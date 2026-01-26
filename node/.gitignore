@@ -1,0 +1,57 @@
+# Build outputs
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio files
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+[Bb]lender/
+# IDE settings
+.idea/
+
+# Project lock files
+*.lock.json
+
+# NuGet packages
+*.nupkg
+packages/
+**/[Pp]ackages/*
+
+# Output files
+*.pdb
+*.exe
+*.dll
+
+# Logs and temp files
+*.log
+logs/
+*.tmp
+*.temp
+
+# Environment configs
+appsettings.Development.json
+appsettings.Production.json
+appsettings.json
+
+# Secrets
+secrets.json
+*.secret
+
+# Blender/rendering temp files
+render_*.png
+test_output_*.png
+*.blend1
+*.blend2
+Downloads/
+
+# Local app data
+LocalAppData/
+AppData/
+
+# Cache files
+*.cache.json
+blender_versions.json

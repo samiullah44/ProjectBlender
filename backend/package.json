@@ -1,0 +1,64 @@
+{
+  "name": "blendfarm-backend",
+  "version": "1.0.0",
+  "description": "BlendFarm Backend - Distributed Blender Rendering System",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "test": "echo \"No tests specified\" && exit 0",
+    "clean": "rm -rf dist && rm -rf node_modules",
+    "deploy:setup": "bash scripts/ec2-setup.sh",
+    "deploy:ec2": "scp -r ./* ubuntu@ec2-instance:/home/ubuntu/blendfarm-backend/"
+  },
+  "keywords": [
+    "blender",
+    "render-farm",
+    "distributed",
+    "3d-rendering"
+  ],
+  "author": "Sami",
+  "license": "ISC",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=8.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.972.0",
+    "@aws-sdk/s3-request-presigner": "^3.972.0",
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.8.0",
+    "axios": "^1.13.2",
+    "bcrypt": "^6.0.0",
+    "bullmq": "^5.66.5",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "form-data": "^4.0.5",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.9.5",
+    "morgan": "^1.10.1",
+    "multer": "^2.0.2",
+    "pg": "^8.17.1",
+    "redis": "^5.10.0",
+    "sequelize": "^6.37.7",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^1.4.13",
+    "@types/node": "^25.0.8",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.28.0",
+    "@typescript-eslint/parser": "^8.28.0",
+    "eslint": "^9.19.0",
+    "nodemon": "^3.1.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
