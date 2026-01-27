@@ -5,6 +5,7 @@ const router = express.Router();
 
 // Job management routes
 router.post('/upload', upload.single('blendFile'), JobController.createJob);
+router.get('/dashboard/stats', JobController.getDashboardStats);
 router.get('/', JobController.listJobs);
 router.get('/:jobId', JobController.getJob);
 router.post('/:jobId/cancel', JobController.cancelJob);
@@ -13,7 +14,8 @@ router.post('/:jobId/cancel', JobController.cancelJob);
 router.get('/:jobId/upload-url/:frame', JobController.generateFrameUploadUrl); // Get S3 upload URL
 router.post('/:jobId/complete-frame', JobController.completeFrame); // Report completion with S3 key
 router.post('/:jobId/fail-frame', JobController.failFrame); // Report failure
-
+router.post('/:jobId/select-frames', JobController.selectFrames);
+// backend/src/routes/jobRoutes.ts - Add this route
 // Health check
 router.get('/health', JobController.healthCheck);
 

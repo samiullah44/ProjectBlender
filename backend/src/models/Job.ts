@@ -49,6 +49,7 @@ export interface IJob extends Document {
     start: number;
     end: number;
     total: number;
+    selected: number[];
     rendered: number[];      // Successfully rendered frames
     failed: number[];        // Failed frames
     assigned: number[];      // Currently assigned frames

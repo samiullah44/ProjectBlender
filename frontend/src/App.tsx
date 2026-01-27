@@ -14,6 +14,7 @@ import Navbar from '@/components/layout/NavBar'
 // Client Pages
 import ClientDashboard from '@/pages/client/Dashboard'
 import CreateJob from '@/pages/client/CreateJob'
+import JobDetails from '@/pages/client/JobDetails' // Add this import
 // import ClientSettings from '@/pages/client/Settings'
 
 // Node Pages
@@ -84,8 +85,10 @@ function App() {
                   <Routes>
                     <Route path="/dashboard" element={<ClientDashboard />} />
                     <Route path="/create-job" element={<CreateJob />} />
+                    <Route path="/jobs/:jobId" element={<JobDetails />} /> {/* Add this route */}
                     {/* <Route path="/jobs" element={<ClientJobs />} /> */}
                     {/* <Route path="/settings" element={<ClientSettings />} /> */}
+                    {/* <Route path="/billing" element={<Billing />} /> */}
                   </Routes>
                 </ProtectedRoute>
               } 

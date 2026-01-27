@@ -16,6 +16,11 @@ export const upload = multer({
 });
 
 export class JobController {
+  // Get WebSocket service from app
+  private static getWsService(req: Request) {
+    return req.app.get('wsService');
+  }
+
   // Create job from blend file upload with S3 integration
   static async createJob(req: Request, res: Response): Promise<void> {
     try {
@@ -34,6 +39,7 @@ export class JobController {
         resolutionY = 1080,
         startFrame = 1,
         endFrame = 10,
+        selectedFrame = 1, // NEW: For single image rendering - selected frame
         framesPerNode = 1,
         // Image rendering specific parameters
         denoiser = 'OPTIX', // 'NONE', 'OPTIX', 'OPENIMAGEDENOISE', 'NLM'
@@ -45,8 +51,16 @@ export class JobController {
       
       // Calculate total frames
       let totalFrames = 1; // Default for image
+      let selectedFrames: number[] = [];
+      
       if (type === 'animation') {
         totalFrames = parseInt(endFrame as string) - parseInt(startFrame as string) + 1;
+        selectedFrames = Array.from({ length: totalFrames }, (_, i) => parseInt(startFrame as string) + i);
+      } else if (type === 'image') {
+        // For image rendering, use the selected frame or default to frame 1
+        const frame = parseInt(selectedFrame as string) || 1;
+        totalFrames = 1;
+        selectedFrames = [frame];
       }
       
       // Upload blend file to S3 in uploads folder using the new method
@@ -69,12 +83,14 @@ export class JobController {
           resolutionY: parseInt(resolutionY as string),
           tileSize: parseInt(tileSize as string),
           denoiser: type === 'image' ? denoiser : undefined,
-          outputFormat
+          outputFormat,
+          selectedFrame: type === 'image' ? parseInt(selectedFrame as string) || 1 : undefined
         },
         frames: {
-          start: type === 'animation' ? parseInt(startFrame as string) : 1,
-          end: type === 'animation' ? parseInt(endFrame as string) : 1,
+          start: type === 'animation' ? parseInt(startFrame as string) : (parseInt(selectedFrame as string) || 1),
+          end: type === 'animation' ? parseInt(endFrame as string) : (parseInt(selectedFrame as string) || 1),
           total: totalFrames,
+          selected: selectedFrames, // NEW: Store which frames are selected
           rendered: [],
           failed: [],
           assigned: []
@@ -92,7 +108,22 @@ export class JobController {
       console.log(`🎬 New ${type} job created: ${jobId} with ${totalFrames} frame${totalFrames > 1 ? 's' : ''}`);
       console.log(`📁 Blend file uploaded to S3: ${blendFileKey}`);
       if (type === 'image') {
-        console.log(`🖼️  Image settings: ${resolutionX}x${resolutionY}, ${samples} samples, ${denoiser} denoiser`);
+        console.log(`🖼️  Image settings: ${resolutionX}x${resolutionY}, ${samples} samples, ${denoiser} denoiser, Frame: ${selectedFrame}`);
+      }
+      
+      // Broadcast new job creation via WebSocket
+      const wsService = JobController.getWsService(req);
+      if (wsService) {
+        wsService.broadcastSystemUpdate({
+          type: 'job_created',
+          data: { 
+            jobId: job.jobId, 
+            type: job.type, 
+            status: job.status,
+            blendFileName: job.blendFileName,
+            totalFrames: job.frames.total
+          }
+        });
       }
       
       res.json({
@@ -101,6 +132,7 @@ export class JobController {
         message: 'Job created successfully',
         type: job.type,
         totalFrames: job.frames.total,
+        selectedFrames: job.frames.selected, // NEW: Return selected frames
         blendFileUrl: job.blendFileUrl,
         settings: job.settings,
         fileStructure: {
@@ -299,6 +331,20 @@ export class JobController {
       console.log(`✅ Frame ${frame} completed for job ${jobId} by node ${nodeId} (Progress: ${progress}%)`);
       console.log(`📁 Frame stored at: ${s3Key}`);
       
+      // Broadcast job update via WebSocket
+      const wsService = JobController.getWsService(req);
+      if (wsService) {
+        await wsService.broadcastJobUpdate(jobId);
+        
+        // Also broadcast node update
+        wsService.broadcastNodeUpdate(nodeId, {
+          status: isNodeDone ? 'online' : 'busy',
+          currentJob: isNodeDone ? undefined : updatedJob.jobId,
+          jobsCompleted: isNodeDone ? 1 : 0,
+          lastUpdate: new Date().toISOString()
+        });
+      }
+      
       res.json({ 
         success: true, 
         message: 'Frame completion recorded',
@@ -380,6 +426,12 @@ export class JobController {
       
       console.log(`❌ Frame ${frame} failed for job ${jobId} by node ${nodeId}: ${errorMessage}`);
       
+      // Broadcast job update via WebSocket
+      const wsService = JobController.getWsService(req);
+      if (wsService) {
+        await wsService.broadcastJobUpdate(jobId);
+      }
+      
       res.json({ 
         success: true, 
         message: 'Frame failure recorded',
@@ -447,7 +499,8 @@ export class JobController {
           total: totalFrames,
           rendered: renderedFrames,
           failed: failedFrames,
-          pending: pendingFrames
+          pending: pendingFrames,
+          selected: job.frames.selected || [] // NEW: Include selected frames
         },
         outputUrls: outputUrlsWithFreshUrls,
         createdAt: job.createdAt,
@@ -497,6 +550,12 @@ export class JobController {
       await job.save();
       
       console.log(`❌ Cancelled job: ${jobId}`);
+      
+      // Broadcast job update via WebSocket
+      const wsService = JobController.getWsService(req);
+      if (wsService) {
+        await wsService.broadcastJobUpdate(jobId);
+      }
       
       // Optional: Clean up S3 files
       if (cleanupS3) {
@@ -568,7 +627,8 @@ export class JobController {
         frames: {
           total: job.frames.total,
           rendered: job.frames.rendered.length,
-          failed: job.frames.failed.length
+          failed: job.frames.failed.length,
+          selected: job.frames.selected || [] // NEW: Include selected frames
         },
         outputCount: job.outputUrls.length,
         createdAt: job.createdAt,
@@ -597,12 +657,189 @@ export class JobController {
       });
     }
   }
+
+  // NEW: Select specific frame(s) for rendering (for image type)
+  static async selectFrames(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const { frames } = req.body; // Array of frame numbers to render
+      
+      if (!Array.isArray(frames) || frames.length === 0) {
+        throw new AppError('Frames must be a non-empty array', 400);
+      }
+      
+      const job = await Job.findOne({ jobId });
+      if (!job) {
+        throw new AppError('Job not found', 404);
+      }
+      
+      // Validate frames are within range
+      const minFrame = job.frames.start;
+      const maxFrame = job.frames.end;
+      
+      for (const frame of frames) {
+        const frameNum = parseInt(frame);
+        if (isNaN(frameNum) || frameNum < minFrame || frameNum > maxFrame) {
+          throw new AppError(`Frame ${frame} is out of range (${minFrame}-${maxFrame})`, 400);
+        }
+      }
+      
+      // Update selected frames
+      job.frames.selected = frames;
+      job.frames.total = frames.length;
+      job.updatedAt = new Date();
+      
+      // Remove any rendered/failed frames that are no longer selected
+      job.frames.rendered = job.frames.rendered.filter(f => frames.includes(f));
+      job.frames.failed = job.frames.failed.filter(f => frames.includes(f));
+      job.frames.assigned = job.frames.assigned.filter(f => frames.includes(f));
+      
+      // Clear assigned nodes for frames that are no longer selected
+      const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
+      for (const [nodeId, nodeFrames] of assignedNodesMap.entries()) {
+        const updatedFrames = nodeFrames.filter(f => frames.includes(f));
+        if (updatedFrames.length === 0) {
+          assignedNodesMap.delete(nodeId);
+        } else {
+          assignedNodesMap.set(nodeId, updatedFrames);
+        }
+      }
+      
+      // Recalculate progress
+      job.progress = Math.round((job.frames.rendered.length / job.frames.total) * 100);
+      
+      await job.save();
+      
+      console.log(`🎯 Updated selected frames for job ${jobId}: ${frames.join(', ')}`);
+      
+      // Broadcast job update via WebSocket
+      const wsService = JobController.getWsService(req);
+      if (wsService) {
+        await wsService.broadcastJobUpdate(jobId);
+      }
+      
+      res.json({
+        success: true,
+        message: 'Frames updated successfully',
+        frames: {
+          selected: job.frames.selected,
+          total: job.frames.total,
+          rendered: job.frames.rendered.length,
+          failed: job.frames.failed.length
+        }
+      });
+      
+    } catch (error) {
+      console.error('Select frames error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({ 
+          error: error.message
+        });
+      } else {
+        res.status(500).json({ 
+          error: 'Failed to update frames',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+  }
+
+  // Dashboard statistics endpoint
+  static async getDashboardStats(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId, startDate, endDate } = req.query;
+      
+      const start = startDate ? new Date(startDate as string) : new Date();
+      start.setHours(0, 0, 0, 0);
+      
+      const end = endDate ? new Date(endDate as string) : new Date();
+      end.setHours(23, 59, 59, 999);
+      
+      const query: any = { createdAt: { $gte: start, $lte: end } };
+      if (userId) query.userId = userId;
+      
+      // Get job statistics
+      const [jobs, activeJobs, completedJobs, failedJobs] = await Promise.all([
+        Job.find(query),
+        Job.countDocuments({ ...query, status: { $in: ['pending', 'processing'] } }),
+        Job.countDocuments({ ...query, status: 'completed' }),
+        Job.countDocuments({ ...query, status: 'failed' })
+      ]);
+      
+      // Calculate total render time and credits
+      let totalRenderTime = 0;
+      let totalCreditsUsed = 0;
+      let totalFramesRendered = 0;
+      
+      jobs.forEach(job => {
+        if (job.frameAssignments) {
+          job.frameAssignments.forEach((assignment: any) => {
+            if (assignment.status === 'rendered' && assignment.renderTime) {
+              totalRenderTime += assignment.renderTime;
+            }
+          });
+        }
+        
+        if (job.outputUrls) {
+          totalFramesRendered += job.outputUrls.length;
+        }
+        
+        if (job.totalCreditsDistributed) {
+          totalCreditsUsed += job.totalCreditsDistributed;
+        }
+      });
+      
+      // Get today's completed jobs
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(today);
+      todayEnd.setHours(23, 59, 59, 999);
+      
+      const completedToday = await Job.countDocuments({
+        status: 'completed',
+        createdAt: { $gte: today, $lte: todayEnd }
+      });
+      
+      res.json({
+        success: true,
+        stats: {
+          totalJobs: jobs.length,
+          activeJobs,
+          completedJobs,
+          failedJobs,
+          completedToday,
+          totalRenderTime,
+          totalCreditsUsed,
+          totalFramesRendered,
+          avgRenderTimePerFrame: totalFramesRendered > 0 ? totalRenderTime / totalFramesRendered : 0
+        },
+        timeframe: {
+          start,
+          end
+        }
+      });
+      
+    } catch (error) {
+      console.error('Dashboard stats error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch dashboard statistics',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
   
   // Health check endpoint
   static async healthCheck(req: Request, res: Response): Promise<void> {
     try {
       // Test S3 connection using the new method
       const bucketInfo = s3Service.getBucketInfo();
+      
+      // Get WebSocket service stats
+      const wsService = JobController.getWsService(req);
+      const wsStats = wsService ? {
+        connectedClients: wsService.getConnectionCount(),
+        activeSubscriptions: wsService.getSubscriptionCount()
+      } : { connectedClients: 0, activeSubscriptions: 0 };
       
       res.json({
         status: 'healthy',
@@ -612,7 +849,8 @@ export class JobController {
           region: bucketInfo.region,
           publicUrlBase: bucketInfo.publicUrlBase,
           status: 'connected'
-        }
+        },
+        websocket: wsStats
       });
     } catch (error) {
       res.status(500).json({

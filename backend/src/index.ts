@@ -1,9 +1,12 @@
+// backend/src/index.ts
 import express from 'express';
 import http from 'http';
-import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+
+// Import WebSocketService
+import { WebSocketService } from './services/WebSocketService';
 
 // Config
 dotenv.config();
@@ -53,10 +56,6 @@ const corsOptions = {
 // Apply CORS
 app.use(cors(corsOptions));
 
-const io = new Server(server, {
-  cors: corsOptions
-});
-
 // Middleware
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ extended: true, limit: '500mb' }));
@@ -65,15 +64,36 @@ app.use(express.urlencoded({ extended: true, limit: '500mb' }));
 app.use('/api/jobs', jobRoutes);
 app.use('/api/nodes', nodeRoutes);
 
+// WebSocket endpoint
+app.get('/ws', (req, res) => {
+  res.status(400).json({ error: 'WebSocket connection required' });
+});
+
+// Initialize WebSocketService
+const wsService = new WebSocketService(server);
+
+// Make WebSocket service available to controllers
+app.set('wsService', wsService);
+
+// Start WebSocket cleanup and stats broadcasting
+wsService.startCleanupInterval();
+wsService.startStatsBroadcast();
+
 // Health check endpoint
 app.get('/health', (req, res) => {
+  const wsService = req.app.get('wsService') as WebSocketService;
+  
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
     storage: 'aws-s3',
-    bucket: process.env.S3_BUCKET_NAME || 'not-configured'
+    bucket: process.env.S3_BUCKET_NAME || 'not-configured',
+    websocket: {
+      connectedClients: wsService.getConnectionCount(),
+      activeSubscriptions: wsService.getSubscriptionCount()
+    }
   });
 });
 
@@ -94,6 +114,7 @@ server.listen(PORT, HOST, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`☁️  Storage: AWS S3 (${process.env.S3_BUCKET_NAME || 'not-configured'})`);
   console.log(`🗄️  MongoDB: ${MONGODB_URI.includes('@') ? 'connected' : MONGODB_URI}`);
+  console.log(`🔌 WebSocket: ws://${HOST}:${PORT}/ws`);
   console.log('='.repeat(50));
 });
 
@@ -106,5 +127,5 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-// Export socket.io for real-time updates
-export const socketIO = io;
+// Export for use in controllers
+export { wsService };

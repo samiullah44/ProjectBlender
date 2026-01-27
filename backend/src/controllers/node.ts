@@ -26,6 +26,11 @@ interface NodePerformance {
 }
 
 export class NodeController {
+  // Get WebSocket service from app
+  private static getWsService(req: Request) {
+    return req.app.get('wsService');
+  }
+
   // Offline node checker
   private static offlineCheckInterval: NodeJS.Timeout | null = null;
 
@@ -192,6 +197,17 @@ export class NodeController {
         
         console.log(`🔄 Node reconnected: ${nodeId} (status: ${existingNode.status})`);
         
+        // Broadcast node registration via WebSocket
+        const wsService = NodeController.getWsService(req);
+        if (wsService) {
+          wsService.broadcastNodeUpdate(nodeId, {
+            status: existingNode.status,
+            hardware: existingNode.hardware,
+            lastHeartbeat: existingNode.lastHeartbeat,
+            registeredAt: now.toISOString()
+          });
+        }
+        
         res.json({
           success: true,
           message: 'Node updated successfully',
@@ -242,6 +258,21 @@ export class NodeController {
         
         console.log('✅ Node registered:', nodeId);
         
+        // Broadcast new node registration via WebSocket
+        const wsService = NodeController.getWsService(req);
+        if (wsService) {
+          wsService.broadcastSystemUpdate({
+            type: 'node_registered',
+            data: {
+              nodeId,
+              name: node.name,
+              status: node.status,
+              hardware: node.hardware,
+              registeredAt: now.toISOString()
+            }
+          });
+        }
+        
         res.json({
           success: true,
           message: 'Node registered successfully',
@@ -259,7 +290,7 @@ export class NodeController {
     }
   }
 
-  // Heartbeat endpoint with performance tracking
+  // Heartbeat endpoint with performance tracking and WebSocket updates
   static async heartbeat(req: Request, res: Response): Promise<void> {
     try {
       const { nodeId } = req.params;
@@ -284,10 +315,15 @@ export class NodeController {
           const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
           const assignedFrames = assignedNodesMap?.get(nodeId) || [];
           
-          // Check if node still has pending frames
-          const pendingFrames = assignedFrames.filter(frame => 
-            !job.frames.rendered.includes(frame) && !job.frames.failed.includes(frame)
-          );
+          // Check if node still has pending frames (considering selected frames)
+          const pendingFrames = assignedFrames.filter(frame => {
+            // Only check frames that are in the selected frames list
+            const isSelected = !job.frames.selected || job.frames.selected.length === 0 || 
+                             job.frames.selected.includes(frame);
+            return isSelected && 
+                   !job.frames.rendered.includes(frame) && 
+                   !job.frames.failed.includes(frame);
+          });
           
           shouldBeBusy = pendingFrames.length > 0;
           
@@ -361,6 +397,32 @@ export class NodeController {
       
       console.log(`💓 Heartbeat from ${nodeId}: ${node.status} (${now.toISOString()})`);
       
+      // Broadcast node heartbeat via WebSocket
+      const wsService = NodeController.getWsService(req);
+      if (wsService) {
+        const broadcastData = {
+          status: node.status,
+          lastHeartbeat: node.lastHeartbeat,
+          currentJob: node.currentJob,
+          currentProgress: node.currentProgress,
+          resources: heartbeatData.resources,
+          performance: node.performance
+        };
+        
+        // Broadcast to node-specific subscribers
+        wsService.broadcastNodeUpdate(nodeId, broadcastData);
+        
+        // Broadcast system update for dashboard
+        wsService.broadcastSystemUpdate({
+          type: 'node_heartbeat',
+          data: {
+            nodeId,
+            status: node.status,
+            timestamp: now.toISOString()
+          }
+        });
+      }
+      
       res.json({
         success: true,
         message: 'Heartbeat received',
@@ -407,6 +469,16 @@ export class NodeController {
         node.lastStatusChange = node.status !== 'offline' ? now : node.lastStatusChange;
         await node.save();
         
+        // Broadcast node offline status
+        const wsService = NodeController.getWsService(req);
+        if (wsService) {
+          wsService.broadcastNodeUpdate(nodeId, {
+            status: 'offline',
+            lastHeartbeat: node.lastHeartbeat,
+            offlineReason: 'Heartbeat timeout'
+          });
+        }
+        
         throw new AppError(
           `Node is offline (no recent heartbeat). Last heartbeat was ${Math.floor(lastHeartbeatAge / 1000)} seconds ago`,
           400
@@ -428,7 +500,11 @@ export class NodeController {
             );
             
             if (!assignment || assignment.status === 'assigned') {
-              pendingAssignedFrames.push(frame);
+              // Only include frames that are selected (if selection exists)
+              if (!job.frames.selected || job.frames.selected.length === 0 || 
+                  job.frames.selected.includes(frame)) {
+                pendingAssignedFrames.push(frame);
+              }
             }
           }
           
@@ -450,6 +526,7 @@ export class NodeController {
               frameUploadUrls,
               settings: job.settings,
               totalFrames: job.frames.total,
+              selectedFrames: job.frames.selected || [], // NEW: Include selected frames
               assignedFramesCount: pendingAssignedFrames.length,
               isResume: true,
               fileStructure: {
@@ -522,9 +599,14 @@ export class NodeController {
           continue;
         }
         
-        // Get frames that need to be rendered
+        // Get frames that need to be rendered (considering selected frames)
         const pendingFrames: number[] = [];
-        for (let frame = job.frames.start; frame <= job.frames.end; frame++) {
+        const framesToCheck = job.frames.selected && job.frames.selected.length > 0 
+          ? job.frames.selected 
+          : Array.from({ length: job.frames.end - job.frames.start + 1 }, 
+                      (_, i) => job.frames.start + i);
+        
+        for (const frame of framesToCheck) {
           if (!job.frames.rendered.includes(frame) && 
               !job.frames.failed.includes(frame) &&
               !job.frames.assigned.includes(frame)) {
@@ -534,12 +616,22 @@ export class NodeController {
         
         if (pendingFrames.length === 0) {
           // Check if all frames are rendered
-          if (job.frames.rendered.length === job.frames.total) {
+          const totalFramesToRender = job.frames.selected && job.frames.selected.length > 0
+            ? job.frames.selected.length
+            : job.frames.total;
+            
+          if (job.frames.rendered.length === totalFramesToRender) {
             job.status = 'completed';
             job.completedAt = now;
             job.progress = 100;
             await job.save();
             console.log(`✅ Job ${job.jobId} completed automatically`);
+            
+            // Broadcast job completion
+            const wsService = NodeController.getWsService(req);
+            if (wsService) {
+              await wsService.broadcastJobUpdate(job.jobId);
+            }
           }
           continue;
         }
@@ -633,6 +725,21 @@ export class NodeController {
         console.log(`📊 Job ${result.jobId} progress: ${progress}% (${renderedFrames}/${totalFrames} frames)`);
         console.log(`⚡ Node performance: ${currentNodePerf.hardwareScore.toFixed(2)} hardware, ${currentNodePerf.reliabilityScore.toFixed(2)} reliability, ${currentNodePerf.avgFrameTime.toFixed(2)}s avg frame time`);
         
+        // Broadcast job assignment via WebSocket
+        const wsService = NodeController.getWsService(req);
+        if (wsService) {
+          // Broadcast job update
+          await wsService.broadcastJobUpdate(result.jobId);
+          
+          // Broadcast node update
+          wsService.broadcastNodeUpdate(nodeId, {
+            status: 'busy',
+            currentJob: result.jobId,
+            assignedFrames: assignedFrames.length,
+            lastAssignment: now.toISOString()
+          });
+        }
+        
         res.json({
           jobId: result.jobId,
           frames: assignedFrames,
@@ -640,6 +747,7 @@ export class NodeController {
           frameUploadUrls,
           settings: result.settings,
           totalFrames: result.frames.total,
+          selectedFrames: result.frames.selected || [], // NEW: Include selected frames
           assignedFramesCount: assignedFrames.length,
           jobProgress: progress,
           nextHeartbeatExpectedIn: 30000,
@@ -768,6 +876,12 @@ export class NodeController {
     // Sort frames to distribute work evenly
     const sortedFrames = [...pendingFrames].sort((a, b) => a - b);
     
+    // For image rendering with single frame selection
+    if (job.type === 'image' && job.frames.selected && job.frames.selected.length > 0) {
+      // For image rendering, just return the first selected frame
+      return [job.frames.selected[0]];
+    }
+    
     // For animation rendering, distribute frames across the timeline
     if (job.type === 'animation' && pendingFrames.length > 1) {
       const startFrame = job.frames.start;
@@ -798,143 +912,157 @@ export class NodeController {
     return sortedFrames.slice(0, framesToAssign);
   }
 
-  // New endpoint for frame completion with credits tracking
-// New endpoint for frame completion with credits tracking
-static async frameCompleted(req: Request, res: Response): Promise<void> {
-  try {
-    const { nodeId } = req.params;
-    const { jobId, frame, renderTime, s3Key, fileSize } = req.body;
-    
-    if (!jobId || !frame || !s3Key) {
-      throw new AppError('Missing required fields: jobId, frame, s3Key', 400);
-    }
-    
-    const now = new Date();
-    
-    // Find the job
-    const job = await Job.findOne({ jobId });
-    if (!job) {
-      throw new AppError('Job not found', 404);
-    }
-    
-    // Type guard to ensure frameAssignments exists
-    if (!job.frameAssignments) {
-      job.frameAssignments = [];
-    }
-    
-    // Find the frame assignment
-    const assignment = job.frameAssignments.find(
-      (a: IFrameAssignment) => a.frame === frame && a.nodeId === nodeId
-    );
-    
-    if (!assignment) {
-      throw new AppError('Frame assignment not found', 404);
-    }
-    
-    // Update assignment
-    const creditsEarned = job.settings.creditsPerFrame || DEFAULT_CREDITS_PER_FRAME;
-    
-    assignment.status = 'rendered';
-    assignment.completedAt = now;
-    assignment.renderTime = renderTime || 0;
-    assignment.creditsEarned = creditsEarned;
-    assignment.s3Key = s3Key;
-    
-    // Update job frames
-    if (!job.frames.rendered.includes(frame)) {
-      job.frames.rendered.push(frame);
-    }
-    
-    // Remove from assigned frames
-    const assignedIndex = job.frames.assigned.indexOf(frame);
-    if (assignedIndex !== -1) {
-      job.frames.assigned.splice(assignedIndex, 1);
-    }
-    
-    // Update progress
-    const totalFrames = job.frames.total;
-    const renderedFrames = job.frames.rendered.length;
-    job.progress = Math.round((renderedFrames / totalFrames) * 100);
-    
-    // Update output URLs - use correct method name
-    const downloadUrl = await s3Service.generateFrameDownloadUrl(s3Key);
-    
-    // Initialize outputUrls if it doesn't exist
-    if (!job.outputUrls) {
-      job.outputUrls = [];
-    }
-    
-    job.outputUrls.push({
-      frame,
-      url: downloadUrl,
-      s3Key,
-      fileSize: fileSize || 0,
-      uploadedAt: now
-    });
-    
-    // Check if job is completed
-    if (renderedFrames === totalFrames) {
-      job.status = 'completed';
-      job.completedAt = now;
+  // Frame completion with credits tracking and WebSocket updates
+  static async frameCompleted(req: Request, res: Response): Promise<void> {
+    try {
+      const { nodeId } = req.params;
+      const { jobId, frame, renderTime, s3Key, fileSize } = req.body;
       
-      // Calculate total credits distributed
-      const totalCredits = job.frameAssignments
-        .filter((a: IFrameAssignment) => a.status === 'rendered')
-        .reduce((sum: number, a: IFrameAssignment) => sum + (a.creditsEarned || 0), 0);
-      
-      job.totalCreditsDistributed = totalCredits || 0;
-      
-      console.log(`🎉 Job ${job.jobId} completed! All ${totalFrames} frames rendered.`);
-      console.log(`💰 Total credits distributed: ${totalCredits}`);
-    }
-    
-    // Update node performance
-    const node = await Node.findOne({ nodeId });
-    if (node && node.performance) {
-      const perf = node.performance;
-      perf.framesRendered = (perf.framesRendered || 0) + 1;
-      perf.totalRenderTime = (perf.totalRenderTime || 0) + (renderTime || 0);
-      perf.avgFrameTime = perf.totalRenderTime / perf.framesRendered;
-      perf.reliabilityScore = Math.min(1.0, (perf.reliabilityScore || 1.0) * 1.01);
-      perf.lastUpdated = now;
-      
-      // Update jobs completed if this was the last frame
-      if (renderedFrames === totalFrames && node.currentJob === jobId) {
-        node.jobsCompleted = (node.jobsCompleted || 0) + 1;
-        node.currentJob = undefined;
-        node.currentProgress = undefined;
+      if (!jobId || !frame || !s3Key) {
+        throw new AppError('Missing required fields: jobId, frame, s3Key', 400);
       }
       
-      await node.save();
-    }
-    
-    await job.save();
-    
-    console.log(`✅ Frame ${frame} completed for job ${jobId} by node ${nodeId} (Progress: ${job.progress}%)`);
-    console.log(`📁 Frame stored at: ${s3Key}`);
-    
-    res.json({
-      success: true,
-      message: 'Frame completion recorded',
-      progress: job.progress,
-      creditsEarned,
-      jobStatus: job.status
-    });
-    
-  } catch (error) {
-    console.error('❌ Frame completion error:', error);
-    if (error instanceof AppError) {
-      res.status(error.statusCode || 500).json({ 
-        error: error.message
+      const now = new Date();
+      
+      // Find the job
+      const job = await Job.findOne({ jobId });
+      if (!job) {
+        throw new AppError('Job not found', 404);
+      }
+      
+      // Type guard to ensure frameAssignments exists
+      if (!job.frameAssignments) {
+        job.frameAssignments = [];
+      }
+      
+      // Find the frame assignment
+      const assignment = job.frameAssignments.find(
+        (a: IFrameAssignment) => a.frame === frame && a.nodeId === nodeId
+      );
+      
+      if (!assignment) {
+        throw new AppError('Frame assignment not found', 404);
+      }
+      
+      // Update assignment
+      const creditsEarned = job.settings.creditsPerFrame || DEFAULT_CREDITS_PER_FRAME;
+      
+      assignment.status = 'rendered';
+      assignment.completedAt = now;
+      assignment.renderTime = renderTime || 0;
+      assignment.creditsEarned = creditsEarned;
+      assignment.s3Key = s3Key;
+      
+      // Update job frames
+      if (!job.frames.rendered.includes(frame)) {
+        job.frames.rendered.push(frame);
+      }
+      
+      // Remove from assigned frames
+      const assignedIndex = job.frames.assigned.indexOf(frame);
+      if (assignedIndex !== -1) {
+        job.frames.assigned.splice(assignedIndex, 1);
+      }
+      
+      // Update progress
+      const totalFrames = job.frames.total;
+      const renderedFrames = job.frames.rendered.length;
+      job.progress = Math.round((renderedFrames / totalFrames) * 100);
+      
+      // Update output URLs
+      const downloadUrl = await s3Service.generateFrameDownloadUrl(s3Key);
+      
+      // Initialize outputUrls if it doesn't exist
+      if (!job.outputUrls) {
+        job.outputUrls = [];
+      }
+      
+      job.outputUrls.push({
+        frame,
+        url: downloadUrl,
+        s3Key,
+        fileSize: fileSize || 0,
+        uploadedAt: now
       });
-    } else {
-      res.status(500).json({ 
-        error: 'Failed to record frame completion',
-        details: error instanceof Error ? error.message : 'Unknown error'
+      
+      // Check if job is completed
+      if (renderedFrames === totalFrames) {
+        job.status = 'completed';
+        job.completedAt = now;
+        
+        // Calculate total credits distributed
+        const totalCredits = job.frameAssignments
+          .filter((a: IFrameAssignment) => a.status === 'rendered')
+          .reduce((sum: number, a: IFrameAssignment) => sum + (a.creditsEarned || 0), 0);
+        
+        job.totalCreditsDistributed = totalCredits || 0;
+        
+        console.log(`🎉 Job ${job.jobId} completed! All ${totalFrames} frames rendered.`);
+        console.log(`💰 Total credits distributed: ${totalCredits}`);
+      }
+      
+      // Update node performance
+      const node = await Node.findOne({ nodeId });
+      if (node && node.performance) {
+        const perf = node.performance;
+        perf.framesRendered = (perf.framesRendered || 0) + 1;
+        perf.totalRenderTime = (perf.totalRenderTime || 0) + (renderTime || 0);
+        perf.avgFrameTime = perf.totalRenderTime / perf.framesRendered;
+        perf.reliabilityScore = Math.min(1.0, (perf.reliabilityScore || 1.0) * 1.01);
+        perf.lastUpdated = now;
+        
+        // Update jobs completed if this was the last frame
+        if (renderedFrames === totalFrames && node.currentJob === jobId) {
+          node.jobsCompleted = (node.jobsCompleted || 0) + 1;
+          node.currentJob = undefined;
+          node.currentProgress = undefined;
+        }
+        
+        await node.save();
+      }
+      
+      await job.save();
+      
+      console.log(`✅ Frame ${frame} completed for job ${jobId} by node ${nodeId} (Progress: ${job.progress}%)`);
+      console.log(`📁 Frame stored at: ${s3Key}`);
+      
+      // Broadcast frame completion via WebSocket
+      const wsService = NodeController.getWsService(req);
+      if (wsService) {
+        // Broadcast job update
+        await wsService.broadcastJobUpdate(jobId);
+        
+        // Broadcast node update
+        wsService.broadcastNodeUpdate(nodeId, {
+          frameCompleted: frame,
+          renderTime: renderTime || 0,
+          creditsEarned: creditsEarned,
+          lastUpdate: now.toISOString()
+        });
+      }
+      
+      res.json({
+        success: true,
+        message: 'Frame completion recorded',
+        progress: job.progress,
+        creditsEarned,
+        jobStatus: job.status
       });
+      
+    } catch (error) {
+      console.error('❌ Frame completion error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({ 
+          error: error.message
+        });
+      } else {
+        res.status(500).json({ 
+          error: 'Failed to record frame completion',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     }
   }
-}
 
   // Get job distribution report
   static async getJobDistributionReport(req: Request, res: Response): Promise<void> {
@@ -994,6 +1122,7 @@ static async frameCompleted(req: Request, res: Response): Promise<void> {
         renderedFrames: job.frames.rendered.length,
         failedFrames: job.frames.failed.length,
         progress: job.progress,
+        selectedFrames: job.frames.selected || [], // NEW: Include selected frames
         totalCreditsDistributed: job.totalCreditsDistributed || 0,
         nodeContributions: nodeContributions,
         frameAssignments: job.frameAssignments.map((a: IFrameAssignment) => ({
@@ -1024,7 +1153,7 @@ static async frameCompleted(req: Request, res: Response): Promise<void> {
     }
   }
 
-  // Get all nodes (unchanged)
+  // Get all nodes with WebSocket integration
   static async getAllNodes(req: Request, res: Response): Promise<void> {
     try {
       await this.checkAndUpdateOfflineNodes();
@@ -1129,7 +1258,8 @@ static async frameCompleted(req: Request, res: Response): Promise<void> {
             frames: {
               total: job.frames.total,
               rendered: renderedFrames.length,
-              assigned: assignedFrames.length
+              assigned: assignedFrames.length,
+              selected: job.frames.selected || [] // NEW: Include selected frames
             },
             creditsEarned: totalCreditsEarned,
             settings: job.settings
