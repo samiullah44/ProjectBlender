@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Multipart S3 Upload</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    input, button { margin: 10px 0; }
+    .chunk-progress { margin-top: 5px; }
+    .chunk-progress div { width: 0%; height: 20px; background-color: #4caf50; text-align: center; color: white; }
+  </style>
+</head>
+<body>
+  <h2>Upload Large File to S3</h2>
+  <input type="file" id="fileInput" />
+  <button id="uploadBtn">Upload</button>
+  <button id="completeBtn" disabled>Complete Upload</button>
+  <p id="fileSize"></p>
+  <p id="uploadedFile"></p>
+  <div id="progressContainer"></div>
+
+  <script>
+    const uploadBtn = document.getElementById("uploadBtn");
+    const completeBtn = document.getElementById("completeBtn");
+    const fileInput = document.getElementById("fileInput");
+    const fileSizeEl = document.getElementById("fileSize");
+    const progressContainer = document.getElementById("progressContainer");
+    const uploadedFileEl = document.getElementById("uploadedFile");
+
+    let key, uploadId, partsETags = [];
+
+    // Upload button
+    uploadBtn.addEventListener("click", async () => {
+      const file = fileInput.files[0];
+      if (!file) return alert("Please select a file!");
+
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      fileSizeEl.textContent = `File Size: ${sizeMB} MB`;
+
+      const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB chunks
+      const parts = Math.ceil(file.size / CHUNK_SIZE);
+
+      // Request presigned URLs from backend
+      const res = await fetch("http://localhost:3000/api/initiate-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, parts })
+      });
+
+      const data = await res.json();
+      key = data.key;
+      uploadId = data.uploadId;
+      const presignedUrls = data.presignedUrls;
+
+      // Create progress bars
+      progressContainer.innerHTML = "";
+      presignedUrls.forEach((_, i) => {
+        const div = document.createElement("div");
+        div.className = "chunk-progress";
+        div.innerHTML = `<div id="chunk-${i}">0%</div>`;
+        progressContainer.appendChild(div);
+      });
+
+      // Upload chunks
+      const uploadChunk = async (chunk, index, url) => {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", url);
+          xhr.upload.onprogress = e => {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              const bar = document.getElementById(`chunk-${index}`);
+              bar.style.width = percent + "%";
+              bar.textContent = percent + "%";
+            }
+          };
+          xhr.onload = () => {
+            const etag = xhr.getResponseHeader("ETag");
+            if (!etag) return reject(new Error("ETag not returned from S3. Check CORS ExposeHeaders"));
+            partsETags[index] = { ETag: etag.replace(/"/g, ""), PartNumber: index + 1 };
+            resolve();
+          };
+          xhr.onerror = () => reject(new Error("Chunk upload failed"));
+          xhr.send(chunk);
+        });
+      };
+
+      try {
+        const chunkPromises = [];
+        for (let i = 0; i < parts; i++) {
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(start + CHUNK_SIZE, file.size);
+          const chunk = file.slice(start, end);
+          chunkPromises.push(uploadChunk(chunk, i, presignedUrls[i]));
+        }
+
+        await Promise.all(chunkPromises);
+        alert("All chunks uploaded successfully!");
+        completeBtn.disabled = false;
+      } catch (err) {
+        console.error("Error uploading chunks:", err);
+        alert("Error uploading chunks: " + err.message);
+      }
+    });
+
+    // Complete upload button
+    completeBtn.addEventListener("click", async () => {
+      try {
+        const res = await fetch("http://localhost:3000/api/complete-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key, uploadId, parts: partsETags })
+        });
+        const data = await res.json();
+        uploadedFileEl.textContent = `File uploaded to S3: ${data.Location || key}`;
+        completeBtn.disabled = true;
+        alert("Multipart upload completed successfully!");
+      } catch (err) {
+        console.error("Error completing upload:", err);
+        alert("Error completing upload: " + err.message);
+      }
+    });
+  </script>
+</body>
+</html>
