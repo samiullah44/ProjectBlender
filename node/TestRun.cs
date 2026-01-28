@@ -9,7 +9,7 @@ class TestRun
     {
         Console.WriteLine("🧪 Testing C# + Python Integration...");
         
-        // Create a logger
+        // Create a loggers
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConsole();
