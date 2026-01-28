@@ -224,11 +224,11 @@ export class JobController {
       // Generate download URL for the rendered frame using the new method
       const downloadUrl = await s3Service.generateFrameDownloadUrl(s3Key as string);
       
-      // Update frame status using atomic operation
+      // Update frame status using atomic operation - ensure frame is removed from failed/assigned when completed
       const updatedJob = await Job.findOneAndUpdate(
         { 
           jobId,
-          'frames.rendered': { $ne: frameNumber }
+          'frames.rendered': { $ne: frameNumber } // Only update if not already rendered
         },
         {
           $addToSet: {
@@ -242,8 +242,8 @@ export class JobController {
             }
           },
           $pull: {
-            'frames.failed': frameNumber,
-            'frames.assigned': frameNumber
+            'frames.failed': frameNumber,    // Remove from failed if it was there
+            'frames.assigned': frameNumber   // Remove from assigned
           },
           $set: {
             updatedAt: new Date()
@@ -373,7 +373,7 @@ export class JobController {
     }
   }
 
-  // Report frame failure (updated for S3)
+  // Report frame failure (updated for S3) - Fixed to prevent race conditions
   static async failFrame(req: Request, res: Response): Promise<void> {
     try {
       const { jobId } = req.params;
@@ -386,17 +386,51 @@ export class JobController {
       
       const frameNumber = parseInt(frame as string);
       
-      // Add to failed frames
-      if (!job.frames.failed.includes(frameNumber)) {
-        job.frames.failed.push(frameNumber);
+      // Check if frame is already rendered - don't mark as failed if it's already completed
+      if (job.frames.rendered.includes(frameNumber)) {
+        res.json({ 
+          success: true, 
+          message: 'Frame already completed, not marking as failed',
+          progress: job.progress,
+          status: job.status
+        });
+        return;
       }
       
-      // Remove from rendered and assigned if it was there
-      job.frames.rendered = job.frames.rendered.filter(f => f !== frameNumber);
-      job.frames.assigned = job.frames.assigned.filter(f => f !== frameNumber);
+      // Use atomic operation to prevent race conditions
+      const updatedJob = await Job.findOneAndUpdate(
+        { 
+          jobId,
+          'frames.rendered': { $ne: frameNumber }, // Only update if not already rendered
+          'frames.failed': { $ne: frameNumber }    // Only update if not already failed
+        },
+        {
+          $addToSet: {
+            'frames.failed': frameNumber
+          },
+          $pull: {
+            'frames.assigned': frameNumber   // Remove from assigned
+          },
+          $set: {
+            updatedAt: new Date()
+          }
+        },
+        { new: true }
+      );
       
-      // Remove from assigned nodes
-      const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
+      if (!updatedJob) {
+        // Frame was already processed or doesn't exist
+        res.json({ 
+          success: true, 
+          message: 'Frame already processed or job not found',
+          progress: job.progress,
+          status: job.status
+        });
+        return;
+      }
+      
+      // Remove frame from assigned nodes
+      const assignedNodesMap = updatedJob.assignedNodes as unknown as Map<string, number[]>;
       const nodeFrames = assignedNodesMap?.get(nodeId) || [];
       const updatedNodeFrames = nodeFrames.filter(f => f !== frameNumber);
       
@@ -406,23 +440,26 @@ export class JobController {
         assignedNodesMap?.set(nodeId, updatedNodeFrames);
       }
       
-      // Update progress
-      const totalFrames = job.frames.total;
-      const renderedFrames = job.frames.rendered.length;
-      const failedFrames = job.frames.failed.length;
-      job.progress = Math.round((renderedFrames / totalFrames) * 100);
+      // Update progress and status
+      const totalFrames = updatedJob.frames.total;
+      const renderedFrames = updatedJob.frames.rendered.length;
+      const failedFrames = updatedJob.frames.failed.length;
+      const progress = Math.round((renderedFrames / totalFrames) * 100);
       
-      // Check if all frames failed
+      let status = updatedJob.status;
       if (failedFrames === totalFrames) {
-        job.status = 'failed';
+        status = 'failed';
       } else if (renderedFrames + failedFrames === totalFrames) {
-        job.status = 'failed';
+        status = 'failed';
       } else {
-        job.status = 'processing';
+        status = 'processing';
       }
       
-      job.updatedAt = new Date();
-      await job.save();
+      // Save updates
+      updatedJob.status = status;
+      updatedJob.progress = progress;
+      updatedJob.assignedNodes = assignedNodesMap as any;
+      await updatedJob.save();
       
       console.log(`❌ Frame ${frame} failed for job ${jobId} by node ${nodeId}: ${errorMessage}`);
       
@@ -435,8 +472,8 @@ export class JobController {
       res.json({ 
         success: true, 
         message: 'Frame failure recorded',
-        progress: job.progress,
-        status: job.status,
+        progress: progress,
+        status: status,
         s3Key: s3Key
       });
       
