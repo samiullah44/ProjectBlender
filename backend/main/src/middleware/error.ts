@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { env } from "../config/env";
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -26,7 +27,7 @@ export const globalErrorHandler = (
   const response = {
     status: err.statusCode >= 500 ? 'error' : 'fail',
     message: err.message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    ...(env.nodeEnv === 'development' && { stack: err.stack })
   };
 
   res.status(err.statusCode).json(response);
@@ -43,7 +44,7 @@ export const setupErrorHandlers = (): void => {
   process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
     console.error('💥 UNHANDLED REJECTION at:', promise, 'reason:', reason);
     // In production, you might want to exit here
-    if (process.env.NODE_ENV === 'production') {
+    if (env.nodeEnv === 'production') {
       process.exit(1);
     }
   });
