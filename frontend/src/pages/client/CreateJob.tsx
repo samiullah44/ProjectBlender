@@ -83,7 +83,7 @@ const CreateJob: React.FC = () => {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0]
-      if (file.size > 500 * 1024 * 1024) {
+      if (file.size > (500 * 1024 * 1024)) {
         toast.error('File size exceeds 500MB limit')
         return
       }

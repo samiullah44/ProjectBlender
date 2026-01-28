@@ -134,7 +134,6 @@ function App() {
         toastOptions={{
           duration: 4000,
           style: {
-            background: 'hsl(var(--background))',
             color: 'hsl(var(--foreground))',
             border: '1px solid hsl(var(--border))',
           },
@@ -142,7 +141,10 @@ function App() {
       />
 
       {/* React Query Devtools */}
-      <ReactQueryDevtools initialIsOpen={false} />
+      {import.meta.env.VITE_NODE_ENV === 'development' && (
+  <ReactQueryDevtools initialIsOpen={false} />
+)}
+
     </QueryClientProvider>
   )
 }
