@@ -5,7 +5,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import dotenv from "dotenv";
 
 dotenv.config();
-// Initialize Express app
+// Initialize Express apps
 const app = express();
 app.use(cors());
 app.use(express.json());
