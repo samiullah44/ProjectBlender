@@ -1,4 +1,4 @@
-// pages/client/Dashboard.tsx - OPTIMIZED FOR LIVE UPDATES
+// pages/client/Dashboard.tsx - OPTIMIZED FOR LIVE UPDATES WITH TABS
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { 
@@ -27,12 +27,17 @@ import {
   Layers,
   Shield,
   Rocket,
-  Timer
+  Timer,
+  Search,
+  Filter,
+  X
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Progress } from '@/components/ui/Progress'
 import { Badge } from '@/components/ui/Badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
+import { Input } from '@/components/ui/Input'
 import { useNavigate } from 'react-router-dom'
 import jobStore from '@/stores/jobStore'
 import { websocketService } from '@/services/websocketService'
@@ -52,6 +57,472 @@ interface SystemStats {
   framesRenderedToday: number
 }
 
+// Component sections
+const StatsSection: React.FC<{ stats: any[], isLoading: boolean }> = ({ stats, isLoading }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+  >
+    {stats.map((stat, index) => (
+      <motion.div 
+        key={stat.label} 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: index * 0.1 }}
+      >
+        <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 hover:bg-gray-900/70 transition-all duration-300 hover:scale-[1.02] group">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-gray-400 mb-2">{stat.label}</p>
+                <p className="text-2xl font-bold mb-1">{stat.value}</p>
+                <p className="text-xs text-gray-400">{stat.description}</p>
+                <p className="text-xs text-emerald-400 mt-2">{stat.change}</p>
+              </div>
+              <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.bg} group-hover:scale-110 transition-transform duration-300`}>
+                <stat.icon className={`w-6 h-6 ${stat.color}`} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    ))}
+  </motion.div>
+)
+
+// Tabbed Content Components
+const DashboardTab: React.FC<{ 
+  activeJobs: any[], 
+  recentActivity: any[], 
+  navigate: any, 
+  isLoading: boolean, 
+  webSocketConnected: boolean, 
+  averageProgress: number 
+}> = ({ 
+  activeJobs, 
+  recentActivity, 
+  navigate, 
+  isLoading, 
+  webSocketConnected, 
+  averageProgress 
+}) => (
+  <div className="space-y-6">
+    <ActiveJobsSection 
+      activeJobs={activeJobs} 
+      navigate={navigate} 
+      isLoading={isLoading} 
+      webSocketConnected={webSocketConnected} 
+      averageProgress={averageProgress} 
+    />
+    <RecentActivitySection recentActivity={recentActivity} navigate={navigate} />
+  </div>
+)
+
+const AllJobsTab: React.FC<{ 
+  jobs: Job[], 
+  navigate: any, 
+  getJobProgress: (job: Job) => number, 
+  getRenderedFrames: (job: Job) => number 
+}> = ({ 
+  jobs, 
+  navigate, 
+  getJobProgress, 
+  getRenderedFrames 
+}) => {
+  const [filter, setFilter] = useState<string>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  
+  const filteredJobs = useMemo(() => {
+    let result = jobs
+    
+    // Apply status filter
+    if (filter !== 'all') {
+      result = result.filter(job => job.status === filter)
+    }
+    
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      result = result.filter(job => 
+        job.blendFileName?.toLowerCase().includes(query) ||
+        job.jobId?.toLowerCase().includes(query) ||
+        job.type?.toLowerCase().includes(query)
+      )
+    }
+    
+    return result.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+  }, [jobs, filter, searchQuery])
+  
+  const statusCounts = useMemo(() => {
+    return {
+      all: jobs.length,
+      completed: jobs.filter(j => j.status === 'completed').length,
+      processing: jobs.filter(j => j.status === 'processing').length,
+      pending: jobs.filter(j => j.status === 'pending').length,
+      failed: jobs.filter(j => j.status === 'failed').length
+    }
+  }, [jobs])
+
+  return (
+    <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
+      <CardHeader>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2 mb-2">
+              <FileText className="w-5 h-5 text-amber-400" />
+              All Jobs ({filteredJobs.length})
+            </CardTitle>
+            <CardDescription>
+              View and manage all your render jobs
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search jobs..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-white/5 border-white/20 w-48"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSearchQuery('')}
+              className="border-white/20"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-2 mb-4">
+          {['all', 'processing', 'completed', 'pending', 'failed'].map((status) => (
+            <Button
+              key={status}
+              variant={filter === status ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilter(status)}
+              className="border-white/20 text-xs"
+            >
+              {status === 'all' ? 'All' : status}
+              <Badge className={`ml-1 ${
+                filter === status ? 'bg-white/20' : 
+                status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
+                status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
+                'bg-red-500/20 text-red-400'
+              }`}>
+                {statusCounts[status as keyof typeof statusCounts]}
+              </Badge>
+            </Button>
+          ))}
+        </div>
+
+        {filteredJobs.length > 0 ? (
+          <div className="space-y-3 max-h-[500px] overflow-y-auto">
+            {filteredJobs.map((job) => {
+              const progress = getJobProgress(job)
+              const renderedFrames = getRenderedFrames(job)
+              const totalFrames = job.frames?.total || 0
+              
+              return (
+                <div 
+                  key={job.jobId}
+                  className="flex items-center gap-4 p-3 rounded-lg hover:bg-white/5 transition-all duration-300 cursor-pointer group"
+                  onClick={() => navigate(`/client/jobs/${job.jobId}`)}
+                >
+                  <div className={`p-2 rounded-full transition-transform duration-300 group-hover:scale-110 ${
+                    job.status === 'completed' ? 'bg-emerald-500/20' :
+                    job.status === 'processing' ? 'bg-blue-500/20' :
+                    job.status === 'failed' ? 'bg-red-500/20' :
+                    'bg-amber-500/20'
+                  }`}>
+                    {job.status === 'completed' ? (
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                    ) : job.status === 'processing' ? (
+                      <RefreshCw className="w-4 h-4 text-blue-400" />
+                    ) : job.status === 'failed' ? (
+                      <AlertCircle className="w-4 h-4 text-red-400" />
+                    ) : (
+                      <Clock className="w-4 h-4 text-amber-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate mb-1">{job.blendFileName}</div>
+                    <div className="text-sm text-gray-400 flex items-center gap-2 flex-wrap">
+                      <Badge className={`px-2 py-0.5 text-xs ${
+                        job.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                        job.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
+                        job.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                        'bg-amber-500/20 text-amber-400'
+                      }`}>
+                        {job.status}
+                      </Badge>
+                      <span>•</span>
+                      <span>{job.type}</span>
+                      <span>•</span>
+                      <span>{totalFrames} frames</span>
+                      {job.status === 'processing' && (
+                        <>
+                          <span>•</span>
+                          <span>{progress}%</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {new Date(job.createdAt).toLocaleDateString()}
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-400">
+            <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>No jobs found matching your criteria</p>
+            {searchQuery && (
+              <Button
+                variant="outline"
+                className="mt-4 border-white/20 hover:bg-white/5"
+                onClick={() => setSearchQuery('')}
+              >
+                <X className="w-4 h-4 mr-2" />
+                Clear search
+              </Button>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// Existing ActiveJobsSection component (keep as is)
+const ActiveJobsSection: React.FC<{ activeJobs: any[], navigate: any, isLoading: boolean, webSocketConnected: boolean, averageProgress: number }> = ({ 
+  activeJobs, navigate, isLoading, webSocketConnected, averageProgress 
+}) => (
+  <motion.div
+    initial={{ opacity: 0, x: -20 }}
+    animate={{ opacity: 1, x: 0 }}
+    transition={{ delay: 0.2 }}
+  >
+    <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 mb-2">
+              <PlayCircle className="w-5 h-5 text-blue-400" />
+              Active Jobs ({activeJobs.length})
+              {webSocketConnected && (
+                <span className="text-xs text-emerald-400 animate-pulse">
+                  • Live
+                </span>
+              )}
+            </CardTitle>
+            <CardDescription>
+              Jobs currently being processed across the network
+              {activeJobs.length > 0 && (
+                <span className="text-blue-400 ml-2">
+                  Average progress: {averageProgress}%
+                </span>
+              )}
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+          </div>
+        ) : activeJobs.length > 0 ? (
+          <div className="space-y-4">
+            {activeJobs.slice(0, 3).map((job) => {
+              const progress = job.progress || 0
+              const renderedFrames = job.renderedFrames || 0
+              const totalFrames = job.frames?.total || 0
+              const activeNodes = Object.keys(job.assignedNodes || {}).length
+              
+              return (
+                <div 
+                  key={job.jobId}
+                  className="group p-4 rounded-lg bg-white/5 border border-white/10 hover:border-blue-500/30 hover:bg-white/10 transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-blue-500/10"
+                  onClick={() => navigate(`/client/jobs/${job.jobId}`)}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                      <div className="font-medium truncate max-w-xs">
+                        {job.blendFileName}
+                      </div>
+                      <Badge variant="outline" className="border-blue-500/30 text-blue-400">
+                        {job.type === 'animation' ? 'Animation' : 'Image'}
+                      </Badge>
+                    </div>
+                    <div className="text-sm font-medium text-blue-400">
+                      {progress}%
+                      {progress > 0 && progress < 100 && (
+                        <span className="text-xs text-gray-400 ml-1">
+                          (Live)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <Progress value={progress} className="h-2 mb-3" />
+                  
+                  <div className="flex items-center justify-between text-sm text-gray-400">
+                    <div className="flex items-center gap-4">
+                      <span className="flex items-center gap-1">
+                        <Film className="w-3 h-3" />
+                        {renderedFrames}/{totalFrames} frames
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {activeNodes} {activeNodes === 1 ? 'node' : 'nodes'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <HardDrive className="w-3 h-3" />
+                        {job.outputUrls?.length || 0} outputs
+                      </span>
+                    </div>
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-blue-400 flex items-center gap-1">
+                      View details
+                      <ArrowRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+            
+            {activeJobs.length > 3 && (
+              <Button
+                variant="ghost"
+                className="w-full border-dashed border-white/20 hover:border-white/40 hover:bg-white/5 transition-colors duration-300"
+                onClick={() => navigate('/client/jobs')}
+              >
+                View All Active Jobs ({activeJobs.length})
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center group">
+              <PlayCircle className="w-8 h-8 text-blue-400 group-hover:scale-110 transition-transform duration-300" />
+            </div>
+            <h3 className="text-xl font-medium mb-2">No Active Jobs</h3>
+            <p className="text-gray-400 mb-6 max-w-md mx-auto">
+              Start your first distributed rendering job to see live progress and statistics here
+            </p>
+            <Button
+              onClick={() => navigate('/client/create-job')}
+              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 transition-all duration-300 hover:scale-105"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Create New Render Job
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </motion.div>
+)
+
+// Existing RecentActivitySection component (keep as is)
+const RecentActivitySection: React.FC<{ recentActivity: any[], navigate: any }> = ({ recentActivity, navigate }) => (
+  <motion.div
+    initial={{ opacity: 0, x: -20 }}
+    animate={{ opacity: 1, x: 0 }}
+    transition={{ delay: 0.3 }}
+  >
+    <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Activity className="w-5 h-5 text-purple-400" />
+          Recent Activity
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {recentActivity.length > 0 ? (
+          <div className="space-y-3">
+            {recentActivity.map((activity) => (
+              <div 
+                key={activity.id}
+                className="flex items-center gap-4 p-3 rounded-lg hover:bg-white/5 transition-all duration-300 cursor-pointer group"
+                onClick={() => navigate(`/client/jobs/${activity.id}`)}
+              >
+                <div className={`p-2 rounded-full transition-transform duration-300 group-hover:scale-110 ${
+                  activity.type === 'success' ? 'bg-emerald-500/20' :
+                  activity.type === 'processing' ? 'bg-blue-500/20' :
+                  activity.type === 'failed' ? 'bg-red-500/20' :
+                  'bg-blue-500/20'
+                }`}>
+                  {activity.type === 'success' ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-400" />
+                  ) : activity.type === 'processing' ? (
+                    <PlayCircle className="w-4 h-4 text-blue-400" />
+                  ) : activity.type === 'failed' ? (
+                    <AlertCircle className="w-4 h-4 text-red-400" />
+                  ) : (
+                    <Upload className="w-4 h-4 text-blue-400" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate mb-1">{activity.title}</div>
+                  <div className="text-sm text-gray-400 flex items-center gap-2 flex-wrap">
+                    <span>{activity.time}</span>
+                    <span>•</span>
+                    <Badge className={`px-2 py-0.5 text-xs ${
+                      activity.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                      activity.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
+                      activity.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                      'bg-amber-500/20 text-amber-400'
+                    }`}>
+                      {activity.status}
+                    </Badge>
+                    {activity.progress > 0 && activity.status !== 'completed' && (
+                      <>
+                        <span>•</span>
+                        <span>{activity.progress}%</span>
+                        {activity.status === 'processing' && (
+                          <span className="text-xs text-blue-400">(Live)</span>
+                        )}
+                      </>
+                    )}
+                    {activity.framesCompleted > 0 && (
+                      <>
+                        <span>•</span>
+                        <span className="text-xs">
+                          {activity.framesCompleted}/{activity.totalFrames} frames
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">
+            <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>No recent activity</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </motion.div>
+)
+
 const ClientDashboard: React.FC = () => {
   const navigate = useNavigate()
   const { 
@@ -67,8 +538,9 @@ const ClientDashboard: React.FC = () => {
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [realTimeStats, setRealTimeStats] = useState<any>(null)
   const [jobSubscriptions, setJobSubscriptions] = useState<Set<string>>(new Set())
+  const [activeTab, setActiveTab] = useState('dashboard')
 
-  // Calculate accurate statistics from jobs (automatically updates when jobs change)
+  // Calculate accurate statistics from jobs
   const dashboardStats = useMemo(() => {
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -77,7 +549,6 @@ const ClientDashboard: React.FC = () => {
     const activeJobs = jobs.filter(j => j.status === 'processing' || j.status === 'pending')
     const failedJobs = jobs.filter(j => j.status === 'failed')
     
-    // Calculate frames rendered today
     const framesRenderedToday = completedJobs.reduce((total, job) => {
       const jobDate = new Date(job.updatedAt || job.createdAt)
       if (jobDate >= today) {
@@ -86,15 +557,11 @@ const ClientDashboard: React.FC = () => {
       return total
     }, 0)
     
-    // Calculate total frames rendered across all completed jobs
     const totalFramesRendered = completedJobs.reduce((total, job) => {
       return total + (job.outputUrls?.length || job.frames?.rendered?.length || 0)
     }, 0)
     
-    // Calculate total render time (estimate: 2 minutes per frame)
-    const estimatedRenderTime = totalFramesRendered * 120 // 2 minutes per frame
-    
-    // Calculate credits used (estimate: 0.5 credits per frame)
+    const estimatedRenderTime = totalFramesRendered * 120
     const creditsUsed = completedJobs.reduce((sum, job) => {
       const frames = job.outputUrls?.length || job.frames?.rendered?.length || 0
       return sum + (frames * 0.5)
@@ -116,19 +583,16 @@ const ClientDashboard: React.FC = () => {
     }
   }, [jobs])
 
-  // Subscribe to job updates for active jobs
   const subscribeToActiveJobs = useCallback(() => {
     const activeJobIds = jobs
       .filter(job => job.status === 'processing' || job.status === 'pending')
       .map(job => job.jobId)
     
-    // Only subscribe to jobs we're not already subscribed to
     const jobsToSubscribe = activeJobIds.filter(jobId => !jobSubscriptions.has(jobId))
     
     if (jobsToSubscribe.length > 0 && websocketService.isConnected()) {
       jobsToSubscribe.forEach(jobId => {
         websocketService.subscribeToJob(jobId, (updatedJob) => {
-          // This will trigger the jobStore to update and re-render
           console.log(`📊 Dashboard received update for job ${jobId}:`, updatedJob.progress)
         })
       })
@@ -137,7 +601,6 @@ const ClientDashboard: React.FC = () => {
     }
   }, [jobs, jobSubscriptions])
 
-  // Cleanup subscriptions for completed/failed jobs
   const cleanupJobSubscriptions = useCallback(() => {
     const activeJobIds = new Set(
       jobs
@@ -145,17 +608,11 @@ const ClientDashboard: React.FC = () => {
         .map(job => job.jobId)
     )
     
-    // Remove subscriptions for jobs that are no longer active
     const subscriptionsToRemove = Array.from(jobSubscriptions).filter(
       jobId => !activeJobIds.has(jobId)
     )
     
     if (subscriptionsToRemove.length > 0) {
-      subscriptionsToRemove.forEach(jobId => {
-        // Unsubscribe logic would be here if WebSocketService had unsubscribe method
-        // For now, we just remove from our tracking
-      })
-      
       setJobSubscriptions(prev => {
         const newSet = new Set(prev)
         subscriptionsToRemove.forEach(jobId => newSet.delete(jobId))
@@ -166,11 +623,8 @@ const ClientDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchDashboardData()
-    
-    // Connect WebSocket
     websocketService.connect()
     
-    // Subscribe to system updates
     const unsubscribeSystem = websocketService.subscribeToSystem((data) => {
       if (data.type === 'system_stats') {
         setRealTimeStats(data.data)
@@ -182,7 +636,6 @@ const ClientDashboard: React.FC = () => {
     }
   }, [])
 
-  // Subscribe to active jobs when jobs list changes
   useEffect(() => {
     if (websocketService.isConnected()) {
       subscribeToActiveJobs()
@@ -193,14 +646,9 @@ const ClientDashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       setRefreshing(true)
-      
-      // Fetch dashboard stats from API
       const apiStats = await getDashboardStats()
       setSystemStats(apiStats)
-      
-      // Refresh jobs
       await refreshJobs()
-      
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
       toast.error('Failed to load dashboard data')
@@ -211,7 +659,6 @@ const ClientDashboard: React.FC = () => {
 
   const formatTime = (seconds: number) => {
     if (!seconds || seconds <= 0) return '0s'
-    
     const days = Math.floor(seconds / 86400)
     const hours = Math.floor((seconds % 86400) / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
@@ -226,18 +673,14 @@ const ClientDashboard: React.FC = () => {
     fetchDashboardData()
   }
 
-  // Calculate accurate progress for jobs - uses store data which is updated by WebSocket
   const getJobProgress = (job: Job): number => {
-    // Job store already has the latest progress from WebSocket updates
     return job.progress || 0
   }
 
-  // Calculate actual rendered frames for a job
   const getRenderedFrames = (job: Job): number => {
     return job.outputUrls?.length || job.frames?.rendered?.length || 0
   }
 
-  // Active jobs with accurate progress
   const activeJobs = useMemo(() => {
     return jobs
       .filter(j => j.status === 'processing' || j.status === 'pending')
@@ -268,7 +711,6 @@ const ClientDashboard: React.FC = () => {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
   }, [jobs])
 
-  // Enhanced stats cards with better metrics
   const stats = [
     { 
       label: 'Active Renders', 
@@ -308,7 +750,6 @@ const ClientDashboard: React.FC = () => {
     },
   ]
 
-  // Calculate average progress of active jobs
   const averageProgress = useMemo(() => {
     if (activeJobs.length === 0) return 0
     const total = activeJobs.reduce((sum, job) => sum + getJobProgress(job), 0)
@@ -437,432 +878,221 @@ const ClientDashboard: React.FC = () => {
           </motion.div>
         )}
 
-        {/* Stats Overview */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
-        >
-          {stats.map((stat, index) => (
-            <motion.div 
-              key={stat.label} 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 hover:bg-gray-900/70 transition-all duration-300 hover:scale-[1.02] group">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-sm text-gray-400 mb-2">{stat.label}</p>
-                      <p className="text-2xl font-bold mb-1">{stat.value}</p>
-                      <p className="text-xs text-gray-400">{stat.description}</p>
-                      <p className="text-xs text-emerald-400 mt-2">{stat.change}</p>
-                    </div>
-                    <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.bg} group-hover:scale-110 transition-transform duration-300`}>
-                      <stat.icon className={`w-6 h-6 ${stat.color}`} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </motion.div>
+        <StatsSection stats={stats} isLoading={isLoading} />
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Active Jobs & Recent Activity */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="space-y-6">
-              {/* Active Jobs */}
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-              >
-                <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2 mb-2">
-                          <PlayCircle className="w-5 h-5 text-blue-400" />
-                          Active Jobs ({activeJobs.length})
-                          {webSocketConnected && (
-                            <span className="text-xs text-emerald-400 animate-pulse">
-                              • Live
-                            </span>
-                          )}
-                        </CardTitle>
-                        <CardDescription>
-                          Jobs currently being processed across the network
-                          {activeJobs.length > 0 && (
-                            <span className="text-blue-400 ml-2">
-                              Average progress: {averageProgress}%
-                            </span>
-                          )}
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {isLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
-                      </div>
-                    ) : activeJobs.length > 0 ? (
-                      <div className="space-y-4">
-                        {activeJobs.slice(0, 3).map((job) => {
-                          const progress = getJobProgress(job)
-                          const renderedFrames = getRenderedFrames(job)
-                          const totalFrames = job.frames?.total || 0
-                          const activeNodes = Object.keys(job.assignedNodes || {}).length
-                          
-                          return (
-                            <div 
-                              key={job.jobId}
-                              className="group p-4 rounded-lg bg-white/5 border border-white/10 hover:border-blue-500/30 hover:bg-white/10 transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-blue-500/10"
-                              onClick={() => navigate(`/client/jobs/${job.jobId}`)}
-                            >
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                                  <div className="font-medium truncate max-w-xs">
-                                    {job.blendFileName}
-                                  </div>
-                                  <Badge variant="outline" className="border-blue-500/30 text-blue-400">
-                                    {job.type === 'animation' ? 'Animation' : 'Image'}
-                                  </Badge>
-                                </div>
-                                <div className="text-sm font-medium text-blue-400">
-                                  {progress}%
-                                  {progress > 0 && progress < 100 && (
-                                    <span className="text-xs text-gray-400 ml-1">
-                                      (Live)
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              <Progress value={progress} className="h-2 mb-3" />
-                              
-                              <div className="flex items-center justify-between text-sm text-gray-400">
-                                <div className="flex items-center gap-4">
-                                  <span className="flex items-center gap-1">
-                                    <Film className="w-3 h-3" />
-                                    {renderedFrames}/{totalFrames} frames
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <Users className="w-3 h-3" />
-                                    {activeNodes} {activeNodes === 1 ? 'node' : 'nodes'}
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <HardDrive className="w-3 h-3" />
-                                    {job.outputUrls?.length || 0} outputs
-                                  </span>
-                                </div>
-                                <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-blue-400 flex items-center gap-1">
-                                  View details
-                                  <ArrowRight className="w-3 h-3" />
-                                </span>
-                              </div>
-                            </div>
-                          )
-                        })}
-                        
-                        {activeJobs.length > 3 && (
-                          <Button
-                            variant="ghost"
-                            className="w-full border-dashed border-white/20 hover:border-white/40 hover:bg-white/5 transition-colors duration-300"
-                            onClick={() => navigate('/client/jobs')}
-                          >
-                            View All Active Jobs ({activeJobs.length})
-                            <ArrowRight className="w-4 h-4 ml-2" />
-                          </Button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center group">
-                          <PlayCircle className="w-8 h-8 text-blue-400 group-hover:scale-110 transition-transform duration-300" />
-                        </div>
-                        <h3 className="text-xl font-medium mb-2">No Active Jobs</h3>
-                        <p className="text-gray-400 mb-6 max-w-md mx-auto">
-                          Start your first distributed rendering job to see live progress and statistics here
-                        </p>
+        {/* Main Content with Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid grid-cols-2 bg-gray-900/50 border border-white/10">
+            <TabsTrigger value="dashboard" className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="all-jobs" className="flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              All Jobs ({jobs.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="dashboard" className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left Column - Active Jobs & Recent Activity */}
+              <div className="lg:col-span-2 space-y-6">
+                <DashboardTab 
+                  activeJobs={activeJobs} 
+                  recentActivity={recentActivity} 
+                  navigate={navigate} 
+                  isLoading={isLoading} 
+                  webSocketConnected={webSocketConnected} 
+                  averageProgress={averageProgress} 
+                />
+              </div>
+
+              {/* Right Column - Quick Actions & System Info */}
+              <div className="space-y-6">
+                {/* Quick Actions */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <Card className="bg-gradient-to-br from-blue-900/30 to-purple-900/30 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Zap className="w-5 h-5 text-amber-400" />
+                        Quick Actions
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-3">
                         <Button
+                          variant="outline"
+                          className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
                           onClick={() => navigate('/client/create-job')}
-                          className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 transition-all duration-300 hover:scale-105"
                         >
-                          <Upload className="w-4 h-4 mr-2" />
-                          Create New Render Job
+                          <Upload className="w-6 h-6 mb-2" />
+                          <span className="text-sm font-medium">New Job</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
+                          onClick={() => navigate('/client/jobs')}
+                        >
+                          <FileText className="w-6 h-6 mb-2" />
+                          <span className="text-sm font-medium">All Jobs</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
+                          onClick={() => navigate('/client/settings')}
+                        >
+                          <Settings className="w-6 h-6 mb-2" />
+                          <span className="text-sm font-medium">Settings</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
+                          onClick={() => navigate('/client/billing')}
+                        >
+                          <DollarSign className="w-6 h-6 mb-2" />
+                          <span className="text-sm font-medium">Credits</span>
                         </Button>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
 
-              {/* Recent Activity */}
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-purple-400" />
-                      Recent Activity
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {recentActivity.length > 0 ? (
-                      <div className="space-y-3">
-                        {recentActivity.map((activity) => (
-                          <div 
-                            key={activity.id}
-                            className="flex items-center gap-4 p-3 rounded-lg hover:bg-white/5 transition-all duration-300 cursor-pointer group"
-                            onClick={() => navigate(`/client/jobs/${activity.id}`)}
-                          >
-                            <div className={`p-2 rounded-full transition-transform duration-300 group-hover:scale-110 ${
-                              activity.type === 'success' ? 'bg-emerald-500/20' :
-                              activity.type === 'processing' ? 'bg-blue-500/20' :
-                              activity.type === 'failed' ? 'bg-red-500/20' :
-                              'bg-blue-500/20'
-                            }`}>
-                              {activity.type === 'success' ? (
-                                <CheckCircle className="w-4 h-4 text-emerald-400" />
-                              ) : activity.type === 'processing' ? (
-                                <PlayCircle className="w-4 h-4 text-blue-400" />
-                              ) : activity.type === 'failed' ? (
-                                <AlertCircle className="w-4 h-4 text-red-400" />
-                              ) : (
-                                <Upload className="w-4 h-4 text-blue-400" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate mb-1">{activity.title}</div>
-                              <div className="text-sm text-gray-400 flex items-center gap-2 flex-wrap">
-                                <span>{activity.time}</span>
-                                <span>•</span>
-                                <Badge className={`px-2 py-0.5 text-xs ${
-                                  activity.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
-                                  activity.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
-                                  activity.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                                  'bg-amber-500/20 text-amber-400'
-                                }`}>
-                                  {activity.status}
-                                </Badge>
-                                {activity.progress > 0 && activity.status !== 'completed' && (
-                                  <>
-                                    <span>•</span>
-                                    <span>{activity.progress}%</span>
-                                    {activity.status === 'processing' && (
-                                      <span className="text-xs text-blue-400">(Live)</span>
-                                    )}
-                                  </>
-                                )}
-                                {activity.framesCompleted > 0 && (
-                                  <>
-                                    <span>•</span>
-                                    <span className="text-xs">
-                                      {activity.framesCompleted}/{activity.totalFrames} frames
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <ArrowRight className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-gray-400">
-                        <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                        <p>No recent activity</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
-          </div>
-
-          {/* Right Column - Quick Actions & System Info */}
-          <div className="space-y-6">
-            {/* Quick Actions */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card className="bg-gradient-to-br from-blue-900/30 to-purple-900/30 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-amber-400" />
-                    Quick Actions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      variant="outline"
-                      className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
-                      onClick={() => navigate('/client/create-job')}
-                    >
-                      <Upload className="w-6 h-6 mb-2" />
-                      <span className="text-sm font-medium">New Job</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
-                      onClick={() => navigate('/client/jobs')}
-                    >
-                      <FileText className="w-6 h-6 mb-2" />
-                      <span className="text-sm font-medium">All Jobs</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
-                      onClick={() => navigate('/client/settings')}
-                    >
-                      <Settings className="w-6 h-6 mb-2" />
-                      <span className="text-sm font-medium">Settings</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
-                      onClick={() => navigate('/client/billing')}
-                    >
-                      <DollarSign className="w-6 h-6 mb-2" />
-                      <span className="text-sm font-medium">Credits</span>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* System Status */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    {webSocketConnected ? (
-                      <Wifi className="w-5 h-5 text-emerald-400 animate-pulse" />
-                    ) : (
-                      <WifiOff className="w-5 h-5 text-red-400" />
-                    )}
-                    System Status
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Connection:</span>
-                      <Badge className={`px-2 py-1 ${webSocketConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                        {webSocketConnected ? 'Live Connected' : 'Disconnected'}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Live Jobs:</span>
-                      <span className="font-medium text-blue-400">{jobSubscriptions.size}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Total Jobs:</span>
-                      <span className="font-medium">{dashboardStats.totalJobs}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Completed:</span>
-                      <span className="font-medium text-emerald-400">{dashboardStats.completedJobs}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Failed:</span>
-                      <span className="font-medium text-red-400">{dashboardStats.failedJobs}</span>
-                    </div>
-                    
-                    <div className="pt-4 border-t border-white/10">
-                      <div className="text-sm text-gray-400 mb-2 flex items-center justify-between">
-                        <span>Credits Usage</span>
-                        <span className="font-medium">{dashboardStats.creditsUsed.toFixed(1)} used</span>
-                      </div>
-                      <Progress 
-                        value={Math.min((dashboardStats.creditsUsed / 1000) * 100, 100)} 
-                        className="h-2 mb-1" 
-                      />
-                      <div className="text-xs text-gray-400 flex justify-between">
-                        <span>0 credits</span>
-                        <span>1000 credits</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Performance Metrics */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="bg-gradient-to-br from-emerald-900/30 to-cyan-900/30 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-emerald-400" />
-                    Performance
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center p-3 rounded-lg bg-white/5">
-                        <div className="text-2xl font-bold mb-1">{dashboardStats.framesRenderedToday}</div>
-                        <div className="text-xs text-gray-400">Frames Today</div>
-                      </div>
-                      <div className="text-center p-3 rounded-lg bg-white/5">
-                        <div className="text-2xl font-bold mb-1">
-                          {formatTime(dashboardStats.estimatedRenderTime)}
+                {/* System Status */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        {webSocketConnected ? (
+                          <Wifi className="w-5 h-5 text-emerald-400 animate-pulse" />
+                        ) : (
+                          <WifiOff className="w-5 h-5 text-red-400" />
+                        )}
+                        System Status
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400">Connection:</span>
+                          <Badge className={`px-2 py-1 ${webSocketConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {webSocketConnected ? 'Live Connected' : 'Disconnected'}
+                          </Badge>
                         </div>
-                        <div className="text-xs text-gray-400">Time Saved</div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400">Live Jobs:</span>
+                          <span className="font-medium text-blue-400">{jobSubscriptions.size}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400">Total Jobs:</span>
+                          <span className="font-medium">{dashboardStats.totalJobs}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400">Completed:</span>
+                          <span className="font-medium text-emerald-400">{dashboardStats.completedJobs}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400">Failed:</span>
+                          <span className="font-medium text-red-400">{dashboardStats.failedJobs}</span>
+                        </div>
+                        
+                        <div className="pt-4 border-t border-white/10">
+                          <div className="text-sm text-gray-400 mb-2 flex items-center justify-between">
+                            <span>Credits Usage</span>
+                            <span className="font-medium">{dashboardStats.creditsUsed.toFixed(1)} used</span>
+                          </div>
+                          <Progress 
+                            value={Math.min((dashboardStats.creditsUsed / 1000) * 100, 100)} 
+                            className="h-2 mb-1" 
+                          />
+                          <div className="text-xs text-gray-400 flex justify-between">
+                            <span>0 credits</span>
+                            <span>1000 credits</span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    
-                    <div className="text-sm text-gray-400 space-y-2">
-                      <div className="flex justify-between">
-                        <span>Avg. Frame Time:</span>
-                        <span className="font-medium">~120s</span>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {/* Performance Metrics */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <Card className="bg-gradient-to-br from-emerald-900/30 to-cyan-900/30 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-emerald-400" />
+                        Performance
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="text-center p-3 rounded-lg bg-white/5">
+                            <div className="text-2xl font-bold mb-1">{dashboardStats.framesRenderedToday}</div>
+                            <div className="text-xs text-gray-400">Frames Today</div>
+                          </div>
+                          <div className="text-center p-3 rounded-lg bg-white/5">
+                            <div className="text-2xl font-bold mb-1">
+                              {formatTime(dashboardStats.estimatedRenderTime)}
+                            </div>
+                            <div className="text-xs text-gray-400">Time Saved</div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-sm text-gray-400 space-y-2">
+                          <div className="flex justify-between">
+                            <span>Avg. Frame Time:</span>
+                            <span className="font-medium">~120s</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Jobs Today:</span>
+                            <span className="font-medium text-emerald-400">{dashboardStats.completedToday}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Success Rate:</span>
+                            <span className="font-medium">{
+                              dashboardStats.totalJobs > 0 
+                                ? `${Math.round((dashboardStats.completedJobs / dashboardStats.totalJobs) * 100)}%`
+                                : '100%'
+                            }</span>
+                          </div>
+                        </div>
+                        
+                        <Button 
+                          className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 transition-all duration-300 hover:scale-105 active:scale-95"
+                          onClick={() => navigate('/client/analytics')}
+                        >
+                          View Analytics
+                          <ArrowRight className="w-4 h-4 ml-2" />
+                        </Button>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Jobs Today:</span>
-                        <span className="font-medium text-emerald-400">{dashboardStats.completedToday}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Success Rate:</span>
-                        <span className="font-medium">{
-                          dashboardStats.totalJobs > 0 
-                            ? `${Math.round((dashboardStats.completedJobs / dashboardStats.totalJobs) * 100)}%`
-                            : '100%'
-                        }</span>
-                      </div>
-                    </div>
-                    
-                    <Button 
-                      className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 transition-all duration-300 hover:scale-105 active:scale-95"
-                      onClick={() => navigate('/client/analytics')}
-                    >
-                      View Analytics
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-        </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="all-jobs">
+            <AllJobsTab 
+              jobs={jobs} 
+              navigate={navigate} 
+              getJobProgress={getJobProgress} 
+              getRenderedFrames={getRenderedFrames} 
+            />
+          </TabsContent>
+        </Tabs>
       </div>
     </motion.div>
   )
