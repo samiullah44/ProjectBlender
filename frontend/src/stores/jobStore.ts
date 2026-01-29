@@ -12,7 +12,7 @@ interface Frame {
   freshUrl?: string
 }
 
-interface Job {
+export interface Job {
   jobId: string
   projectId: string
   userId: string
@@ -88,6 +88,7 @@ interface JobStore {
     totalCreditsUsed: number
     totalFramesRendered: number
     avgRenderTimePerFrame: number
+    framesRenderedToday: number
   }>
   
   // Real-time updates
@@ -104,7 +105,7 @@ interface JobStore {
   clearCurrentJob: () => void
 }
 
-const API_BASE_URL = import.meta.env.REACT_APP_API_URL || 'http://localhost:3000'
+const API_BASE_URL = import.meta.env.REACT_APP_API_URL || 'http://localhost:3000/api'
 
 const jobStore = create<JobStore>((set, get) => ({
   jobs: [],
@@ -117,7 +118,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.post(`${API_BASE_URL}/api/jobs/upload`, formData, {
+      const response = await axios.post(`${API_BASE_URL}/jobs/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -187,7 +188,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.get(`${API_BASE_URL}/api/jobs/${jobId}`)
+      const response = await axios.get(`${API_BASE_URL}/jobs/${jobId}`)
       
       const job: Job = response.data
       set({ 
@@ -216,7 +217,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.get(`${API_BASE_URL}/api/jobs`, { params })
+      const response = await axios.get(`${API_BASE_URL}/jobs`, { params })
       
       const jobs = response.data.jobs || []
       set({ jobs, isLoading: false })
@@ -233,7 +234,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.delete(`${API_BASE_URL}/api/jobs/${jobId}`, {
+      const response = await axios.delete(`${API_BASE_URL}/jobs/${jobId}`, {
         data: { cleanupS3 }
       })
       
@@ -271,7 +272,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.post(`${API_BASE_URL}/api/jobs/${jobId}/select-frames`, { frames })
+      const response = await axios.post(`${API_BASE_URL}/jobs/${jobId}/select-frames`, { frames })
       
       set({ isLoading: false })
       
@@ -312,7 +313,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.get(`${API_BASE_URL}/api/jobs/dashboard/stats`)
+      const response = await axios.get(`${API_BASE_URL}/jobs/dashboard/stats`)
       
       set({ isLoading: false })
       return response.data.stats
@@ -330,7 +331,8 @@ const jobStore = create<JobStore>((set, get) => ({
         totalRenderTime: 0,
         totalCreditsUsed: 0,
         totalFramesRendered: 0,
-        avgRenderTimePerFrame: 0
+        avgRenderTimePerFrame: 0,
+        framesRenderedToday: 0
       }
     }
   },
