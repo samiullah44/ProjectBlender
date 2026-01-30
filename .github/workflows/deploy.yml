@@ -1,0 +1,46 @@
+name: Auto Deploy Backend to EC2
+
+on:
+  push:
+    branches:
+      - main  # triggers on push to main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e  # stop on first error
+
+            echo "Navigating to render folder..."
+            cd ~/render
+
+            echo "Cleaning old files except backend..."
+            find . -maxdepth 1 ! -name '.' ! -name 'backend' -exec rm -rf {} +
+
+            echo "Pulling latest code from GitHub..."
+            GIT_SSH_COMMAND="ssh -i ~/.ssh/github_deploy_key" git fetch --all
+            GIT_SSH_COMMAND="ssh -i ~/.ssh/github_deploy_key" git reset --hard origin/main
+
+            echo "Installing backend dependencies..."
+            cd backend
+            npm install
+            npm run build
+
+            echo "Starting or restarting PM2..."
+            pm2 describe render-server > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+            pm2 restart render-server
+            else
+            pm2 start npm --name render-server -- run dev
+            fi
+
+            pm2 save
+            echo "Deployment complete!"
