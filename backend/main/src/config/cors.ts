@@ -10,6 +10,7 @@ export const createCorsOptions = (): CorsOptions => ({
       'http://localhost:3000',
       'http://localhost:5173',
       'http://localhost:8080',
+      'https://main.d1zbjn2d2gkpde.amplifyapp.com'
       env.frontendUrl || '',
       /\.awsapprunner\.com$/
     ].filter(Boolean);
