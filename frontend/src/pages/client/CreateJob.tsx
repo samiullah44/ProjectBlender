@@ -1,5 +1,5 @@
 // pages/client/CreateJob.tsx - UPDATED
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback,  } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Upload, 
@@ -9,10 +9,9 @@ import {
   Clock,
   DollarSign,
   CheckCircle,
-  ArrowRight,
-  AlertCircle,
+
   Loader2,
-  Monitor,
+
   Image as ImageIcon,
   Film,
   Gauge,

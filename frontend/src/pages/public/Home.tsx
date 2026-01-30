@@ -12,7 +12,7 @@ import {
   Globe,
   Clock,
   Wallet,
-  Sparkles,
+  // Sparkles,
   ChevronLeft,
   ChevronRight as ChevronRightIcon
 } from 'lucide-react'
@@ -24,7 +24,7 @@ const HERO_IMAGES = ["/hero.jpg","/hero1.jpg"
   ]
 
 const FEATURE_IMAGE_1 = "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=1080&q=80"
-const FEATURE_IMAGE_2 = "https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&w=1080&q=80"
+// const FEATURE_IMAGE_2 = "https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&w=1080&q=80"
 const NETWORK_IMAGE = "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=1080&q=80"
 
 const HomePage: React.FC = () => {

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  Cpu, 
+  
   Menu, 
   X, 
   ChevronDown, 
@@ -14,12 +14,10 @@ import {
   Home,
   BarChart3,
   Globe,
-  Cloud,
-  Users,
+ 
   Zap,
   Wallet,
   FileText,
-  HelpCircle,
   Bell,
   Search
 } from 'lucide-react'
@@ -54,7 +52,8 @@ const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
-  const [scrolled, setScrolled] = useState(false)
+ const [scrolled, setScrolled] = useState(false)
+
   const [currentUser, setCurrentUser] = useState<UserData | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
@@ -71,13 +70,14 @@ const Navbar: React.FC = () => {
     setCurrentUser(mockUser)
   }, [])
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20)
-    }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
+useEffect(() => {
+  const handleScroll = () => {
+    setScrolled(window.scrollY > 20)
+  }
+  window.addEventListener('scroll', handleScroll)
+  return () => window.removeEventListener('scroll', handleScroll)
+}, [])
+
 
   const handleLogout = () => {
     // Add your logout logic here
