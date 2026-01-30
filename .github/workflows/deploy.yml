@@ -3,7 +3,7 @@ name: Auto Deploy Backend to EC2
 on:
   push:
     branches:
-      - main
+      - main #main
 
 jobs:
   deploy:
