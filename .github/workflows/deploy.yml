@@ -21,37 +21,31 @@ jobs:
 
             cd ~
 
-            if [ ! -d "render" ]; then
-              echo "render not found, cloning via SSH..."
+            if [ ! -d "render/.git" ]; then
+              echo "Cloning repo via SSH..."
+              rm -rf render
               git clone git@github.com:MWahhabMirzaVectorLabsFZELLC/renderNodes.git render
             else
               cd render
-
-              if [ -d ".git" ]; then
-                echo "Repo exists, fixing remote to SSH (just in case)..."
-                git remote set-url origin git@github.com:MWahhabMirzaVectorLabsFZELLC/renderNodes.git
-                git fetch origin
-                git reset --hard origin/main
-              else
-                echo "Not a git repo, recreating folder..."
-                cd ..
-                rm -rf render
-                git clone git@github.com:MWahhabMirzaVectorLabsFZELLC/renderNodes.git render
-              fi
+              git remote set-url origin git@github.com:MWahhabMirzaVectorLabsFZELLC/renderNodes.git
+              git fetch origin
+              git reset --hard origin/main
             fi
 
-            cd ~/render
-
             echo "Installing backend dependencies..."
-            cd backend
+            cd ~/render/backend/main
             npm install
-            npm run build
+
+            # Build only if build script exists
+            if npm run | grep -q "build"; then
+              npm run build
+            fi
 
             echo "Restarting PM2..."
             if pm2 describe render-server > /dev/null 2>&1; then
               pm2 restart render-server
             else
-              pm2 start npm --name render-server -- run dev
+              pm2 start npm --name render-server -- start
             fi
 
             pm2 save
