@@ -1,5 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { env } from "../config/env";
 
 export class S3Service {
   private s3Client: S3Client;
@@ -7,14 +8,14 @@ export class S3Service {
   private region: string;
 
   constructor() {
-    this.bucketName = process.env.S3_BUCKET_NAME!;
-    this.region = process.env.AWS_REGION!;
-    
+    this.bucketName = env.aws.s3Bucket;
+    this.region = env.aws.region;
+
     this.s3Client = new S3Client({
       region: this.region,
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+        accessKeyId: env.aws.accessKeyId!,
+        secretAccessKey: env.aws.secretAccessKey!
       }
     });
   }
@@ -25,7 +26,7 @@ export class S3Service {
   async uploadBlendFile(file: Express.Multer.File, jobId: string): Promise<string> {
     const fileName = `${file.originalname}`;
     const fileKey = `uploads/${jobId}/${fileName}`;
-    
+
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: fileKey,
@@ -39,7 +40,7 @@ export class S3Service {
     });
 
     await this.s3Client.send(command);
-    
+
     return fileKey;
   }
 
@@ -61,7 +62,7 @@ export class S3Service {
   async generateFrameUploadUrl(jobId: string, frame: number, expiresIn: number = 3600): Promise<{ uploadUrl: string; s3Key: string }> {
     const fileName = `frame_${frame.toString().padStart(4, '0')}.png`;
     const fileKey = `renders/${jobId}/${fileName}`;
-    
+
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: fileKey,
@@ -74,7 +75,7 @@ export class S3Service {
     });
 
     const uploadUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
-    
+
     return {
       uploadUrl,
       s3Key: fileKey
@@ -114,11 +115,11 @@ export class S3Service {
       const blendFilePattern = `uploads/${jobId}/`;
       // Note: For production, you would need to list and delete all files
       // This is simplified version
-      
+
       // Delete rendered frames
       const rendersPattern = `renders/${jobId}/`;
       // Similarly, list and delete all files
-      
+
       console.log(`Would delete files for job ${jobId}: ${blendFilePattern}, ${rendersPattern}`);
     } catch (error) {
       console.error(`Failed to delete job files for ${jobId}:`, error);

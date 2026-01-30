@@ -53,7 +53,7 @@ interface FrameImage {
 const jobDataCache = new Map<string, any>()
 const imageCache = new Map<string, string>()
 const cacheTimestamps = new Map<string, number>()
-const CACHE_DURATION = 10 * 60 * 1000 // 10 minutes
+const CACHE_DURATION = 20 * 60 * 1000 // 20 minutes
 
 const JobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>()
@@ -241,11 +241,6 @@ const JobDetails: React.FC = () => {
       
       // Update job store
       jobStore.getState().updateJobProgress(jobId, updatedJob)
-      
-      // Show completion toast
-      if (updatedJob.status === 'completed' && localJob?.status !== 'completed') {
-        toast.success('🎉 Job completed! All frames rendered.')
-      }
     })
 
     return () => {
@@ -891,7 +886,7 @@ const JobDetails: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-medium flex items-center gap-2">
                       <Film className="w-5 h-5 text-blue-400" />
-                      Rendered Frames (Ascending Order)
+                      Rendered Frames
                     </h3>
                     <p className="text-sm text-gray-400">
                       {frameStats.renderedFrames} of {frameStats.totalFrames} frames completed

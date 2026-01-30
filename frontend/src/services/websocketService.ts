@@ -7,6 +7,7 @@ class WebSocketService {
   private jobSubscriptions: Map<string, ((job: any) => void)[]> = new Map()
   private systemSubscriptions: ((data: any) => void)[] = [] // Added this back
   private nodeSubscriptions: Map<string, ((node: any) => void)[]> = new Map()
+  private jobStatusCache: Map<string, string> = new Map() // Track previous job statuses
   private reconnectAttempts = 0
   private maxReconnectAttempts = 10
   private reconnectDelay = 1000
@@ -114,6 +115,10 @@ class WebSocketService {
     const job = data.data
     console.log('📊 Job update received:', jobId, job.status, job.progress)
     
+    // Check for status transition to completed
+    const previousStatus = this.jobStatusCache.get(jobId)
+    const currentStatus = job.status
+    
     // Update job in store
     jobStore.getState().updateJobProgress(jobId, job)
 
@@ -121,10 +126,13 @@ class WebSocketService {
     const subscribers = this.jobSubscriptions.get(jobId) || []
     subscribers.forEach(callback => callback(job))
 
-    // Show toast for job completion
-    if (job.status === 'completed') {
+    // Show toast only when job transitions to completed (not on every update)
+    if (currentStatus === 'completed' && previousStatus !== 'completed') {
       toast.success(`🎉 Job "${job.blendFileName || job.jobId}" completed!`)
     }
+    
+    // Update status cache
+    this.jobStatusCache.set(jobId, currentStatus)
   }
 
   private handleNodeUpdate(data: any) {

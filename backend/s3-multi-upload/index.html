@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Multipart S3 Upload</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    input, button { margin: 10px 0; }
+    .chunk-progress { margin-top: 5px; width: 100%; background: #eee; }
+    .chunk-progress div { width: 0%; height: 20px; background-color: #4caf50; text-align: center; color: white; }
+  </style>
+</head>
+<body>
+  <h2>Upload Large File to S3</h2>
+  <input type="file" id="fileInput" />
+  <button id="uploadBtn">Upload</button>
+  <p id="fileSize"></p>
+  <p id="uploadedFile"></p>
+  <div id="progressContainer"></div>
+
+  <script>
+    const uploadBtn = document.getElementById("uploadBtn");
+    const fileInput = document.getElementById("fileInput");
+    const fileSizeEl = document.getElementById("fileSize");
+    const progressContainer = document.getElementById("progressContainer");
+    const uploadedFileEl = document.getElementById("uploadedFile");
+
+    let key, uploadId, partsETags = [];
+
+    uploadBtn.addEventListener("click", async () => {
+      const file = fileInput.files[0];
+      if (!file) return alert("Please select a file!");
+
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      fileSizeEl.textContent = `File Size: ${sizeMB} MB`;
+
+      const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
+      const parts = Math.ceil(file.size / CHUNK_SIZE);
+
+      // 1️⃣ Request presigned URLs from backend
+      const res = await fetch("http://localhost:3000/api/initiate-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, parts })
+      });
+      const data = await res.json();
+      key = data.key;
+      uploadId = data.uploadId;
+      const presignedUrls = data.presignedUrls;
+
+      // 2️⃣ Create progress bars
+      progressContainer.innerHTML = "";
+      presignedUrls.forEach((_, i) => {
+        const div = document.createElement("div");
+        div.className = "chunk-progress";
+        div.innerHTML = `<div id="chunk-${i}">0%</div>`;
+        progressContainer.appendChild(div);
+      });
+
+      // 3️⃣ Upload chunks
+      const uploadChunk = (chunk, index, url) => {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", url);
+          xhr.upload.onprogress = e => {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              const bar = document.getElementById(`chunk-${index}`);
+              bar.style.width = percent + "%";
+              bar.textContent = percent + "%";
+            }
+          };
+          xhr.onload = () => {
+            const etag = xhr.getResponseHeader("ETag");
+            if (!etag) return reject(new Error("ETag not returned from S3"));
+            partsETags[index] = { ETag: etag.replace(/"/g, ""), PartNumber: index + 1 };
+            resolve();
+          };
+          xhr.onerror = () => reject(new Error("Chunk upload failed"));
+          xhr.send(chunk);
+        });
+      };
+
+      try {
+        const chunkPromises = [];
+        for (let i = 0; i < parts; i++) {
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(start + CHUNK_SIZE, file.size);
+          const chunk = file.slice(start, end);
+          chunkPromises.push(uploadChunk(chunk, i, presignedUrls[i].url));
+        }
+        await Promise.all(chunkPromises);
+        alert("All chunks uploaded successfully!");
+
+        // 4️⃣ Automatically complete upload & create job
+        const completeRes = await fetch("http://localhost:3000/api/complete-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            key,
+            uploadId,
+            parts: partsETags,
+            // ✅ Hardcoded job metadata
+            jobId: "JOB-" + Date.now(),
+            userId: "user123",
+            projectId: "default-project",
+            type: "image",
+            settings: {
+              engine: "CYCLES",
+              device: "GPU",
+              samples: 128,
+              resolutionX: 1920,
+              resolutionY: 1080,
+              tileSize: 256,
+              outputFormat: "PNG"
+            },
+            inputFileOriginalName: file.name,
+            inputFileSize: file.size
+          })
+        });
+
+        const completeData = await completeRes.json();
+        uploadedFileEl.textContent = `File uploaded & job created! S3 URL: ${completeData.Location || key}`;
+        alert("Upload and job creation completed successfully!");
+      } catch (err) {
+        console.error(err);
+        alert("Error during upload or job creation: " + err.message);
+      }
+    });
+  </script>
+</body>
+</html>

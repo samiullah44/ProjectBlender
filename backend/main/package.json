@@ -32,6 +32,7 @@
     "express": "^5.2.1",
     "mongoose": "^8.9.5",
     "multer": "^2.0.2",
+    "uuid": "^13.0.0",
     "ws": "^8.19.0"
   },
   "devDependencies": {

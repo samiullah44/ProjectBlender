@@ -1,5 +1,6 @@
 import cors, { CorsOptions } from 'cors';
 import dotenv from 'dotenv';
+import { env } from "./env"
 
 dotenv.config();
 
@@ -9,13 +10,13 @@ export const createCorsOptions = (): CorsOptions => ({
       'http://localhost:3000',
       'http://localhost:5173',
       'http://localhost:8080',
-      process.env.FRONTEND_URL || '',
+      env.frontendUrl || '',
       /\.awsapprunner\.com$/
     ].filter(Boolean);
 
     // Allow requests with no origin
     if (!origin) return callback(null, true);
-    
+
     const isAllowed = allowedOrigins.some(allowed => {
       if (typeof allowed === 'string') return origin === allowed;
       if (allowed instanceof RegExp) return allowed.test(origin);

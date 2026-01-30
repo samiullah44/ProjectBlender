@@ -281,7 +281,7 @@ jobSchema.pre('findOneAndUpdate', function(next) {
 });
 
 // Indexes for optimized queries
-jobSchema.index({ jobId: 1 }, { unique: true });
+// jobSchema.index({ jobId: 1 }, { unique: true });
 jobSchema.index({ status: 1, createdAt: 1 });
 jobSchema.index({ projectId: 1, status: 1 });
 jobSchema.index({ userId: 1, createdAt: -1 });
