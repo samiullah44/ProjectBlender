@@ -20,14 +20,22 @@ jobs:
             set -e  # stop on first error
 
             echo "Navigating to render folder..."
-            cd ~/render
+            cd ~
+            
+            # Clone repo if it doesn't exist
+            if [ ! -d "render/.git" ]; then
+              echo "Repo not found, cloning..."
+              git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/MWahhabMirzaVectorLabsFZELLC/renderNodes.git render
+            fi
+
+            cd render
 
             echo "Cleaning old files except backend..."
             find . -maxdepth 1 ! -name '.' ! -name 'backend' -exec rm -rf {} +
 
             echo "Pulling latest code from GitHub..."
-            GIT_SSH_COMMAND="ssh -i ~/.ssh/github_deploy_key" git fetch --all
-            GIT_SSH_COMMAND="ssh -i ~/.ssh/github_deploy_key" git reset --hard origin/main
+            git fetch --all
+            git reset --hard origin/main
 
             echo "Installing backend dependencies..."
             cd backend
@@ -35,11 +43,10 @@ jobs:
             npm run build
 
             echo "Starting or restarting PM2..."
-            pm2 describe render-server > /dev/null 2>&1
-            if [ $? -eq 0 ]; then
-            pm2 restart render-server
+            if pm2 describe render-server > /dev/null 2>&1; then
+              pm2 restart render-server
             else
-            pm2 start npm --name render-server -- run dev
+              pm2 start npm --name render-server -- run dev
             fi
 
             pm2 save
