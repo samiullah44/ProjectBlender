@@ -8,6 +8,7 @@ import {env} from "./config/env"
 // Import routes
 import jobRoutes from './routes/api/jobs';
 import nodeRoutes from './routes/api/nodes';
+import authRoutes from './routes/api/auth';
 
 // Import your CORS middleware
 import { corsMiddleware } from './config/cors';
@@ -27,6 +28,7 @@ app.use(express.urlencoded({ extended: true, limit: '500mb' }));
 // Routes
 app.use('/api/jobs', jobRoutes);
 app.use('/api/nodes', nodeRoutes);
+app.use('/api/auth', authRoutes);
 
 // WebSocket endpoint
 app.get('/ws', (req, res) => {

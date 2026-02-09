@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document,Types } from 'mongoose';
 
 // Interface for output URL with S3 metadata
 export interface IJobOutput {
@@ -25,7 +25,7 @@ export interface IFrameAssignment {
 export interface IJob extends Document {
   jobId: string;
   projectId: string;
-  userId: string;
+  userId: Types.ObjectId | string;
   blendFileKey: string;    // S3 key for blend file
   blendFileUrl: string;    // Pre-signed URL for blend file
   blendFileName: string;
@@ -71,6 +71,13 @@ export interface IJob extends Document {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'; 
   progress: number;  // 0-100
   
+  uploadMetadata?: {
+    type: 'multipart' | 'single';
+    uploadId?: string;
+    parts?: number;
+    completedAt?: Date;
+  };
+
   // Results - now using IJobOutput structure
   outputUrls: IJobOutput[];
   renderTime?: number;  // Total render time in seconds
@@ -88,7 +95,8 @@ const jobSchema = new mongoose.Schema<IJob>({
   jobId: { 
     type: String, 
     required: true, 
-    unique: true 
+    unique: true,
+    index:true 
   },
   projectId: { 
     type: String, 
@@ -96,10 +104,10 @@ const jobSchema = new mongoose.Schema<IJob>({
     default: 'default-project'
   },
   userId: { 
-    type: String, 
-    required: true,
-    default: 'default-user'
-  },
+  type: Schema.Types.ObjectId,
+  ref: 'User',
+  required: true
+},
   blendFileKey: { 
     type: String, 
     required: true 
@@ -199,6 +207,16 @@ const jobSchema = new mongoose.Schema<IJob>({
     default: new Map()
   },
   
+   uploadMetadata: {
+    type: {
+      type: String,
+      enum: ['multipart', 'single'],
+      default: 'single'
+    },
+    uploadId: String,
+    parts: Number,
+    completedAt: Date
+  },
   // Enhanced frame assignment tracking
   frameAssignments: [{
     frame: { type: Number, required: true },

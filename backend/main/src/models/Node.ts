@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 export interface INode {
   nodeId: string;
   name?: string;
+  userId: mongoose.Types.ObjectId;
   status: 'online' | 'offline' | 'busy' | 'maintenance';
   os: string;
   hardware: {
@@ -58,6 +59,12 @@ export interface INode {
 const nodeSchema = new mongoose.Schema<INode>({
   nodeId: { type: String, required: true, unique: true },
   name: String,
+  userId: { 
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true, 
+  },
   status: { 
     type: String, 
     enum: ['online', 'offline', 'busy', 'maintenance'],

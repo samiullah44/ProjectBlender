@@ -1,7 +1,8 @@
 // stores/jobStore.ts - UPDATED
 import { create } from 'zustand'
-import axios from 'axios'
+import { axiosInstance } from '@/lib/axios'
 import { toast } from 'react-hot-toast'
+import { uploadService } from '@/services/uploadService'
 
 interface Frame {
   frame: number
@@ -10,6 +11,19 @@ interface Frame {
   fileSize: number
   uploadedAt: string
   freshUrl?: string
+}
+
+interface JobSettings {
+  engine: 'CYCLES' | 'EEVEE'
+  device: 'CPU' | 'GPU'
+  samples: number
+  resolutionX: number
+  resolutionY: number
+  tileSize: number
+  outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF'
+  denoiser?: 'NONE' | 'OPTIX' | 'OPENIMAGEDENOISE' | 'NLM'
+  selectedFrame?: number
+  creditsPerFrame: number
 }
 
 export interface Job {
@@ -64,9 +78,13 @@ interface JobStore {
   jobs: Job[]
   currentJob: Job | null
   isLoading: boolean
+   isUploading: boolean  
+  uploadProgress: number  
+  uploadStage: string 
   error: string | null
   webSocketConnected: boolean
 
+   
   // Actions
   createJob: (formData: FormData) => Promise<{ success: boolean; data?: any; error?: string }>
   getJob: (jobId: string) => Promise<Job | null>
@@ -90,6 +108,21 @@ interface JobStore {
     avgRenderTimePerFrame: number
     framesRenderedToday: number
   }>
+  createJobMultipart: (
+    file: File,
+    jobData: {
+      name: string
+      description: string
+      projectId: string
+      type: 'image' | 'animation'
+      settings: JobSettings
+      startFrame: number
+      endFrame: number
+      selectedFrame: number
+      userId?: string
+    }
+  ) => Promise<{ success: boolean; data?: any; error?: string }>
+
   
   // Real-time updates
   updateJobProgress: (jobId: string, updates: Partial<Job>) => void
@@ -99,18 +132,23 @@ interface JobStore {
   // WebSocket
   setWebSocketConnected: (connected: boolean) => void
   
+  setUploadProgress: (progress: number) => void
+  setUploadStage: (stage: string) => void
+  resetUploadState: () => void
+
   // Utility
   refreshJobs: () => Promise<void>
   clearError: () => void
   clearCurrentJob: () => void
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
-
 const jobStore = create<JobStore>((set, get) => ({
   jobs: [],
   currentJob: null,
   isLoading: false,
+   isUploading: false, 
+  uploadProgress: 0, 
+  uploadStage: 'idle', 
   error: null,
   webSocketConnected: false,
 
@@ -118,7 +156,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.post(`${API_BASE_URL}/jobs/upload`, formData, {
+      const response = await axiosInstance.post('/jobs/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -129,7 +167,7 @@ const jobStore = create<JobStore>((set, get) => ({
         const newJob: Job = {
           jobId: response.data.jobId,
           projectId: response.data.projectId,
-          userId: 'default-user', // You might want to get this from auth
+          userId: 'default-user',
           blendFileName: response.data.blendFileName || 'uploaded_file.blend',
           blendFileKey: response.data.fileStructure.blendFile,
           blendFileUrl: response.data.blendFileUrl,
@@ -183,12 +221,176 @@ const jobStore = create<JobStore>((set, get) => ({
       return { success: false, error: errorMessage }
     }
   },
+  createJobMultipart: async (file, jobData) => {
+    try {
+      console.log('🎯 Starting multipart job creation...')
+      console.log('📄 File info:', {
+        name: file.name,
+        size: `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+        type: file.type
+      })
+      console.log('⚙️ Job settings:', jobData)
+      
+      set({ 
+        isUploading: true,
+        uploadProgress: 0,
+        uploadStage: 'preparing',
+        error: null 
+      })
+      
+      // Upload the file using the multipart service
+      const result = await uploadService.uploadFileWithMultipart(
+        file,
+        {
+          name: jobData.name,
+          description: jobData.description || '',
+          projectId: jobData.projectId,
+          type: jobData.type,
+          startFrame: jobData.startFrame,
+          endFrame: jobData.endFrame,
+          selectedFrame: jobData.selectedFrame,
+          userId: jobData.userId || 'default-user',
+          settings: jobData.settings
+        },
+        (stage, progress) => {
+          console.log(`📈 Progress update: ${stage} - ${progress}%`)
+          set({
+            uploadStage: stage,
+            uploadProgress: progress
+          })
+          
+          // Show toast notifications for major milestones
+          if (stage === 'uploading' && progress % 25 === 0) {
+            toast.loading(`Uploading: ${progress}% complete`, {
+              id: 'upload-progress'
+            })
+          } else if (stage === 'completed') {
+            toast.dismiss('upload-progress')
+            toast.success('File uploaded successfully!')
+          }
+        }
+      )
+      
+      if (result.success) {
+  console.log('✅ Job creation successful:', result)
+  
+  // Check for job ID in different possible locations
+  const jobId = result.jobId || result.data?.jobId || result.job?.jobId
+  
+  if (!jobId) {
+    console.error('❌ No jobId found in response:', result)
+    throw new Error('Job created but no job ID returned')
+  }
+  
+  console.log('🎯 Extracted jobId:', jobId)
+  
+  const newJob: Job = {
+    jobId: jobId, // ✅ Use the extracted jobId
+    projectId: result.projectId || jobData.projectId,
+    userId: result.userId || jobData.userId || 'default-user',
+    blendFileName: file.name,
+    blendFileKey: result.fileStructure?.blendFile || result.key,
+    blendFileUrl: result.blendFileUrl,
+    type: result.type || jobData.type,
+    status: 'pending',
+    progress: 0,
+    settings: {
+      engine: result.settings?.engine || jobData.settings.engine,
+      device: result.settings?.device || jobData.settings.device,
+      samples: result.settings?.samples || jobData.settings.samples,
+      resolutionX: result.settings?.resolutionX || jobData.settings.resolutionX,
+      resolutionY: result.settings?.resolutionY || jobData.settings.resolutionY,
+      tileSize: result.settings?.tileSize || jobData.settings.tileSize,
+      outputFormat: result.settings?.outputFormat || jobData.settings.outputFormat,
+      denoiser: result.settings?.denoiser || jobData.settings.denoiser,
+      creditsPerFrame: result.settings?.creditsPerFrame || jobData.settings.creditsPerFrame
+    },
+    frames: {
+      start: result.settings?.startFrame || jobData.startFrame,
+      end: result.settings?.endFrame || jobData.endFrame,
+      total: result.totalFrames || 
+        (jobData.type === 'animation' 
+          ? (jobData.endFrame - jobData.startFrame + 1)
+          : 1),
+      selected: result.selectedFrames || [],
+      rendered: [],
+      failed: [],
+      assigned: []
+    },
+    outputUrls: [],
+    assignedNodes: {},
+    frameAssignments: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+  
+  console.log('📋 Created job object with ID:', newJob.jobId)
+  
+  set(state => ({ 
+    jobs: [newJob, ...state.jobs],
+    currentJob: newJob,
+    isUploading: false,
+    uploadProgress: 100,
+    uploadStage: 'completed'
+  }))
+  
+  toast.success('Job created successfully!')
+  
+  // Return jobId in the result so CreateJob.tsx can navigate to it
+  return { 
+    success: true, 
+    data: { 
+      jobId: newJob.jobId,
+      ...result 
+    } 
+  }
+} else {
+        const errorMsg = result.error || 'Failed to create job'
+        console.error('❌ Job creation failed:', errorMsg)
+        
+        set({ 
+          error: errorMsg, 
+          isUploading: false,
+          uploadStage: 'error'
+        })
+        
+        toast.error(errorMsg)
+        return { success: false, error: errorMsg }
+      }
+    } catch (error: any) {
+      console.error('💥 Error creating job with multipart upload:', error)
+      
+      let errorMessage = 'Failed to create job'
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      // Detailed error logging
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      })
+      
+      set({ 
+        error: errorMessage, 
+        isUploading: false,
+        uploadStage: 'error'
+      })
+      
+      toast.error(errorMessage)
+      return { success: false, error: errorMessage }
+    }
+  },
+
 
   getJob: async (jobId: string) => {
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.get(`${API_BASE_URL}/jobs/${jobId}`)
+      const response = await axiosInstance.get(`/jobs/${jobId}`)
       
       const job: Job = response.data
       set({ 
@@ -217,7 +419,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.get(`${API_BASE_URL}/jobs`, { params })
+      const response = await axiosInstance.get('/jobs', { params })
       
       const jobs = response.data.jobs || []
       set({ jobs, isLoading: false })
@@ -234,7 +436,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.delete(`${API_BASE_URL}/jobs/${jobId}`, {
+      const response = await axiosInstance.delete(`/jobs/${jobId}`, {
         data: { cleanupS3 }
       })
       
@@ -272,7 +474,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.post(`${API_BASE_URL}/jobs/${jobId}/select-frames`, { frames })
+      const response = await axiosInstance.post(`/jobs/${jobId}/select-frames`, { frames })
       
       set({ isLoading: false })
       
@@ -313,7 +515,7 @@ const jobStore = create<JobStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       
-      const response = await axios.get(`${API_BASE_URL}/jobs/dashboard/stats`)
+      const response = await axiosInstance.get('/jobs/dashboard/stats')
       
       set({ isLoading: false })
       return response.data.stats
@@ -367,6 +569,14 @@ const jobStore = create<JobStore>((set, get) => ({
   setWebSocketConnected: (connected: boolean) => {
     set({ webSocketConnected: connected })
   },
+  // NEW: Upload state management
+  setUploadProgress: (progress: number) => set({ uploadProgress: progress }),
+  setUploadStage: (stage: string) => set({ uploadStage: stage }),
+  resetUploadState: () => set({ 
+    isUploading: false, 
+    uploadProgress: 0, 
+    uploadStage: 'idle' 
+  }),
 
   refreshJobs: async () => {
     await get().listJobs({ limit: 50, page: 1 })

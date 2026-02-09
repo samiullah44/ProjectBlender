@@ -1,5 +1,5 @@
-// pages/client/CreateJob.tsx - UPDATED
-import React, { useState, useCallback,  } from 'react'
+// pages/client/CreateJob.tsx - UPDATED for multipart upload
+import React, { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Upload, 
@@ -9,9 +9,7 @@ import {
   Clock,
   DollarSign,
   CheckCircle,
-
   Loader2,
-
   Image as ImageIcon,
   Film,
   Gauge,
@@ -29,54 +27,90 @@ import { useNavigate } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import jobStore from '@/stores/jobStore'
 import { toast } from 'react-hot-toast'
-import { createJobFormData, validateJobFormData } from '@/utils/jobFormData'
+import { uploadService } from '@/services/uploadService'
+// REMOVED: import { createJobFormData, validateJobFormData } from '@/utils/jobFormData'
 
 type Step = 'upload' | 'settings' | 'review' | 'processing'
+
+// UPDATED: Add JobSettings interface
+interface JobSettings {
+  engine: 'CYCLES' | 'EEVEE'
+  device: 'CPU' | 'GPU'
+  samples: number
+  resolutionX: number
+  resolutionY: number
+  tileSize: number
+  outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF'
+  denoiser?: 'NONE' | 'OPTIX' | 'OPENIMAGEDENOISE' | 'NLM'
+  selectedFrame?: number
+  creditsPerFrame: number
+}
 
 interface JobFormData {
   name: string
   description: string
   projectId: string
   type: 'image' | 'animation'
-  engine: 'CYCLES' | 'EEVEE'
-  device: 'CPU' | 'GPU'
-  samples: number
-  resolutionX: number
-  resolutionY: number
   startFrame: number
   endFrame: number
   selectedFrame: number
-  framesPerNode: number
-  denoiser: 'NONE' | 'OPTIX' | 'OPENIMAGEDENOISE' | 'NLM'
-  tileSize: number
-  outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF'
-  creditsPerFrame: number
+  // UPDATED: Use JobSettings interface
+  settings: JobSettings
+}
+
+// NEW: Form validation helper (moved from utils/jobFormData.ts)
+const validateJobForm = (data: Partial<JobFormData>, uploadedFile: File | null): string[] => {
+  const errors: string[] = []
+  
+  if (!uploadedFile) errors.push('Blender file is required')
+  if (!data.name?.trim()) errors.push('Job name is required')
+  if (data.type === 'animation') {
+    if (!data.startFrame || !data.endFrame) errors.push('Frame range is required for animation')
+    if (data.startFrame && data.endFrame && data.startFrame >= data.endFrame) {
+      errors.push('Start frame must be less than end frame')
+    }
+  }
+  if (!data.settings?.resolutionX || !data.settings?.resolutionY) errors.push('Resolution is required')
+  if (data.settings?.resolutionX && data.settings.resolutionX < 1) errors.push('Width must be greater than 0')
+  if (data.settings?.resolutionY && data.settings.resolutionY < 1) errors.push('Height must be greater than 0')
+  if (!data.settings?.samples || data.settings.samples < 1) errors.push('Samples must be greater than 0')
+  
+  return errors
 }
 
 const CreateJob: React.FC = () => {
   const navigate = useNavigate()
-  const { createJob, isLoading } = jobStore()
+  // UPDATED: Get multipart upload method and upload state
+  const { 
+    createJobMultipart, 
+    isUploading, 
+    uploadProgress, 
+    uploadStage 
+  } = jobStore()
+  
   const [currentStep, setCurrentStep] = useState<Step>('upload')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   
+  // UPDATED: Initialize form data with settings object
   const [formData, setFormData] = useState<JobFormData>({
     name: '',
     description: '',
     projectId: 'default-project',
     type: 'animation',
-    engine: 'CYCLES',
-    device: 'GPU',
-    samples: 128,
-    resolutionX: 1920,
-    resolutionY: 1080,
     startFrame: 1,
     endFrame: 100,
     selectedFrame: 1,
-    framesPerNode: 5,
-    denoiser: 'OPTIX',
-    tileSize: 256,
-    outputFormat: 'PNG',
-    creditsPerFrame: 1
+    settings: {
+      engine: 'CYCLES',
+      device: 'GPU',
+      samples: 128,
+      resolutionX: 1920,
+      resolutionY: 1080,
+      tileSize: 256,
+      outputFormat: 'PNG',
+      denoiser: 'OPTIX',
+      creditsPerFrame: 1
+    }
   })
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -108,10 +142,22 @@ const CreateJob: React.FC = () => {
     maxSize: 500 * 1024 * 1024,
   })
 
+  // UPDATED: Handle settings changes
   const handleInputChange = (field: keyof JobFormData, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
+    }))
+  }
+
+  // UPDATED: Handle settings changes
+  const handleSettingsChange = (field: keyof JobSettings, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        [field]: value
+      }
     }))
   }
 
@@ -124,10 +170,7 @@ const CreateJob: React.FC = () => {
         }
         return true
       case 'settings':
-        const errors = validateJobFormData({
-          ...formData,
-          blendFile: uploadedFile!
-        })
+        const errors = validateJobForm(formData, uploadedFile)
         if (errors.length > 0) {
           errors.forEach(error => toast.error(error))
           return false
@@ -157,31 +200,97 @@ const CreateJob: React.FC = () => {
       setCurrentStep(steps[currentIndex - 1])
     }
   }
+// In your CreateJob.tsx - Update the handleSubmit function
 
-  const handleSubmit = async () => {
+const handleSubmit = async () => {
     if (!uploadedFile) {
       toast.error('No file uploaded')
       return
     }
 
-    try {
-      const formDataToSend = createJobFormData({
-        ...formData,
-        blendFile: uploadedFile
-      })
+    console.log('🚀 Submitting job creation...')
+    console.log('📄 File:', uploadedFile.name, `${(uploadedFile.size / (1024 * 1024)).toFixed(2)}MB`)
+    console.log('⚙️ Form data:', formData)
 
-      const result = await createJob(formDataToSend)
+    try {
+      console.log('🔄 Calling createJobMultipart...')
       
-      if (result.success) {
-        setCurrentStep('processing')
-        // Navigate to job details after a delay
+      // Use multipart upload method
+      const result = await createJobMultipart(uploadedFile, {
+        name: formData.name,
+        description: formData.description,
+        projectId: formData.projectId,
+        type: formData.type,
+        startFrame: formData.startFrame,
+        endFrame: formData.endFrame,
+        selectedFrame: formData.selectedFrame,
+        settings: formData.settings
+      })
+      
+      console.log('📤 Upload result:', result)
+      
+       if (result.success) {
+      console.log('✅ Job created successfully')
+      setCurrentStep('processing')
+      
+      // Get jobId from result (check multiple possible locations)
+      const jobId = result.data?.jobId || result.data?.data?.jobId
+      
+      if (jobId) {
+        console.log('🎯 Navigating to job details:', jobId)
+        
+        // Show success message for 2 seconds then navigate
         setTimeout(() => {
-          navigate(`/client/jobs/${result.data.jobId}`)
+          navigate(`/client/jobs/${jobId}`)
+        }, 2000)
+      } else {
+        console.error('❌ No jobId found in response:', result)
+        // Fallback: navigate to dashboard and show message
+        setTimeout(() => {
+          navigate('/client/dashboard')
+          toast.success('Job created! Check dashboard for details.')
         }, 2000)
       }
-    } catch (error) {
-      console.error('Job submission error:', error)
+    } else {
+        console.error('❌ Job creation failed:', result.error)
+        
+        // Try fallback to simple upload
+        console.log('🔄 Trying fallback simple upload...')
+        try {
+          const simpleResult = await uploadService.simpleUpload(uploadedFile, {
+            name: formData.name,
+            description: formData.description,
+            projectId: formData.projectId,
+            type: formData.type,
+            startFrame: formData.startFrame,
+            endFrame: formData.endFrame,
+            selectedFrame: formData.selectedFrame,
+            settings: formData.settings
+          })
+          
+          if (simpleResult.success) {
+            toast.success('Job created with simple upload!')
+            setCurrentStep('processing')
+            
+            if (simpleResult.jobId) {
+              setTimeout(() => {
+                navigate(`/client/jobs/${simpleResult.jobId}`)
+              }, 2000)
+            }
+          } else {
+            setCurrentStep('review')
+            toast.error(simpleResult.error || 'Failed to create job')
+          }
+        } catch (fallbackError: any) {
+          console.error('Fallback upload failed:', fallbackError)
+          setCurrentStep('review')
+          toast.error(fallbackError.message || 'All upload methods failed')
+        }
+      }
+    } catch (error: any) {
+      console.error('💥 Job submission error:', error)
       setCurrentStep('review')
+      toast.error(error.message || 'An unexpected error occurred')
     }
   }
 
@@ -190,16 +299,16 @@ const CreateJob: React.FC = () => {
       ? (formData.endFrame - formData.startFrame + 1)
       : 1
     
-    const complexityFactor = formData.samples / 128
-    const resolutionFactor = (formData.resolutionX * formData.resolutionY) / (1920 * 1080)
+    const complexityFactor = formData.settings.samples / 128
+    const resolutionFactor = (formData.settings.resolutionX * formData.settings.resolutionY) / (1920 * 1080)
     
-    let baseCost = frames * formData.creditsPerFrame
+    let baseCost = frames * formData.settings.creditsPerFrame
     baseCost *= complexityFactor
     baseCost *= resolutionFactor
     
     // Engine factor
-    if (formData.engine === 'CYCLES') baseCost *= 1.2
-    if (formData.device === 'GPU') baseCost *= 0.8
+    if (formData.settings.engine === 'CYCLES') baseCost *= 1.2
+    if (formData.settings.device === 'GPU') baseCost *= 0.8
     
     return Math.ceil(baseCost)
   }
@@ -461,26 +570,6 @@ const CreateJob: React.FC = () => {
                             Total: {totalFrames} frames
                           </div>
                         </div>
-
-                        <div>
-                          <label className="block text-sm font-medium mb-2">
-                            Frames Per Node: {formData.framesPerNode}
-                          </label>
-                          <input
-                            type="range"
-                            min="1"
-                            max="20"
-                            step="1"
-                            value={formData.framesPerNode}
-                            onChange={(e) => handleInputChange('framesPerNode', parseInt(e.target.value))}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500"
-                          />
-                          <div className="flex justify-between text-xs text-gray-400 mt-1">
-                            <span>1</span>
-                            <span>Balanced</span>
-                            <span>20</span>
-                          </div>
-                        </div>
                       </div>
                     )}
                   </div>
@@ -494,8 +583,8 @@ const CreateJob: React.FC = () => {
                       <div className="space-y-2">
                         <Button
                           type="button"
-                          variant={formData.engine === 'CYCLES' ? 'default' : 'outline'}
-                          onClick={() => handleInputChange('engine', 'CYCLES')}
+                          variant={formData.settings.engine === 'CYCLES' ? 'default' : 'outline'}
+                          onClick={() => handleSettingsChange('engine', 'CYCLES')}
                           className="w-full justify-start border-white/20 h-auto py-4"
                         >
                           <Palette className="w-5 h-5 mr-3 text-purple-400" />
@@ -506,8 +595,8 @@ const CreateJob: React.FC = () => {
                         </Button>
                         <Button
                           type="button"
-                          variant={formData.engine === 'EEVEE' ? 'default' : 'outline'}
-                          onClick={() => handleInputChange('engine', 'EEVEE')}
+                          variant={formData.settings.engine === 'EEVEE' ? 'default' : 'outline'}
+                          onClick={() => handleSettingsChange('engine', 'EEVEE')}
                           className="w-full justify-start border-white/20 h-auto py-4"
                         >
                           <Zap className="w-5 h-5 mr-3 text-amber-400" />
@@ -526,8 +615,8 @@ const CreateJob: React.FC = () => {
                       <div className="space-y-2">
                         <Button
                           type="button"
-                          variant={formData.device === 'GPU' ? 'default' : 'outline'}
-                          onClick={() => handleInputChange('device', 'GPU')}
+                          variant={formData.settings.device === 'GPU' ? 'default' : 'outline'}
+                          onClick={() => handleSettingsChange('device', 'GPU')}
                           className="w-full justify-start border-white/20 h-auto py-4"
                         >
                           <Gauge className="w-5 h-5 mr-3 text-emerald-400" />
@@ -538,8 +627,8 @@ const CreateJob: React.FC = () => {
                         </Button>
                         <Button
                           type="button"
-                          variant={formData.device === 'CPU' ? 'default' : 'outline'}
-                          onClick={() => handleInputChange('device', 'CPU')}
+                          variant={formData.settings.device === 'CPU' ? 'default' : 'outline'}
+                          onClick={() => handleSettingsChange('device', 'CPU')}
                           className="w-full justify-start border-white/20 h-auto py-4"
                         >
                           <Cpu className="w-5 h-5 mr-3 text-blue-400" />
@@ -558,8 +647,8 @@ const CreateJob: React.FC = () => {
                         </label>
                         <input
                           type="number"
-                          value={formData.resolutionX}
-                          onChange={(e) => handleInputChange('resolutionX', parseInt(e.target.value) || 1920)}
+                          value={formData.settings.resolutionX}
+                          onChange={(e) => handleSettingsChange('resolutionX', parseInt(e.target.value) || 1920)}
                           className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 focus:border-blue-500 focus:outline-none transition-colors"
                           min="1"
                           max="16384"
@@ -571,8 +660,8 @@ const CreateJob: React.FC = () => {
                         </label>
                         <input
                           type="number"
-                          value={formData.resolutionY}
-                          onChange={(e) => handleInputChange('resolutionY', parseInt(e.target.value) || 1080)}
+                          value={formData.settings.resolutionY}
+                          onChange={(e) => handleSettingsChange('resolutionY', parseInt(e.target.value) || 1080)}
                           className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 focus:border-blue-500 focus:outline-none transition-colors"
                           min="1"
                           max="16384"
@@ -582,15 +671,15 @@ const CreateJob: React.FC = () => {
 
                     <div>
                       <label className="block text-sm font-medium mb-2">
-                        Samples: {formData.samples}
+                        Samples: {formData.settings.samples}
                       </label>
                       <input
                         type="range"
                         min="32"
                         max="2048"
                         step="32"
-                        value={formData.samples}
-                        onChange={(e) => handleInputChange('samples', parseInt(e.target.value))}
+                        value={formData.settings.samples}
+                        onChange={(e) => handleSettingsChange('samples', parseInt(e.target.value))}
                         className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500"
                       />
                       <div className="flex justify-between text-xs text-gray-400 mt-1">
@@ -669,7 +758,7 @@ const CreateJob: React.FC = () => {
                         <div className="flex justify-between">
                           <span className="text-gray-400">Resolution:</span>
                           <span className="font-medium">
-                            {formData.resolutionX} × {formData.resolutionY}
+                            {formData.settings.resolutionX} × {formData.settings.resolutionY}
                           </span>
                         </div>
                       </div>
@@ -680,24 +769,24 @@ const CreateJob: React.FC = () => {
                       <div className="space-y-3">
                         <div className="flex justify-between">
                           <span className="text-gray-400">Engine:</span>
-                          <span className="font-medium">{formData.engine}</span>
+                          <span className="font-medium">{formData.settings.engine}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Device:</span>
-                          <span className="font-medium">{formData.device}</span>
+                          <span className="font-medium">{formData.settings.device}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Samples:</span>
-                          <span className="font-medium">{formData.samples}</span>
+                          <span className="font-medium">{formData.settings.samples}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Output Format:</span>
-                          <span className="font-medium">{formData.outputFormat}</span>
+                          <span className="font-medium">{formData.settings.outputFormat}</span>
                         </div>
-                        {formData.denoiser && (
+                        {formData.settings.denoiser && (
                           <div className="flex justify-between">
                             <span className="text-gray-400">Denoiser:</span>
-                            <span className="font-medium">{formData.denoiser}</span>
+                            <span className="font-medium">{formData.settings.denoiser}</span>
                           </div>
                         )}
                       </div>
@@ -724,21 +813,21 @@ const CreateJob: React.FC = () => {
                         <div className="space-y-2">
                           <div className="flex justify-between">
                             <span className="text-gray-400">Frames:</span>
-                            <span>{totalFrames} × {formData.creditsPerFrame} credits</span>
+                            <span>{totalFrames} × {formData.settings.creditsPerFrame} credits</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-400">Complexity:</span>
-                            <span>{(formData.samples / 128).toFixed(2)}×</span>
+                            <span>{(formData.settings.samples / 128).toFixed(2)}×</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-400">Resolution:</span>
                             <span>
-                              {((formData.resolutionX * formData.resolutionY) / (1920 * 1080)).toFixed(2)}×
+                              {((formData.settings.resolutionX * formData.settings.resolutionY) / (1920 * 1080)).toFixed(2)}×
                             </span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-400">Engine:</span>
-                            <span>{formData.engine === 'CYCLES' ? '1.2×' : '1.0×'}</span>
+                            <span>{formData.settings.engine === 'CYCLES' ? '1.2×' : '1.0×'}</span>
                           </div>
                         </div>
 
@@ -769,16 +858,6 @@ const CreateJob: React.FC = () => {
                             }
                           </span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Frames per node:</span>
-                          <span className="font-medium">{formData.framesPerNode}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Parallel nodes:</span>
-                          <span className="font-medium">
-                            {Math.ceil(totalFrames / formData.framesPerNode)}
-                          </span>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -797,13 +876,13 @@ const CreateJob: React.FC = () => {
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={isLoading}
+                disabled={isUploading}
                 className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700"
               >
-                {isLoading ? (
+                {isUploading ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Creating Job...
+                    Uploading & Creating Job...
                   </>
                 ) : (
                   <>
@@ -824,23 +903,43 @@ const CreateJob: React.FC = () => {
             className="text-center py-12"
           >
             <div className="w-32 h-32 mx-auto mb-8 rounded-full bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 flex items-center justify-center">
-              <Loader2 className="w-16 h-16 text-emerald-400 animate-spin" />
+              {isUploading ? (
+                <Loader2 className="w-16 h-16 text-emerald-400 animate-spin" />
+              ) : (
+                <CheckCircle className="w-16 h-16 text-emerald-400" />
+              )}
             </div>
             
-            <h2 className="text-2xl font-bold mb-4">Creating Your Render Job</h2>
-            <p className="text-gray-400 mb-8 max-w-md mx-auto">
-              Your file is being uploaded and job is being configured. 
-              You'll be redirected to the job details page shortly.
-            </p>
+            <h2 className="text-2xl font-bold mb-4">
+              {isUploading ? 'Uploading Your File...' : 'Job Created Successfully!'}
+            </h2>
             
-            <Progress value={75} className="max-w-md mx-auto mb-6" />
-            
-            <div className="space-y-2 text-sm text-gray-400">
-              <p>✓ File uploaded to S3</p>
-              <p>✓ Job configuration validated</p>
-              <p>⏳ Creating job in database...</p>
-              <p>⏳ Preparing for distribution...</p>
-            </div>
+            {isUploading ? (
+              <>
+                <p className="text-gray-400 mb-8 max-w-md mx-auto">
+                  {uploadStage === 'preparing' && 'Preparing upload...'}
+                  {uploadStage === 'uploading' && `Uploading ${uploadProgress}% complete`}
+                  {uploadStage === 'creating' && 'Creating job in database...'}
+                </p>
+                
+                <Progress value={uploadProgress} className="max-w-md mx-auto mb-6" />
+                
+                <div className="space-y-2 text-sm text-gray-400">
+                  <p>{uploadProgress >= 10 ? '✓' : '⏳'} Preparing upload</p>
+                  <p>{uploadProgress >= 50 ? '✓' : '⏳'} Uploading file parts</p>
+                  <p>{uploadProgress >= 90 ? '✓' : '⏳'} Finalizing upload</p>
+                  <p>{uploadStage === 'completed' ? '✓' : '⏳'} Creating job record</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-400 mb-8 max-w-md mx-auto">
+                  Your render job has been created and is being processed.
+                  Redirecting to job details...
+                </p>
+                <Progress value={100} className="max-w-md mx-auto mb-6" />
+              </>
+            )}
           </motion.div>
         )
     }
