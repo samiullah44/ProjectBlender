@@ -1,0 +1,209 @@
+// backend/src/types/job.types.ts
+import { Types } from 'mongoose';
+
+export interface IJobOutput {
+    frame: number;
+    url: string;
+    s3Key: string;
+    fileSize: number;
+    uploadedAt: Date;
+    thumbnailUrl?: string;
+}
+
+export interface IFrameAssignment {
+    frame: number;
+    nodeId: string;
+    status: 'assigned' | 'rendered' | 'failed';
+    assignedAt: Date;
+    completedAt?: Date;
+    renderTime?: number;
+    creditsEarned?: number;
+    s3Key?: string;
+    errorMessage?: string;
+}
+
+export interface IJobSettings {
+    engine: 'CYCLES' | 'EEVEE' | 'BLENDER_EEVEE';
+    device: 'CPU' | 'GPU' | 'GPU_CUDA' | 'GPU_OPTIX';
+    samples: number;
+    resolutionX: number;
+    resolutionY: number;
+    tileSize: number;
+    denoiser?: 'NONE' | 'OPTIX' | 'OPENIMAGEDENOISE' | 'NLM';
+    outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF';
+    creditsPerFrame: number;
+    selectedFrame?: number;
+    animationFrameRate?: number;
+    useCompositing?: boolean;
+    useSequencer?: boolean;
+}
+
+export interface IJobFrames {
+    start: number;
+    end: number;
+    total: number;
+    selected: number[];
+    rendered: number[];
+    failed: number[];
+    assigned: number[];
+    pending: number[];
+}
+
+export interface IJobTiles {
+    totalX: number;
+    totalY: number;
+    rendered: string[];
+    failed: string[];
+    assigned: string[];
+}
+
+export interface IUploadMetadata {
+    type: 'multipart' | 'single' | 'direct';
+    uploadId?: string;
+    parts?: number;
+    completedAt?: Date;
+    fileSize?: number;
+    checksum?: string;
+}
+
+export interface IJob {
+    _id?: Types.ObjectId;
+    jobId: string;
+    projectId: string;
+    userId: Types.ObjectId;
+    blendFileKey: string;
+    blendFileUrl: string;
+    blendFileName: string;
+    type: 'image' | 'animation';
+
+    settings: IJobSettings;
+    frames: IJobFrames;
+    tiles?: IJobTiles;
+
+    assignedNodes: Map<string, number[]> | Record<string, number[]>;
+    frameAssignments: IFrameAssignment[];
+
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    progress: number;
+
+    uploadMetadata?: IUploadMetadata;
+    outputUrls: IJobOutput[];
+    renderTime?: number;
+    totalCreditsDistributed?: number;
+
+    // Metadata
+    estimatedRenderTime?: number;
+    estimatedCost?: number;
+    actualCost?: number;
+    tags?: string[];
+    description?: string;
+
+    // Timestamps
+    cancelledAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+    completedAt?: Date;
+    startedAt?: Date;
+    pausedAt?: Date;
+
+    // System fields
+    retryCount: number;
+    maxRetries: number;
+    priority: 'low' | 'normal' | 'high' | 'urgent';
+    requireApproval?: boolean;
+    approved?: boolean;
+    approvedBy?: Types.ObjectId;
+    approvedAt?: Date;
+}
+
+export interface JobFilterOptions {
+    userId?: Types.ObjectId | string;
+    projectId?: string;
+    status?: string;
+    type?: 'image' | 'animation';
+    priority?: string;
+    tags?: string[];
+    startDate?: Date;
+    endDate?: Date;
+    search?: string;
+    approved?: boolean;
+}
+
+export interface PaginationOptions {
+    page: number;
+    limit: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+}
+
+export interface JobStats {
+    totalJobs: number;
+    activeJobs: number;
+    completedJobs: number;
+    failedJobs: number;
+    cancelledJobs: number;
+    pausedJobs: number;
+    completedToday: number;
+    totalRenderTime: number;
+    totalCreditsUsed: number;
+    totalFramesRendered: number;
+    avgRenderTimePerFrame: number;
+    framesRenderedToday: number;
+    estimatedTotalCost: number;
+    actualTotalCost: number;
+}
+
+export interface UserJobStats {
+    totalJobs: number;
+    activeJobs: number;
+    completedJobs: number;
+    totalSpent: number;
+    creditsRemaining: number;
+    avgJobCompletionTime: number;
+    successRate: number;
+}
+
+export interface CreateJobRequest {
+    blendFile: Express.Multer.File;
+    userId: string;
+    projectId?: string;
+    type: 'image' | 'animation';
+    settings: Partial<IJobSettings>;
+    startFrame?: number;
+    endFrame?: number;
+    selectedFrame?: number;
+    name?: string;
+    description?: string;
+    tags?: string[];
+    priority?: 'low' | 'normal' | 'high' | 'urgent';
+    requireApproval?: boolean;
+}
+
+export interface CreateJobResponse {
+    success: boolean;
+    jobId: string;
+    message: string;
+    type: string;
+    totalFrames: number;
+    selectedFrames: number[];
+    blendFileUrl: string;
+    settings: IJobSettings;
+    estimatedCost: number;
+    estimatedTime: number;
+    fileStructure: {
+        blendFile: string;
+        uploadsFolder: string;
+        rendersFolder: string;
+    };
+}
+
+export interface JobListResponse {
+    jobs: Partial<IJob>[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        pages: number;
+    };
+    stats?: JobStats;
+}

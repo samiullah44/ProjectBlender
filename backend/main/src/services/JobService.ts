@@ -1,135 +1,166 @@
 // backend/src/services/JobService.ts
-import { Types } from 'mongoose';
-import { Job, IJob } from '../models/Job';
-import { Node } from '../models/Node';
+import mongoose, { Types } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
+import { Job } from '../models/Job';
 import { User } from '../models/User';
+import { Node } from '../models/Node';
 import { S3Service } from './S3Service';
 import { WebSocketService } from './WebSocketService';
-import { AppError } from '../middleware/error';
 import {
-    ICreateJobRequest,
-    IJobFilterOptions,
-    IJobStatistics,
-    INodeContribution,
-    IJobOutput
-} from '../types/jobs/jobs.types';
+    IJob,
+    IJobOutput,
+    IFrameAssignment,
+    CreateJobRequest,
+    CreateJobResponse,
+    JobFilterOptions,
+    PaginationOptions,
+    JobStats,
+    UserJobStats
+} from '../types/job.types';
+import { AppError } from '../middleware/error';
 
 export class JobService {
     private s3Service: S3Service;
+    private wsService?: WebSocketService;
 
-    constructor() {
-        this.s3Service = new S3Service();
+    constructor(s3Service: S3Service, wsService?: WebSocketService) {
+        this.s3Service = s3Service;
+        this.wsService = wsService;
     }
 
-    /**
-     * Create a new job with user-specific validation
-     */
-    async createJob(
-        userId: Types.ObjectId | string,
-        request: ICreateJobRequest,
-        file?: Express.Multer.File
-    ): Promise<{ job: IJob; blendFileUrl: string; fileStructure: any }> {
+    setWebSocketService(wsService: WebSocketService) {
+        this.wsService = wsService;
+    }
+
+    // Create a new job
+    async createJob(data: CreateJobRequest): Promise<CreateJobResponse> {
+        const {
+            blendFile,
+            userId,
+            projectId = 'default-project',
+            type = 'animation',
+            settings = {},
+            startFrame = 1,
+            endFrame = 10,
+            selectedFrame = 1,
+            name = 'Untitled Job',
+            description = '',
+            tags = [],
+            priority = 'normal',
+            requireApproval = false
+        } = data;
+
         try {
-            // Validate user exists and has sufficient credits
+            // Validate user exists
             const user = await User.findById(userId);
             if (!user) {
                 throw new AppError('User not found', 404);
             }
 
-            // For clients, check if they have sufficient credits
-            if (user.role === 'client' && user.credits < 10) { // Minimum credit check
-                throw new AppError('Insufficient credits to create job', 400);
-            }
-
-            const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            const projectId = request.projectId || user.preferences?.defaultProjectId || 'default-project';
-
-            // Calculate total frames
-            let totalFrames = 1;
-            let selectedFrames: number[] = [];
-
-            if (request.type === 'animation') {
-                const startFrame = request.startFrame || 1;
-                const endFrame = request.endFrame || 10;
-                totalFrames = endFrame - startFrame + 1;
-                selectedFrames = Array.from({ length: totalFrames }, (_, i) => startFrame + i);
-            } else if (request.type === 'image') {
-                const frame = request.selectedFrame || 1;
-                totalFrames = 1;
-                selectedFrames = [frame];
-            }
-
-            // Calculate credits required
-            const creditsPerFrame = request.settings.creditsPerFrame || 1;
-            const totalCreditsRequired = totalFrames * creditsPerFrame;
-
-            // For clients, deduct credits
-            if (user.role === 'client') {
-                if (user.credits < totalCreditsRequired) {
-                    throw new AppError(`Insufficient credits. Required: ${totalCreditsRequired}, Available: ${user.credits}`, 400);
+            // Check user credits if not admin
+            if (user.role !== 'admin') {
+                const estimatedCredits = this.calculateEstimatedCredits(type, settings, startFrame, endFrame);
+                if (user.credits < estimatedCredits) {
+                    throw new AppError('Insufficient credits', 400);
                 }
-                await user.deductCredits(totalCreditsRequired);
             }
 
-            let blendFileKey = '';
-            let blendFileUrl = '';
+            // Generate job ID
+            const jobId = `job-${Date.now()}-${uuidv4().slice(0, 8)}`;
 
-            if (file) {
-                // Upload blend file to S3
-                blendFileKey = await this.s3Service.uploadBlendFile(file, jobId);
-                blendFileUrl = await this.s3Service.generateBlendFileDownloadUrl(blendFileKey);
-            }
+            // Calculate frames
+            const { totalFrames, selectedFrames } = this.calculateFrames(type, startFrame, endFrame, selectedFrame);
 
-            // Create job
+            // Upload blend file to S3
+            const blendFileKey = await this.s3Service.uploadBlendFile(blendFile, jobId);
+            const blendFileUrl = await this.s3Service.generateBlendFileDownloadUrl(blendFileKey);
+
+            // Calculate estimated cost and time
+            const estimatedCost = this.calculateEstimatedCost(totalFrames, settings);
+            const estimatedTime = this.calculateEstimatedRenderTime(totalFrames, settings);
+
+            // Create job document
             const job = new Job({
                 jobId,
                 projectId,
-                userId,
+                userId: new Types.ObjectId(userId),
                 blendFileKey,
                 blendFileUrl,
-                blendFileName: file?.originalname || 'unknown.blend',
-                type: request.type,
+                blendFileName: blendFile.originalname || name,
+                type,
                 settings: {
-                    engine: request.settings.engine || 'CYCLES',
-                    device: request.settings.device || 'GPU',
-                    samples: request.settings.samples || 128,
-                    resolutionX: request.settings.resolutionX || 1920,
-                    resolutionY: request.settings.resolutionY || 1080,
-                    tileSize: request.settings.tileSize || 256,
-                    denoiser: request.type === 'image' ? request.settings.denoiser : undefined,
-                    outputFormat: request.settings.outputFormat || 'PNG',
-                    creditsPerFrame,
-                    selectedFrame: request.type === 'image' ? request.selectedFrame : undefined
+                    engine: settings.engine || 'CYCLES',
+                    device: settings.device || 'GPU',
+                    samples: settings.samples || 128,
+                    resolutionX: settings.resolutionX || 1920,
+                    resolutionY: settings.resolutionY || 1080,
+                    tileSize: settings.tileSize || 256,
+                    denoiser: settings.denoiser,
+                    outputFormat: settings.outputFormat || 'PNG',
+                    creditsPerFrame: settings.creditsPerFrame || 1,
+                    selectedFrame: settings.selectedFrame || selectedFrame
                 },
                 frames: {
-                    start: request.type === 'animation' ? (request.startFrame || 1) : (request.selectedFrame || 1),
-                    end: request.type === 'animation' ? (request.endFrame || 10) : (request.selectedFrame || 1),
+                    start: type === 'animation' ? startFrame : selectedFrame,
+                    end: type === 'animation' ? endFrame : selectedFrame,
                     total: totalFrames,
                     selected: selectedFrames,
                     rendered: [],
                     failed: [],
-                    assigned: []
+                    assigned: [],
+                    pending: selectedFrames
                 },
-                assignedNodes: new Map(),
-                frameAssignments: [],
-                status: 'pending',
+                description,
+                tags,
+                priority,
+                requireApproval,
+                approved: !requireApproval,
+                estimatedCost,
+                estimatedRenderTime: estimatedTime,
+                status: requireApproval ? 'pending' : 'pending',
                 progress: 0,
-                outputUrls: [],
-                createdAt: new Date(),
-                updatedAt: new Date()
+                frameAssignments: [],
+                assignedNodes: new Map(),
+                outputUrls: []
             });
 
             await job.save();
 
-            // Update user stats
-            user.stats!.jobsCreated += 1;
-            await user.save();
+            // Deduct credits if not admin
+            if (user.role !== 'admin') {
+                await user.deductCredits(estimatedCost);
+            }
 
-            console.log(`🎬 New ${request.type} job created by user ${userId}: ${jobId} with ${totalFrames} frame(s)`);
+            // Update user stats
+            await User.findByIdAndUpdate(userId, {
+                $inc: { 'stats.jobsCreated': 1 }
+            });
+
+            console.log(`🎬 New ${type} job created: ${jobId} by user ${userId}`);
+
+            // Broadcast via WebSocket
+            this.wsService?.broadcastSystemUpdate({
+                type: 'job_created',
+                data: {
+                    jobId,
+                    userId,
+                    type,
+                    estimatedCost,
+                    estimatedTime
+                }
+            });
 
             return {
-                job,
+                success: true,
+                jobId,
+                message: requireApproval ? 'Job created and pending approval' : 'Job created successfully',
+                type,
+                totalFrames,
+                selectedFrames,
                 blendFileUrl,
+                settings: job.settings,
+                estimatedCost,
+                estimatedTime,
                 fileStructure: {
                     blendFile: blendFileKey,
                     uploadsFolder: `uploads/${jobId}/`,
@@ -143,88 +174,104 @@ export class JobService {
         }
     }
 
-    /**
-     * Get job with user-specific access control
-     */
-    async getJob(
-        jobId: string,
-        userId: Types.ObjectId | string,
-        userRole: string
-    ): Promise<{ job: IJob; blendFileUrl: string; outputUrls: IJobOutput[] }> {
-        const job = await Job.findOne({ jobId });
-        if (!job) {
-            throw new AppError('Job not found', 404);
+    // Get job by ID with user access control
+    async getJobById(jobId: string, userId: string, role?: string): Promise<IJob | null> {
+        const query: any = { jobId };
+
+        // Non-admin users can only see their own jobs
+        if (role !== 'admin') {
+            query.userId = new Types.ObjectId(userId);
         }
 
-        // Check access permissions
-        this.checkJobAccess(job, userId, userRole);
+        const job = await Job.findOne(query)
+            .populate('user', 'username name email role')
+            .populate('approvedBy', 'username name')
+            .lean();
+
+        if (!job) return null;
 
         // Generate fresh URLs
         const blendFileUrl = await this.s3Service.generateBlendFileDownloadUrl(job.blendFileKey);
-
-        const outputUrls = await Promise.all(
-            job.outputUrls.map(async (output) => ({
+        const outputUrlsWithFreshUrls = await Promise.all(
+            job.outputUrls.map(async (output: IJobOutput) => ({
                 ...output,
-                freshUrl: await this.s3Service.generateFrameDownloadUrl(output.s3Key)
+                freshUrl: await this.s3Service.generateFrameDownloadUrl(output.s3Key),
+                thumbnailUrl: await this.generateThumbnailUrl(output.s3Key)
             }))
         );
 
         return {
-            job,
+            ...job,
             blendFileUrl,
-            outputUrls
+            outputUrls: outputUrlsWithFreshUrls
         };
     }
 
-    /**
-     * List jobs with user-specific filtering
-     */
+    // List jobs with filtering and pagination
     async listJobs(
-        filterOptions: IJobFilterOptions
-    ): Promise<{ jobs: IJob[]; total: number }> {
+        filters: JobFilterOptions,
+        pagination: PaginationOptions,
+        requestingUserId?: string,
+        requestingUserRole?: string
+    ): Promise<any> {
         const {
             userId,
             projectId,
             status,
             type,
+            priority,
+            tags,
             startDate,
             endDate,
-            page = 1,
-            limit = 50,
-            sortBy = 'createdAt',
-            sortOrder = 'desc'
-        } = filterOptions;
+            search,
+            approved
+        } = filters;
+
+        const { page = 1, limit = 50, sortBy = 'createdAt', sortOrder = 'desc' } = pagination;
 
         const query: any = {};
 
-        // Apply user-specific filtering
+        // Apply user filtering
         if (userId) {
-            query.userId = userId;
+            query.userId = new Types.ObjectId(userId);
+        } else if (requestingUserId && requestingUserRole !== 'admin') {
+            // Non-admin users can only see their own jobs
+            query.userId = new Types.ObjectId(requestingUserId);
         }
 
-        if (projectId) {
-            query.projectId = projectId;
-        }
+        // Apply other filters
+        if (projectId) query.projectId = projectId;
+        if (status) query.status = status;
+        if (type) query.type = type;
+        if (priority) query.priority = priority;
+        if (approved !== undefined) query.approved = approved;
+        if (tags && tags.length > 0) query.tags = { $all: tags };
 
-        if (status) {
-            query.status = status;
-        }
-
-        if (type) {
-            query.type = type;
-        }
-
+        // Date range
         if (startDate || endDate) {
             query.createdAt = {};
-            if (startDate) query.createdAt.$gte = startDate;
-            if (endDate) query.createdAt.$lte = endDate;
+            if (startDate) query.createdAt.$gte = new Date(startDate);
+            if (endDate) query.createdAt.$lte = new Date(endDate);
+        }
+
+        // Text search
+        if (search) {
+            query.$or = [
+                { jobId: { $regex: search, $options: 'i' } },
+                { blendFileName: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } },
+                { 'user.username': { $regex: search, $options: 'i' } },
+                { 'user.name': { $regex: search, $options: 'i' } }
+            ];
         }
 
         const skip = (page - 1) * limit;
-        const sort: any = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+        const sort: any = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
 
         const [jobs, total] = await Promise.all([
             Job.find(query)
+                .populate('user', 'username name email role')
+                .populate('approvedBy', 'username name')
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
@@ -232,572 +279,366 @@ export class JobService {
             Job.countDocuments(query)
         ]);
 
-        return { jobs, total };
+        // Generate fresh URLs for blend files
+        const jobsWithUrls = await Promise.all(
+            jobs.map(async (job) => ({
+                ...job,
+                blendFileUrl: await this.s3Service.generateBlendFileDownloadUrl(job.blendFileKey),
+                outputCount: job.outputUrls?.length || 0
+            }))
+        );
+
+        return {
+            jobs: jobsWithUrls,
+            pagination: {
+                total,
+                page,
+                limit,
+                pages: Math.ceil(total / limit)
+            }
+        };
     }
 
-    /**
-     * Cancel job with user-specific permissions
-     */
-    async cancelJob(
-        jobId: string,
-        userId: Types.ObjectId | string,
-        userRole: string,
-        cleanupS3: boolean = false
-    ): Promise<{ success: boolean; message: string }> {
-        const job = await Job.findOne({ jobId });
-        if (!job) {
-            throw new AppError('Job not found', 404);
+    // Update job
+    async updateJob(jobId: string, updates: Partial<IJob>, userId: string, role?: string): Promise<IJob | null> {
+        const query: any = { jobId };
+
+        // Non-admin users can only update their own jobs
+        if (role !== 'admin') {
+            query.userId = new Types.ObjectId(userId);
         }
 
-        // Check permissions (admin can cancel any job, users can only cancel their own)
-        if (userRole !== 'admin' && job.userId.toString() !== userId.toString()) {
-            throw new AppError('Unauthorized to cancel this job', 403);
-        }
+        const job = await Job.findOne(query);
+        if (!job) return null;
 
-        // Only allow cancelling if job is pending or processing
+        // Validate updates based on job status
         if (job.status === 'completed' || job.status === 'failed') {
-            throw new AppError('Cannot cancel a completed or failed job', 400);
+            throw new AppError('Cannot update completed or failed job', 400);
         }
+
+        // Update allowed fields
+        const allowedUpdates = [
+            'description',
+            'tags',
+            'priority',
+            'frames.selected',
+            'settings'
+        ];
+
+        Object.keys(updates).forEach(key => {
+            if (allowedUpdates.includes(key)) {
+                (job as any)[key] = updates[key as keyof IJob];
+            }
+        });
+
+        // Recalculate if frames changed
+        if (updates.frames?.selected) {
+            job.frames.total = updates.frames.selected.length;
+            // Calculate pending frames correctly
+            job.frames.pending = updates.frames.selected.filter(
+                (f: number) => !job.frames.rendered.includes(f) && !job.frames.failed.includes(f)
+            );
+            job.progress = Math.round((job.frames.rendered.length / job.frames.total) * 100);
+        }
+
+        await job.save();
+
+        // Broadcast update
+        this.wsService?.broadcastJobUpdate(jobId);
+
+        return job.toObject();
+    }
+
+    // Cancel job
+    async cancelJob(jobId: string, userId: string, role?: string, cleanupS3: boolean = false): Promise<boolean> {
+        const query: any = { jobId };
+
+        // Non-admin users can only cancel their own jobs
+        if (role !== 'admin') {
+            query.userId = new Types.ObjectId(userId);
+        }
+
+        const job = await Job.findOne(query);
+        if (!job) return false;
+
+        // Validate job can be cancelled
+        if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+            throw new AppError(`Job is already ${job.status}`, 400);
+        }
+
+        const wasProcessing = job.status === 'processing';
 
         job.status = 'cancelled';
         job.cancelledAt = new Date();
         await job.save();
 
-        // If cleanup requested, delete S3 files
+        // Refund credits if job was in progress
+        if (wasProcessing) {
+            const user = await User.findById(userId);
+            if (user && user.role !== 'admin') {
+                const spentCredits = job.totalCreditsDistributed || 0;
+                const refundAmount = Math.max(0, job.estimatedCost! - spentCredits);
+                if (refundAmount > 0) {
+                    await user.addCredits(refundAmount);
+                }
+            }
+        }
+
+        // Cleanup S3 files if requested
         if (cleanupS3) {
             try {
                 await this.s3Service.deleteFile(job.blendFileKey);
                 for (const output of job.outputUrls) {
                     await this.s3Service.deleteFile(output.s3Key);
                 }
-            } catch (s3Error) {
-                console.error('Failed to cleanup S3 files:', s3Error);
-                // Don't fail the cancellation if S3 cleanup fails
+            } catch (error) {
+                console.error('Failed to cleanup S3 files:', error);
             }
         }
 
-        return {
-            success: true,
-            message: 'Job cancelled successfully'
-        };
-    }
-
-    /**
-     * Select frames for rendering (user-specific)
-     */
-    async selectFrames(
-        jobId: string,
-        userId: Types.ObjectId | string,
-        frames: number[]
-    ): Promise<{ success: boolean; message: string }> {
-        const job = await Job.findOne({ jobId });
-        if (!job) {
-            throw new AppError('Job not found', 404);
+        // Update nodes that were working on this job
+        let nodeIds: string[] = [];
+        if (job.assignedNodes instanceof Map) {
+            nodeIds = Array.from(job.assignedNodes.keys());
+        } else if (typeof job.assignedNodes === 'object' && job.assignedNodes !== null) {
+            nodeIds = Object.keys(job.assignedNodes);
         }
 
-        // Check if user owns the job
-        if (job.userId.toString() !== userId.toString()) {
-            throw new AppError('Unauthorized to modify this job', 403);
-        }
-
-        // Validate frames
-        if (!Array.isArray(frames) || frames.length === 0) {
-            throw new AppError('Frames must be a non-empty array', 400);
-        }
-
-        const minFrame = job.frames.start;
-        const maxFrame = job.frames.end;
-
-        for (const frame of frames) {
-            if (frame < minFrame || frame > maxFrame) {
-                throw new AppError(`Frame ${frame} is out of range (${minFrame}-${maxFrame})`, 400);
-            }
-        }
-
-        // Update selected frames
-        job.frames.selected = frames;
-        job.frames.total = frames.length;
-
-        // Remove any rendered/failed frames that are no longer selected
-        job.frames.rendered = job.frames.rendered.filter(f => frames.includes(f));
-        job.frames.failed = job.frames.failed.filter(f => frames.includes(f));
-        job.frames.assigned = job.frames.assigned.filter(f => frames.includes(f));
-
-        // Clear assigned nodes for frames that are no longer selected
-        const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
-        for (const [nodeId, nodeFrames] of assignedNodesMap.entries()) {
-            const updatedFrames = nodeFrames.filter(f => frames.includes(f));
-            if (updatedFrames.length === 0) {
-                assignedNodesMap.delete(nodeId);
-            } else {
-                assignedNodesMap.set(nodeId, updatedFrames);
-            }
-        }
-
-        // Recalculate progress
-        job.progress = Math.round((job.frames.rendered.length / job.frames.total) * 100);
-        await job.save();
-
-        return {
-            success: true,
-            message: 'Frames updated successfully'
-        };
-    }
-
-    /**
-     * Get dashboard statistics (user-specific)
-     */
-    async getDashboardStats(
-        userId?: Types.ObjectId | string,
-        startDate?: Date,
-        endDate?: Date
-    ): Promise<IJobStatistics> {
-        const start = startDate || new Date();
-        start.setHours(0, 0, 0, 0);
-
-        const end = endDate || new Date();
-        end.setHours(23, 59, 59, 999);
-
-        const query: any = {
-            createdAt: { $gte: start, $lte: end }
-        };
-
-        if (userId) {
-            query.userId = userId;
-        }
-
-        const jobs = await Job.find(query);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayEnd = new Date(today);
-        todayEnd.setHours(23, 59, 59, 999);
-
-        const stats: IJobStatistics = {
-            totalJobs: jobs.length,
-            activeJobs: jobs.filter(j => ['pending', 'processing'].includes(j.status)).length,
-            completedJobs: jobs.filter(j => j.status === 'completed').length,
-            failedJobs: jobs.filter(j => j.status === 'failed').length,
-            totalFrames: jobs.reduce((sum, job) => sum + job.frames.total, 0),
-            renderedFrames: jobs.reduce((sum, job) => sum + job.frames.rendered.length, 0),
-            totalRenderTime: jobs.reduce((sum, job) => sum + (job.renderTime || 0), 0),
-            totalCreditsUsed: jobs.reduce((sum, job) => sum + (job.totalCreditsDistributed || 0), 0),
-            avgRenderTimePerFrame: 0,
-            framesRenderedToday: 0,
-            completedToday: 0
-        };
-
-        // Calculate completed today
-        const completedToday = jobs.filter(j =>
-            j.status === 'completed' &&
-            j.completedAt &&
-            j.completedAt >= today &&
-            j.completedAt <= todayEnd
-        );
-        stats.completedToday = completedToday.length;
-
-        // Calculate frames rendered today
-        stats.framesRenderedToday = jobs.reduce((sum, job) => {
-            if (job.completedAt && job.completedAt >= today && job.completedAt <= todayEnd) {
-                return sum + job.frames.rendered.length;
-            }
-            return sum;
-        }, 0);
-
-        // Calculate average render time per frame
-        if (stats.renderedFrames > 0) {
-            stats.avgRenderTimePerFrame = stats.totalRenderTime / stats.renderedFrames;
-        }
-
-        return stats;
-    }
-
-    /**
-     * Generate frame upload URL (for nodes)
-     */
-    async generateFrameUploadUrl(jobId: string, frame: number): Promise<{ uploadUrl: string; s3Key: string }> {
-        const job = await Job.findOne({ jobId });
-        if (!job) {
-            throw new AppError('Job not found', 404);
-        }
-
-        // Check if frame is valid for this job
-        if (frame < job.frames.start || frame > job.frames.end) {
-            throw new AppError(`Frame ${frame} is out of range for this job`, 400);
-        }
-
-        // Check if frame is already rendered
-        if (job.frames.rendered.includes(frame)) {
-            throw new AppError(`Frame ${frame} is already rendered`, 400);
-        }
-
-        return await this.s3Service.generateFrameUploadUrl(jobId, frame);
-    }
-
-    /**
-     * Complete frame rendering (for nodes)
-     */
-    async completeFrame(
-        jobId: string,
-        frame: number,
-        nodeId: string,
-        renderTime: number,
-        fileSize: number,
-        s3Key: string
-    ): Promise<{
-        success: boolean;
-        progress: number;
-        status: string;
-        isNodeDone: boolean;
-    }> {
-        const job = await Job.findOne({ jobId });
-        if (!job) {
-            throw new AppError('Job not found', 404);
-        }
-
-        // Check if frame is already rendered
-        if (job.frames.rendered.includes(frame)) {
-            return {
-                success: true,
-                progress: job.progress,
-                status: job.status,
-                isNodeDone: false
-            };
-        }
-
-        // Generate download URL
-        const downloadUrl = await this.s3Service.generateFrameDownloadUrl(s3Key);
-
-        // Update frame status
-        const updatedJob = await Job.findOneAndUpdate(
-            {
-                jobId,
-                'frames.rendered': { $ne: frame }
-            },
-            {
-                $addToSet: {
-                    'frames.rendered': frame,
-                    'outputUrls': {
-                        frame,
-                        url: downloadUrl,
-                        s3Key,
-                        fileSize,
-                        uploadedAt: new Date()
-                    }
-                },
-                $pull: {
-                    'frames.failed': frame,
-                    'frames.assigned': frame
-                }
-            },
-            { new: true }
-        );
-
-        if (!updatedJob) {
-            throw new AppError('Failed to update frame status', 500);
-        }
-
-        // Update frame assignment
-        const assignment = updatedJob.frameAssignments.find(
-            (a) => a.frame === frame && a.nodeId === nodeId
-        );
-
-        if (assignment) {
-            assignment.status = 'rendered';
-            assignment.completedAt = new Date();
-            assignment.renderTime = renderTime;
-            assignment.s3Key = s3Key;
-        }
-
-        // Remove frame from assigned nodes
-        const assignedNodesMap = updatedJob.assignedNodes as unknown as Map<string, number[]>;
-        const nodeFrames = assignedNodesMap?.get(nodeId) || [];
-        const updatedNodeFrames = nodeFrames.filter(f => f !== frame);
-
-        let isNodeDone = false;
-        if (updatedNodeFrames.length === 0) {
-            assignedNodesMap?.delete(nodeId);
-            isNodeDone = true;
-        } else {
-            assignedNodesMap?.set(nodeId, updatedNodeFrames);
-        }
-
-        // Calculate progress and update status
-        const totalFrames = updatedJob.frames.total;
-        const renderedFrames = updatedJob.frames.rendered.length;
-        const failedFrames = updatedJob.frames.failed.length;
-        const progress = Math.round((renderedFrames / totalFrames) * 100);
-
-        let status = updatedJob.status;
-        if (renderedFrames === totalFrames) {
-            status = 'completed';
-            updatedJob.completedAt = new Date();
-
-            // Mark all nodes as online
-            const allNodeIds = Array.from(assignedNodesMap.keys());
-            if (allNodeIds.length > 0) {
-                await Node.updateMany(
-                    { nodeId: { $in: allNodeIds } },
-                    {
+        if (nodeIds.length > 0) {
+            await Node.updateMany(
+                { nodeId: { $in: nodeIds } },
+                {
+                    $set: {
                         status: 'online',
                         currentJob: undefined,
                         currentProgress: undefined
                     }
-                );
-            }
-        } else if (renderedFrames + failedFrames === totalFrames) {
-            status = 'failed';
-        } else {
-            status = 'processing';
-        }
-
-        updatedJob.status = status;
-        updatedJob.progress = progress;
-        updatedJob.assignedNodes = assignedNodesMap as any;
-        await updatedJob.save();
-
-        // Update node if done
-        if (isNodeDone) {
-            await Node.updateOne(
-                { nodeId },
-                {
-                    status: 'online',
-                    currentJob: undefined,
-                    currentProgress: undefined,
-                    $inc: { jobsCompleted: 1 }
                 }
             );
         }
 
-        // Distribute credits to node provider
-        if (updatedJob.settings.creditsPerFrame && assignment) {
-            const credits = updatedJob.settings.creditsPerFrame;
-            assignment.creditsEarned = credits;
+        // Broadcast updates
+        this.wsService?.broadcastJobUpdate(jobId);
+        nodeIds.forEach(nodeId => {
+            this.wsService?.broadcastNodeUpdate(nodeId, {
+                status: 'online',
+                currentJob: undefined
+            });
+        });
 
-            // Find node's user and add earnings
-            const node = await Node.findOne({ nodeId });
-            if (node && node.userId) {
-                const nodeUser = await User.findById(node.userId);
-                if (nodeUser && nodeUser.role === 'node_provider') {
-                    await nodeUser.addEarnings(credits);
-                }
-            }
-        }
-
-        return {
-            success: true,
-            progress,
-            status,
-            isNodeDone
-        };
+        return true;
     }
 
-    /**
-     * Mark frame as failed
-     */
-    async failFrame(
-        jobId: string,
-        frame: number,
-        nodeId: string,
-        error: string,
-        s3Key: string
-    ): Promise<{ success: boolean; progress: number; status: string }> {
+    // Approve job (admin only)
+    async approveJob(jobId: string, adminId: string): Promise<boolean> {
         const job = await Job.findOne({ jobId });
-        if (!job) {
-            throw new AppError('Job not found', 404);
+        if (!job) return false;
+
+        if (job.approved) {
+            throw new AppError('Job is already approved', 400);
         }
 
-        // Don't mark as failed if already rendered
-        if (job.frames.rendered.includes(frame)) {
-            return {
-                success: true,
-                progress: job.progress,
-                status: job.status
-            };
+        if (!job.requireApproval) {
+            throw new AppError('Job does not require approval', 400);
         }
 
-        const updatedJob = await Job.findOneAndUpdate(
+        job.approved = true;
+        job.approvedBy = new Types.ObjectId(adminId);
+        job.approvedAt = new Date();
+        job.status = 'pending'; // Ready for processing
+
+        await job.save();
+
+        // Broadcast update
+        this.wsService?.broadcastJobUpdate(jobId);
+
+        return true;
+    }
+
+    // Get job statistics
+    async getJobStats(userId?: string, role?: string): Promise<JobStats> {
+        const matchStage: any = {};
+
+        // Non-admin users can only see their own stats
+        if (userId && role !== 'admin') {
+            matchStage.userId = new Types.ObjectId(userId);
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const stats = await Job.aggregate([
+            { $match: matchStage },
             {
-                jobId,
-                'frames.rendered': { $ne: frame },
-                'frames.failed': { $ne: frame }
-            },
-            {
-                $addToSet: {
-                    'frames.failed': frame
-                },
-                $pull: {
-                    'frames.assigned': frame
+                $facet: {
+                    statusCounts: [
+                        {
+                            $group: {
+                                _id: '$status',
+                                count: { $sum: 1 }
+                            }
+                        }
+                    ],
+                    totals: [
+                        {
+                            $group: {
+                                _id: null,
+                                totalJobs: { $sum: 1 },
+                                totalRenderTime: { $sum: { $ifNull: ['$renderTime', 0] } },
+                                totalCreditsUsed: { $sum: { $ifNull: ['$totalCreditsDistributed', 0] } },
+                                estimatedTotalCost: { $sum: { $ifNull: ['$estimatedCost', 0] } },
+                                actualTotalCost: { $sum: { $ifNull: ['$actualCost', 0] } },
+                                totalFramesRendered: {
+                                    $sum: { $size: { $ifNull: ['$frames.rendered', []] } }
+                                }
+                            }
+                        }
+                    ],
+                    todayStats: [
+                        {
+                            $match: {
+                                createdAt: { $gte: today, $lt: tomorrow }
+                            }
+                        },
+                        {
+                            $group: {
+                                _id: null,
+                                completedToday: {
+                                    $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+                                },
+                                framesRenderedToday: {
+                                    $sum: { $size: { $ifNull: ['$frames.rendered', []] } }
+                                }
+                            }
+                        }
+                    ]
                 }
-            },
-            { new: true }
-        );
+            }
+        ]);
 
-        if (!updatedJob) {
-            return {
-                success: true,
-                progress: job.progress,
-                status: job.status
-            };
-        }
+        const statusCounts = stats[0].statusCounts.reduce((acc: any, curr: any) => {
+            acc[curr._id] = curr.count;
+            return acc;
+        }, {});
 
-        // Remove frame from assigned nodes
-        const assignedNodesMap = updatedJob.assignedNodes as unknown as Map<string, number[]>;
-        const nodeFrames = assignedNodesMap?.get(nodeId) || [];
-        const updatedNodeFrames = nodeFrames.filter(f => f !== frame);
+        const totals = stats[0].totals[0] || {
+            totalJobs: 0,
+            totalRenderTime: 0,
+            totalCreditsUsed: 0,
+            estimatedTotalCost: 0,
+            actualTotalCost: 0,
+            totalFramesRendered: 0
+        };
 
-        if (updatedNodeFrames.length === 0) {
-            assignedNodesMap?.delete(nodeId);
-        } else {
-            assignedNodesMap?.set(nodeId, updatedNodeFrames);
-        }
-
-        // Update progress
-        const totalFrames = updatedJob.frames.total;
-        const renderedFrames = updatedJob.frames.rendered.length;
-        const failedFrames = updatedJob.frames.failed.length;
-        const progress = Math.round((renderedFrames / totalFrames) * 100);
-
-        let status = updatedJob.status;
-        if (failedFrames === totalFrames) {
-            status = 'failed';
-        } else if (renderedFrames + failedFrames === totalFrames) {
-            status = 'failed';
-        } else {
-            status = 'processing';
-        }
-
-        updatedJob.status = status;
-        updatedJob.progress = progress;
-        updatedJob.assignedNodes = assignedNodesMap as any;
-        await updatedJob.save();
-
-        // Update frame assignment
-        const assignment = updatedJob.frameAssignments.find(
-            (a) => a.frame === frame && a.nodeId === nodeId
-        );
-
-        if (assignment) {
-            assignment.status = 'failed';
-        }
+        const todayStats = stats[0].todayStats[0] || {
+            completedToday: 0,
+            framesRenderedToday: 0
+        };
 
         return {
-            success: true,
-            progress,
-            status
+            totalJobs: totals.totalJobs,
+            activeJobs: (statusCounts.pending || 0) + (statusCounts.processing || 0) + (statusCounts.paused || 0),
+            completedJobs: statusCounts.completed || 0,
+            failedJobs: statusCounts.failed || 0,
+            cancelledJobs: statusCounts.cancelled || 0,
+            pausedJobs: statusCounts.paused || 0,
+            completedToday: todayStats.completedToday,
+            totalRenderTime: totals.totalRenderTime,
+            totalCreditsUsed: totals.totalCreditsUsed,
+            totalFramesRendered: totals.totalFramesRendered,
+            avgRenderTimePerFrame: totals.totalFramesRendered > 0
+                ? totals.totalRenderTime / totals.totalFramesRendered
+                : 0,
+            framesRenderedToday: todayStats.framesRenderedToday,
+            estimatedTotalCost: totals.estimatedTotalCost,
+            actualTotalCost: totals.actualTotalCost
         };
     }
 
-    /**
-     * Get node contributions (for node providers and admins)
-     */
-    async getNodeContributions(
-        userId?: Types.ObjectId | string,
-        nodeId?: string
-    ): Promise<INodeContribution[]> {
-        const match: any = { 'frameAssignments.status': 'rendered' };
+    // Get user-specific job statistics
+    async getUserJobStats(userId: string): Promise<UserJobStats> {
+        const stats = await (Job as any).getUserStats(userId);
 
-        if (nodeId) {
-            match['frameAssignments.nodeId'] = nodeId;
-        }
+        const successRate = stats.totalJobs > 0
+            ? (stats.completedJobs / stats.totalJobs) * 100
+            : 0;
 
-        // If user is not admin, they can only see contributions from their own nodes
-        if (userId) {
-            const user = await User.findById(userId);
-            if (user && user.role !== 'admin') {
-                const userNodes = await Node.find({ userId }).select('nodeId');
-                const nodeIds = userNodes.map(n => n.nodeId);
-                match['frameAssignments.nodeId'] = { $in: nodeIds };
-            }
-        }
+        const avgJobCompletionTime = stats.completedJobs > 0
+            ? stats.totalRenderTime / stats.completedJobs
+            : 0;
 
-        const result = await Job.aggregate([
-            { $unwind: '$frameAssignments' },
-            { $match: match },
-            {
-                $group: {
-                    _id: '$frameAssignments.nodeId',
-                    totalFramesRendered: { $sum: 1 },
-                    totalRenderTime: { $sum: '$frameAssignments.renderTime' },
-                    totalCreditsEarned: { $sum: '$frameAssignments.creditsEarned' },
-                    avgFrameTime: { $avg: '$frameAssignments.renderTime' }
-                }
-            },
-            {
-                $project: {
-                    nodeId: '$_id',
-                    totalFramesRendered: 1,
-                    totalRenderTime: { $round: ['$totalRenderTime', 2] },
-                    totalCreditsEarned: 1,
-                    avgFrameTime: { $round: ['$avgFrameTime', 2] },
-                    _id: 0
-                }
-            },
-            { $sort: { totalCreditsEarned: -1 } }
-        ]);
+        const user = await User.findById(userId).select('credits');
 
-        return result;
+        return {
+            totalJobs: stats.totalJobs,
+            activeJobs: stats.activeJobs,
+            completedJobs: stats.completedJobs,
+            totalSpent: stats.totalSpent,
+            creditsRemaining: user?.credits || 0,
+            avgJobCompletionTime,
+            successRate
+        };
     }
 
-    /**
-     * Check job access permissions
-     */
-    private checkJobAccess(job: IJob, userId: Types.ObjectId | string, userRole: string): void {
-        const jobUserId = job.userId instanceof Types.ObjectId
-            ? job.userId.toString()
-            : job.userId;
-
-        const requestUserId = userId instanceof Types.ObjectId
-            ? userId.toString()
-            : userId;
-
-        // Admins can access any job
-        if (userRole === 'admin') {
-            return;
-        }
-
-        // Users can only access their own jobs
-        if (jobUserId !== requestUserId) {
-            throw new AppError('Unauthorized to access this job', 403);
+    // Helper methods
+    private calculateFrames(
+        type: 'image' | 'animation',
+        startFrame: number,
+        endFrame: number,
+        selectedFrame: number
+    ): { totalFrames: number; selectedFrames: number[] } {
+        if (type === 'image') {
+            return {
+                totalFrames: 1,
+                selectedFrames: [selectedFrame || 1]
+            };
+        } else {
+            const totalFrames = endFrame - startFrame + 1;
+            const selectedFrames = Array.from(
+                { length: totalFrames },
+                (_, i) => startFrame + i
+            );
+            return { totalFrames, selectedFrames };
         }
     }
 
-    /**
-     * Get job statistics by status
-     */
-    async getJobStatistics(): Promise<Array<{
-        status: string;
-        count: number;
-        totalFrames: number;
-        renderedFrames: number;
-        avgProgress: number;
-        totalCredits: number;
-    }>> {
-        const stats = await Job.aggregate([
-            {
-                $group: {
-                    _id: '$status',
-                    count: { $sum: 1 },
-                    totalFrames: { $sum: '$frames.total' },
-                    renderedFrames: { $sum: { $size: '$frames.rendered' } },
-                    avgProgress: { $avg: '$progress' },
-                    totalCredits: { $sum: '$totalCreditsDistributed' }
-                }
-            },
-            {
-                $project: {
-                    status: '$_id',
-                    count: 1,
-                    totalFrames: 1,
-                    renderedFrames: 1,
-                    avgProgress: { $round: ['$avgProgress', 2] },
-                    totalCredits: 1,
-                    _id: 0
-                }
-            }
-        ]);
+    private calculateEstimatedCredits(
+        type: 'image' | 'animation',
+        settings: any,
+        startFrame: number,
+        endFrame: number
+    ): number {
+        const frames = type === 'image' ? 1 : endFrame - startFrame + 1;
+        const creditsPerFrame = settings.creditsPerFrame || 1;
 
-        return stats;
+        // Adjust based on settings complexity
+        let complexityMultiplier = 1;
+        if (settings.samples && settings.samples > 256) complexityMultiplier *= 1.5;
+        if (settings.resolutionX * settings.resolutionY > 1920 * 1080) complexityMultiplier *= 2;
+        if (settings.denoiser && settings.denoiser !== 'NONE') complexityMultiplier *= 1.2;
+
+        return Math.ceil(frames * creditsPerFrame * complexityMultiplier);
+    }
+
+    private calculateEstimatedCost(frames: number, settings: any): number {
+        const baseCostPerFrame = 0.1; // $0.10 per frame
+        const creditsPerFrame = settings.creditsPerFrame || 1;
+        return frames * creditsPerFrame * baseCostPerFrame;
+    }
+
+    private calculateEstimatedRenderTime(frames: number, settings: any): number {
+        const baseTimePerFrame = 60; // 60 seconds per frame at 1080p, 128 samples
+        const resolutionFactor = (settings.resolutionX * settings.resolutionY) / (1920 * 1080);
+        const samplesFactor = (settings.samples || 128) / 128;
+
+        return frames * baseTimePerFrame * resolutionFactor * samplesFactor;
+    }
+
+    private async generateThumbnailUrl(s3Key: string): Promise<string> {
+        // This would generate a thumbnail URL (implement based on your thumbnail service)
+        // For now, return the original URL
+        return await this.s3Service.generateFrameDownloadUrl(s3Key);
     }
 }
-
-export const jobService = new JobService();

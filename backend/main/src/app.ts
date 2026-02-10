@@ -7,6 +7,8 @@ import MongoStore from 'connect-mongo';
 import session from 'express-session';
 import { WebSocketService } from './services/WebSocketService';
 import { env } from "./config/env"
+import { S3Service } from './services/S3Service';
+import { JobService } from './services/JobService';
 
 // Import routes
 import jobRoutes from './routes/api/jobs';
@@ -58,12 +60,14 @@ app.use('/api/auth', authRoutes);
 app.get('/ws', (req, res) => {
   res.status(400).json({ error: 'WebSocket connection required' });
 });
-
-// Initialize WebSocketService
+const s3Service = new S3Service();
 const wsService = new WebSocketService(server);
+const jobService = new JobService(s3Service, wsService);
 
-// Make WebSocket service available to controllers
+// Make services available to controllers via app
+app.set('s3Service', s3Service);
 app.set('wsService', wsService);
+app.set('jobService', jobService);
 
 // Start WebSocket cleanup and stats broadcasting
 wsService.startCleanupInterval();
