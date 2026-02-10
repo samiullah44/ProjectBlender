@@ -1,9 +1,12 @@
 // backend/src/app.ts
+/// <reference path="./types/express-session.d.ts" />
 import express from 'express';
 import http from 'http';
 import dotenv from 'dotenv';
+import MongoStore from 'connect-mongo';
+import session from 'express-session';
 import { WebSocketService } from './services/WebSocketService';
-import {env} from "./config/env"
+import { env } from "./config/env"
 
 // Import routes
 import jobRoutes from './routes/api/jobs';
@@ -20,6 +23,27 @@ const server = http.createServer(app);
 
 // Use your CORS middleware
 app.use(corsMiddleware);
+
+// Session configuration
+app.use(session({
+  secret: env.sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: env.mongodbUri,
+    collectionName: 'sessions'
+  }),
+  cookie: {
+    secure: env.nodeEnv === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Initialize Passport
+import passport from './config/passport';
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Middleware
 app.use(express.json({ limit: '500mb' }));

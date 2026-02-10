@@ -2,26 +2,51 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { authService } from '../services/AuthService';
-import { User } from '../models/User';
+import { validateEmail, validatePassword } from '../utils/authUtils';
+import { env } from '../config/env';
 
 export class AuthController {
   // Register new user
   static async register(req: Request, res: Response) {
     try {
-      const { email, username, password, role } = req.body;
+      const { email, username, name, password, role } = req.body;
 
-      if (!email || !username || !password) {
+      // Validation
+      if (!email || !username || !name || !password) {
         return res.status(400).json({
           success: false,
-          error: 'Email, username, and password are required'
+          error: 'Email, username, name, and password are required'
+        });
+      }
+
+      if (!validateEmail(email)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid email format'
+        });
+      }
+
+      const passwordValidation = validatePassword(password);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: passwordValidation.errors.join(', ')
+        });
+      }
+
+      if (role && !['client', 'node_provider'].includes(role)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid role'
         });
       }
 
       const result = await authService.register(
         email,
         username,
+        name,
         password,
-        role || 'client'
+        (role as 'client' | 'node_provider') || 'client'
       );
 
       if (!result.success) {
@@ -31,6 +56,34 @@ export class AuthController {
       res.status(201).json(result);
     } catch (error: any) {
       console.error('Registration error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  }
+
+  // Verify OTP
+  static async verifyOTP(req: Request, res: Response) {
+    try {
+      const { email, otp } = req.body;
+
+      if (!email || !otp) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email and OTP are required'
+        });
+      }
+
+      const result = await authService.verifyOTP(email, otp);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('OTP verification error:', error);
       res.status(500).json({
         success: false,
         error: 'Internal server error'
@@ -66,24 +119,91 @@ export class AuthController {
     }
   }
 
+  // Forgot password
+  static async forgotPassword(req: Request, res: Response) {
+    try {
+      const { email, resetUrl } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email is required'
+        });
+      }
+
+      const result = await authService.forgotPassword(email, resetUrl);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Forgot password error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  }
+
+  // Reset password
+  static async resetPassword(req: Request, res: Response) {
+    try {
+      const { token, newPassword } = req.body;
+
+      if (!token || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          error: 'Token and new password are required'
+        });
+      }
+
+      const passwordValidation = validatePassword(newPassword);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: passwordValidation.errors.join(', ')
+        });
+      }
+
+      const result = await authService.resetPassword(token, newPassword);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  }
+
   // Get user profile
   static async getProfile(req: AuthRequest, res: Response) {
     try {
       const user = await authService.getProfile(req.user.userId);
-      
+
       res.json({
         success: true,
         user: {
           id: user._id,
           email: user.email,
           username: user.username,
+          name: user.name,
           role: user.role,
           credits: user.credits,
           isVerified: user.isVerified,
+          provider: user.provider,
           stats: user.stats,
           preferences: user.preferences,
           nodeProvider: user.nodeProvider,
-          createdAt: user.createdAt
+          createdAt: user.createdAt,
+          lastLoginAt: user.lastLoginAt
         }
       });
     } catch (error: any) {
@@ -98,38 +218,122 @@ export class AuthController {
   // Update user profile
   static async updateProfile(req: AuthRequest, res: Response) {
     try {
-      const { username, preferences } = req.body;
-      const userId = req.user.userId;
+      const { username, name, preferences } = req.body;
 
-      // Find and update user
-      const user = await User.findById(userId);
-      if (!user) {
-        return res.status(404).json({
+      // Basic validation
+      if (username && username.length < 3) {
+        return res.status(400).json({
           success: false,
-          error: 'User not found'
+          error: 'Username must be at least 3 characters long'
         });
       }
 
-      if (username) user.username = username;
-      if (preferences) user.preferences = { ...user.preferences, ...preferences };
+      if (name && name.length < 2) {
+        return res.status(400).json({
+          success: false,
+          error: 'Name must be at least 2 characters long'
+        });
+      }
 
-      await user.save();
-
-      res.json({
-        success: true,
-        message: 'Profile updated successfully',
-        user: {
-          id: user._id,
-          email: user.email,
-          username: user.username,
-          preferences: user.preferences
-        }
+      const result = await authService.updateProfile(req.user.userId, {
+        username,
+        name,
+        preferences
       });
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
     } catch (error: any) {
       console.error('Update profile error:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to update profile'
+      });
+    }
+  }
+
+  // Resend OTP
+  static async resendOTP(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email is required'
+        });
+      }
+
+      const result = await authService.resendOTP(email);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Resend OTP error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  }
+
+  // OAuth callbacks
+  static async googleCallback(req: Request, res: Response) {
+    try {
+      const { profile } = req.body;
+
+      if (!profile || !profile.email) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid profile data'
+        });
+      }
+
+      const result = await authService.oauthAuthenticate(profile, 'google');
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Google OAuth error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Google authentication failed'
+      });
+    }
+  }
+
+  static async githubCallback(req: Request, res: Response) {
+    try {
+      const { profile } = req.body;
+
+      if (!profile || !profile.email) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid profile data'
+        });
+      }
+
+      const result = await authService.oauthAuthenticate(profile, 'github');
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('GitHub OAuth error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'GitHub authentication failed'
       });
     }
   }
@@ -146,7 +350,7 @@ export class AuthController {
         });
       }
 
-      const user = await authService.updateCredits(userId, amount, 'add');
+      const user = await authService.addCredits(userId, amount);
 
       res.json({
         success: true,
@@ -160,5 +364,15 @@ export class AuthController {
         error: 'Failed to add credits'
       });
     }
+  }
+
+  // Health check
+  static async healthCheck(req: Request, res: Response) {
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      service: 'auth',
+      version: '1.0.0'
+    });
   }
 }
