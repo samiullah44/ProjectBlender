@@ -59,14 +59,14 @@ export interface INode {
 const nodeSchema = new mongoose.Schema<INode>({
   nodeId: { type: String, required: true, unique: true },
   name: String,
-  userId: { 
+  userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    index: true, 
+    required: false,
+    index: true,
   },
-  status: { 
-    type: String, 
+  status: {
+    type: String,
     enum: ['online', 'offline', 'busy', 'maintenance'],
     default: 'online'
   },

@@ -180,31 +180,70 @@ export class JobService {
 
         // Non-admin users can only see their own jobs
         if (role !== 'admin') {
-            query.userId = new Types.ObjectId(userId);
+            if (mongoose.isValidObjectId(userId)) {
+                query.userId = new Types.ObjectId(userId);
+            } else {
+                return null; // Invalid user ID for non-admin
+            }
         }
 
-        const job = await Job.findOne(query)
-            .populate('user', 'username name email role')
-            .populate('approvedBy', 'username name')
-            .lean();
+        try {
+            const job = await Job.findOne(query)
+                .populate('user', 'username name email role')
+                .populate('approvedBy', 'username name')
+                .lean()
+                .catch(err => {
+                    console.error(`Population error in getJobById for ${jobId}:`, err);
+                    // Fallback to unpopulated job if population fails due to bad data
+                    return Job.findOne(query).lean();
+                });
 
-        if (!job) return null;
+            if (!job) return null;
 
-        // Generate fresh URLs
-        const blendFileUrl = await this.s3Service.generateBlendFileDownloadUrl(job.blendFileKey);
-        const outputUrlsWithFreshUrls = await Promise.all(
-            job.outputUrls.map(async (output: IJobOutput) => ({
-                ...output,
-                freshUrl: await this.s3Service.generateFrameDownloadUrl(output.s3Key),
-                thumbnailUrl: await this.generateThumbnailUrl(output.s3Key)
-            }))
-        );
+            // Generate fresh URLs (with fallback if S3 fails)
+            let blendFileUrl = job.blendFileUrl;
+            try {
+                if (job.blendFileKey) {
+                    blendFileUrl = await this.s3Service.generateBlendFileDownloadUrl(job.blendFileKey);
+                }
+            } catch (err) {
+                console.warn(`Failed to generate fresh blend file URL for job ${jobId}:`, err);
+            }
 
-        return {
-            ...job,
-            blendFileUrl,
-            outputUrls: outputUrlsWithFreshUrls
-        };
+            let outputUrlsWithFreshUrls = job.outputUrls || [];
+            try {
+                outputUrlsWithFreshUrls = await Promise.all(
+                    (job.outputUrls || []).map(async (output: IJobOutput) => {
+                        let freshUrl = output.url;
+                        let thumbnailUrl = output.thumbnailUrl;
+                        try {
+                            if (output.s3Key) {
+                                freshUrl = await this.s3Service.generateFrameDownloadUrl(output.s3Key);
+                                thumbnailUrl = await this.generateThumbnailUrl(output.s3Key);
+                            }
+                        } catch (urlErr) {
+                            console.warn(`Failed to generate URL for frame ${output.frame}:`, urlErr);
+                        }
+                        return {
+                            ...output,
+                            freshUrl,
+                            thumbnailUrl
+                        };
+                    })
+                );
+            } catch (err) {
+                console.warn(`Failed to generate output URLs for job ${jobId}:`, err);
+            }
+
+            return {
+                ...job,
+                blendFileUrl,
+                outputUrls: outputUrlsWithFreshUrls
+            };
+        } catch (error) {
+            console.error(`Error in getJobById for ${jobId}:`, error);
+            throw error;
+        }
     }
 
     // List jobs with filtering and pagination
@@ -227,76 +266,109 @@ export class JobService {
             approved
         } = filters;
 
-        const { page = 1, limit = 50, sortBy = 'createdAt', sortOrder = 'desc' } = pagination;
+        try {
+            const { page = 1, limit = 50, sortBy = 'createdAt', sortOrder = 'desc' } = pagination;
 
-        const query: any = {};
+            const query: any = {};
 
-        // Apply user filtering
-        if (userId) {
-            query.userId = new Types.ObjectId(userId);
-        } else if (requestingUserId && requestingUserRole !== 'admin') {
-            // Non-admin users can only see their own jobs
-            query.userId = new Types.ObjectId(requestingUserId);
-        }
-
-        // Apply other filters
-        if (projectId) query.projectId = projectId;
-        if (status) query.status = status;
-        if (type) query.type = type;
-        if (priority) query.priority = priority;
-        if (approved !== undefined) query.approved = approved;
-        if (tags && tags.length > 0) query.tags = { $all: tags };
-
-        // Date range
-        if (startDate || endDate) {
-            query.createdAt = {};
-            if (startDate) query.createdAt.$gte = new Date(startDate);
-            if (endDate) query.createdAt.$lte = new Date(endDate);
-        }
-
-        // Text search
-        if (search) {
-            query.$or = [
-                { jobId: { $regex: search, $options: 'i' } },
-                { blendFileName: { $regex: search, $options: 'i' } },
-                { description: { $regex: search, $options: 'i' } },
-                { 'user.username': { $regex: search, $options: 'i' } },
-                { 'user.name': { $regex: search, $options: 'i' } }
-            ];
-        }
-
-        const skip = (page - 1) * limit;
-        const sort: any = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
-
-        const [jobs, total] = await Promise.all([
-            Job.find(query)
-                .populate('user', 'username name email role')
-                .populate('approvedBy', 'username name')
-                .sort(sort)
-                .skip(skip)
-                .limit(limit)
-                .lean(),
-            Job.countDocuments(query)
-        ]);
-
-        // Generate fresh URLs for blend files
-        const jobsWithUrls = await Promise.all(
-            jobs.map(async (job) => ({
-                ...job,
-                blendFileUrl: await this.s3Service.generateBlendFileDownloadUrl(job.blendFileKey),
-                outputCount: job.outputUrls?.length || 0
-            }))
-        );
-
-        return {
-            jobs: jobsWithUrls,
-            pagination: {
-                total,
-                page,
-                limit,
-                pages: Math.ceil(total / limit)
+            // Apply user filtering
+            if (userId) {
+                if (mongoose.isValidObjectId(userId)) {
+                    query.userId = new Types.ObjectId(userId);
+                } else {
+                    // If userId is invalid for an ObjectId field, searching for it will always fail anyway.
+                    // To avoid CastError, we can either return empty or use a query that won't match.
+                    query.userId = new Types.ObjectId(); // Guarantee no match
+                }
+            } else if (requestingUserId && requestingUserRole !== 'admin') {
+                // Non-admin users can only see their own jobs
+                if (mongoose.isValidObjectId(requestingUserId)) {
+                    query.userId = new Types.ObjectId(requestingUserId);
+                } else {
+                    query.userId = new Types.ObjectId(); // Guarantee no match
+                }
             }
-        };
+
+            // Apply other filters
+            if (projectId) query.projectId = projectId;
+            if (status) query.status = status;
+            if (type) query.type = type;
+            if (priority) query.priority = priority;
+            if (approved !== undefined) query.approved = approved;
+            if (tags && tags.length > 0) query.tags = { $all: tags };
+
+            // Date range
+            if (startDate || endDate) {
+                query.createdAt = {};
+                if (startDate) query.createdAt.$gte = new Date(startDate);
+                if (endDate) query.createdAt.$lte = new Date(endDate);
+            }
+
+            // Text search - REMOVED regex search on virtual fields user.username and user.name
+            // MongoDB cannot filter on fields that are not in the document (populated/virtuals)
+            if (search) {
+                query.$or = [
+                    { jobId: { $regex: search, $options: 'i' } },
+                    { blendFileName: { $regex: search, $options: 'i' } },
+                    { description: { $regex: search, $options: 'i' } }
+                ];
+            }
+
+            const skip = (page - 1) * limit;
+            const sort: any = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
+
+            const [jobs, total] = await Promise.all([
+                Job.find(query)
+                    .populate('user', 'username name email role')
+                    .populate('approvedBy', 'username name')
+                    .sort(sort)
+                    .skip(skip)
+                    .limit(limit)
+                    .lean()
+                    .catch(err => {
+                        console.error('Population error in listJobs:', err);
+                        // Fallback to unpopulated jobs if population fails due to bad data
+                        return Job.find(query)
+                            .sort(sort)
+                            .skip(skip)
+                            .limit(limit)
+                            .lean();
+                    }),
+                Job.countDocuments(query).catch(() => 0)
+            ]);
+
+            // Generate fresh URLs for blend files (with fallback if S3 fails)
+            const jobsWithUrls = await Promise.all(
+                jobs.map(async (job) => {
+                    let blendFileUrl = job.blendFileUrl;
+                    try {
+                        if (job.blendFileKey) {
+                            blendFileUrl = await this.s3Service.generateBlendFileDownloadUrl(job.blendFileKey);
+                        }
+                    } catch (err) {
+                        console.warn(`Failed to generate URL for job ${job.jobId}:`, err);
+                    }
+                    return {
+                        ...job,
+                        blendFileUrl,
+                        outputCount: job.outputUrls?.length || 0
+                    };
+                })
+            );
+
+            return {
+                jobs: jobsWithUrls,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    pages: Math.ceil(total / limit)
+                }
+            };
+        } catch (error) {
+            console.error('Error in listJobs:', error);
+            throw error;
+        }
     }
 
     // Update job

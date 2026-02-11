@@ -24,10 +24,10 @@ export const upload = multer({
     }
 });
 
-// Upload routes (multipart)
-router.post('/upload/initiate', UploadController.initiateUpload);
-router.post('/upload/complete', UploadController.completeUpload);
-router.delete('/upload/abort', UploadController.abortUpload);
+// Upload routes (multipart) - all require authentication
+router.post('/upload/initiate', authenticate, UploadController.initiateUpload);
+router.post('/upload/complete', authenticate, UploadController.completeUpload);
+router.delete('/upload/abort', authenticate, UploadController.abortUpload);
 
 // Public job routes (authenticated)
 router.post('/upload',

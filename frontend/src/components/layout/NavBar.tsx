@@ -124,14 +124,14 @@ const Navbar: React.FC = () => {
     if (!user) return []
 
     const baseLinks = [
-      {
-        label: 'Dashboard',
-        href: '/dashboard',
-        icon: <User className="w-4 h-4" />,
-        color: 'text-blue-400',
-        bgColor: 'bg-blue-500/10',
-        roles: ['client', 'admin'] as ('client' | 'node_provider' | 'admin')[]
-      }
+      // {
+      //   label: 'Dashboard',
+      //   href: '/dashboard',
+      //   icon: <User className="w-4 h-4" />,
+      //   color: 'text-blue-400',
+      //   bgColor: 'bg-blue-500/10',
+      //   roles: ['client', 'admin'] as ('client' | 'node_provider' | 'admin')[]
+      // }
     ]
 
     // Add client dashboard link for clients and admins
@@ -170,7 +170,12 @@ const Navbar: React.FC = () => {
       })
     }
 
-    return baseLinks.filter(link => link.roles.includes(user.role))
+    const moduleLinks = baseLinks.filter(link => {
+      if (!link.roles) return true;
+      return link.roles.includes(user.role as any);
+    });
+
+    return moduleLinks;
   }
 
   const userMenuItems = [
@@ -305,7 +310,7 @@ const Navbar: React.FC = () => {
 
             {/* Right Side - Modules & Auth */}
             <div className="hidden lg:flex items-center gap-4">
-              {/* Search */}
+              {/* Search
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -313,7 +318,7 @@ const Navbar: React.FC = () => {
                   placeholder="Search..."
                   className="pl-10 pr-4 py-2 w-40 rounded-lg bg-white/5 border border-white/10 text-sm placeholder-gray-400 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 text-white"
                 />
-              </div>
+              </div> */}
 
               {isAuthenticated && user ? (
                 <>

@@ -1,10 +1,8 @@
-// hooks/useJobs.ts - SIMPLIFIED
+// hooks/useJobs.ts - FIXED: use axiosInstance for auth token
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import jobStore from '@/stores/jobStore'
 import { type Job } from '@/stores/jobStore'
-import axios from 'axios'
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+import { axiosInstance } from '@/lib/axios'
 
 // Query keys
 export const jobKeys = {
@@ -16,19 +14,19 @@ export const jobKeys = {
   stats: () => [...jobKeys.all, 'stats'] as const,
 }
 
-// Fetch functions
+// Fetch functions - using axiosInstance which auto-attaches auth token
 const fetchJobs = async (params = {}): Promise<{ jobs: Job[]; pagination: any }> => {
-  const response = await axios.get(`${API_BASE_URL}/jobs`, { params })
+  const response = await axiosInstance.get('/jobs', { params })
   return response.data
 }
 
 const fetchJob = async (jobId: string): Promise<Job> => {
-  const response = await axios.get(`${API_BASE_URL}/jobs/${jobId}`)
+  const response = await axiosInstance.get(`/jobs/${jobId}`)
   return response.data
 }
 
 const fetchDashboardStats = async () => {
-  const response = await axios.get(`${API_BASE_URL}/jobs/dashboard/stats`)
+  const response = await axiosInstance.get('/jobs/dashboard/stats')
   return response.data.stats
 }
 
@@ -57,7 +55,7 @@ export const useDashboardStats = () => {
 
 export const useCreateJob = () => {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: (formData: FormData) => jobStore.getState().createJob(formData),
     onSuccess: () => {
@@ -69,9 +67,9 @@ export const useCreateJob = () => {
 
 export const useCancelJob = () => {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
-    mutationFn: ({ jobId, cleanupS3 = false }: { jobId: string; cleanupS3?: boolean }) => 
+    mutationFn: ({ jobId, cleanupS3 = false }: { jobId: string; cleanupS3?: boolean }) =>
       jobStore.getState().cancelJob(jobId, cleanupS3),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(variables.jobId) })

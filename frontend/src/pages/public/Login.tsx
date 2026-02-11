@@ -10,11 +10,13 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { useAuthStore } from '@/stores/authStore'
+import { Checkbox } from '@/components/ui/Checkbox'
 import { toast } from 'react-hot-toast'
 
 const loginSchema = z.object({
     email: z.string().email('Please enter a valid email address'),
-    password: z.string().min(1, 'Password is required')
+    password: z.string().min(1, 'Password is required'),
+    rememberMe: z.boolean().optional()
 })
 
 type LoginFormData = z.infer<typeof loginSchema>
@@ -29,18 +31,37 @@ const LoginPage: React.FC = () => {
     const {
         register,
         handleSubmit,
-        formState: { errors }
+        formState: { errors },
+        setValue,
+        watch
     } = useForm<LoginFormData>({
-        resolver: zodResolver(loginSchema)
+        resolver: zodResolver(loginSchema),
+        defaultValues: {
+            rememberMe: false
+        }
     })
 
     const from = (location.state as any)?.from?.pathname || '/dashboard'
 
     useEffect(() => {
         clearError()
-    }, [])
+
+        // Load remembered email
+        const rememberedEmail = localStorage.getItem('rememberedEmail')
+        if (rememberedEmail) {
+            setValue('email', rememberedEmail)
+            setValue('rememberMe', true)
+        }
+    }, [setValue, clearError])
 
     const onSubmit = async (data: LoginFormData) => {
+        // Handle Remember Me
+        if (data.rememberMe) {
+            localStorage.setItem('rememberedEmail', data.email)
+        } else {
+            localStorage.removeItem('rememberedEmail')
+        }
+
         const result = await login(data.email, data.password)
         if (result.success) {
             navigate(from, { replace: true })
@@ -177,6 +198,16 @@ const LoginPage: React.FC = () => {
                                 {errors.password && (
                                     <p className="text-sm text-red-400">{errors.password.message}</p>
                                 )}
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <Checkbox
+                                    id="rememberMe"
+                                    label="Remember me"
+                                    {...register('rememberMe')}
+                                    checked={watch('rememberMe')}
+                                    onChange={(checked) => setValue('rememberMe', checked)}
+                                />
                             </div>
 
                             <Button

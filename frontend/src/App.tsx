@@ -25,9 +25,9 @@ import JobDetails from '@/pages/client/JobDetails' // Add this import
 // import NodeMachines from '@/pages/node/Machines'
 
 // Admin Pages
-// import AdminDashboard from '@/pages/admin/Dashboard'
-// import AdminNodes from '@/pages/admin/Nodes'
-// import AdminJobs from '@/pages/admin/Jobs'
+import AdminDashboard from '@/pages/admin/Dashboard'
+import AdminJobs from '@/pages/admin/Jobs'
+import AdminJobDetails from '@/pages/admin/JobDetails'
 
 // Protected Route Component
 import { ProtectedRoute } from '@/components/layout/ProtectedLayout'
@@ -151,9 +151,9 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['admin']}>
                     <Routes>
-                      {/* <Route path="/dashboard" element={<AdminDashboard />} /> */}
-                      {/* <Route path="/nodes" element={<AdminNodes />} /> */}
-                      {/* <Route path="/jobs" element={<AdminJobs />} /> */}
+                      <Route path="/dashboard" element={<AdminDashboard />} />
+                      <Route path="/jobs" element={<AdminJobs />} />
+                      <Route path="/jobs/:jobId" element={<AdminJobDetails />} />
                     </Routes>
                   </ProtectedRoute>
                 }

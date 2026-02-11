@@ -1,5 +1,5 @@
 // pages/public/Register.tsx
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select'
 import { useAuthStore } from '@/stores/authStore'
+import { Checkbox } from '@/components/ui/Checkbox'
 
 const registerSchema = z.object({
     email: z.string().email('Please enter a valid email address'),
@@ -26,7 +27,8 @@ const registerSchema = z.object({
         .regex(/[0-9]/, 'Password must contain at least one number')
         .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
     confirmPassword: z.string(),
-    role: z.enum(['client', 'node_provider'])
+    role: z.enum(['client', 'node_provider']),
+    rememberMe: z.boolean().optional()
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
     path: ["confirmPassword"],
@@ -50,14 +52,31 @@ const RegisterPage: React.FC = () => {
     } = useForm<RegisterFormData>({
         resolver: zodResolver(registerSchema),
         defaultValues: {
-            role: 'client'
+            role: 'client',
+            rememberMe: false
         }
     })
+
+    useEffect(() => {
+        // Load remembered email
+        const rememberedEmail = localStorage.getItem('rememberedEmail')
+        if (rememberedEmail) {
+            setValue('email', rememberedEmail)
+            setValue('rememberMe', true)
+        }
+    }, [setValue])
 
     const onSubmit = async (data: RegisterFormData) => {
         clearError()
 
-        const { confirmPassword, ...registerData } = data
+        // Handle Remember Me
+        if (data.rememberMe) {
+            localStorage.setItem('rememberedEmail', data.email)
+        } else {
+            localStorage.removeItem('rememberedEmail')
+        }
+
+        const { confirmPassword, rememberMe, ...registerData } = data
         const result = await registerUser(registerData)
 
         if (result.success) {
@@ -312,6 +331,16 @@ const RegisterPage: React.FC = () => {
                                         One special character
                                     </li>
                                 </ul>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <Checkbox
+                                    id="rememberMe"
+                                    label="Remember me"
+                                    {...register('rememberMe')}
+                                    checked={watch('rememberMe')}
+                                    onChange={(checked) => setValue('rememberMe', checked)}
+                                />
                             </div>
 
                             <Button

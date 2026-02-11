@@ -33,11 +33,11 @@ export class UploadController {
     } catch (error) {
       console.error('Initiate upload error:', error);
       if (error instanceof AppError) {
-        res.status(error.statusCode || 500).json({ 
+        res.status(error.statusCode || 500).json({
           error: error.message
         });
       } else {
-        res.status(500).json({ 
+        res.status(500).json({
           error: 'Failed to initiate upload',
           details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -50,12 +50,18 @@ export class UploadController {
    */
   static async completeUpload(req: Request, res: Response): Promise<void> {
     try {
+      // Extract the authenticated user from the request (set by authenticate middleware)
+      const user = (req as any).user;
+      if (!user || !user.userId) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
+
       const {
         key,
         uploadId,
         parts,
         jobSettings,
-        userId = 'default-user',
         projectId = 'default-project',
         type = 'animation',
         startFrame = 1,
@@ -63,6 +69,9 @@ export class UploadController {
         selectedFrame = 1,
         filename
       } = req.body;
+
+      // Use the authenticated user's ID, NOT the body's userId
+      const userId = user.userId;
 
       // Validate required fields
       if (!key || !uploadId || !parts || !filename) {
@@ -107,9 +116,9 @@ export class UploadController {
       if (wsService) {
         wsService.broadcastSystemUpdate({
           type: 'job_created',
-          data: { 
-            jobId: result.jobId, 
-            type: result.type, 
+          data: {
+            jobId: result.jobId,
+            type: result.type,
             status: 'pending',
             blendFileName: filename,
             totalFrames: result.totalFrames
@@ -121,46 +130,46 @@ export class UploadController {
     } catch (error) {
       console.error('Complete upload error:', error);
       if (error instanceof AppError) {
-        res.status(error.statusCode || 500).json({ 
+        res.status(error.statusCode || 500).json({
           error: error.message
         });
       } else {
-        res.status(500).json({ 
+        res.status(500).json({
           error: 'Failed to complete upload and create job',
           details: error instanceof Error ? error.message : 'Unknown error'
         });
       }
     }
   }
-/**
- * Abort multipart upload
- */
-static async abortUpload(req: Request, res: Response): Promise<void> {
-  try {
-    const { key, uploadId } = req.body;
+  /**
+   * Abort multipart upload
+   */
+  static async abortUpload(req: Request, res: Response): Promise<void> {
+    try {
+      const { key, uploadId } = req.body;
 
-    if (!key || !uploadId) {
-      throw new AppError('Key and uploadId are required', 400);
-    }
+      if (!key || !uploadId) {
+        throw new AppError('Key and uploadId are required', 400);
+      }
 
-    await s3Service.abortMultipartUpload(key, uploadId);
+      await s3Service.abortMultipartUpload(key, uploadId);
 
-    res.json({
-      success: true,
-      message: 'Upload aborted successfully'
-    });
-  } catch (error) {
-    console.error('Abort upload error:', error);
-    if (error instanceof AppError) {
-      res.status(error.statusCode || 500).json({ 
-        error: error.message
+      res.json({
+        success: true,
+        message: 'Upload aborted successfully'
       });
-    } else {
-      res.status(500).json({ 
-        error: 'Failed to abort upload',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
+    } catch (error) {
+      console.error('Abort upload error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          error: error.message
+        });
+      } else {
+        res.status(500).json({
+          error: 'Failed to abort upload',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     }
   }
-}
 }
