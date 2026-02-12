@@ -41,6 +41,8 @@ import { Input } from '@/components/ui/Input'
 import { useNavigate } from 'react-router-dom'
 import jobStore from '@/stores/jobStore'
 import { websocketService } from '@/services/websocketService'
+import { authService } from '@/services/authService'
+import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
 import { type Job } from '@/stores/jobStore'
 
@@ -55,6 +57,71 @@ interface SystemStats {
   totalFramesRendered: number
   avgRenderTimePerFrame: number
   framesRenderedToday: number
+}
+
+const NodeProviderCard: React.FC = () => {
+  const { user } = useAuthStore()
+  const navigate = useNavigate()
+
+  // If user is already a node provider, don't show the card
+  if (!user || user.roles?.includes('node_provider')) {
+    return null
+  }
+
+  const handleNavigateToForm = () => {
+    navigate('/apply-node-provider')
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mb-8"
+    >
+      <Card className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 border-purple-500/30 backdrop-blur-sm">
+        <CardContent className="flex flex-col md:flex-row items-start md:items-center justify-between p-6 gap-4">
+          <div>
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <Cpu className="w-5 h-5 text-purple-400" />
+              Earn by Rendering
+            </h3>
+            <p className="text-gray-300 max-w-xl">
+              Become a node provider and earn credits or money by contributing your GPU power to the network.
+              Join our distributed rendering ecosystem today.
+            </p>
+            {user.nodeProviderStatus === 'rejected' && user.rejectionReason && (
+              <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                <p className="text-sm text-red-300">
+                  <strong>Application Rejected:</strong> {user.rejectionReason}
+                </p>
+              </div>
+            )}
+          </div>
+          {user.nodeProviderStatus === 'pending' ? (
+            <Button disabled variant="outline" className="border-purple-500/50 text-purple-300 bg-purple-500/10 dark:bg-purple-900/20 cursor-not-allowed opacity-80">
+              <Clock className="w-4 h-4 mr-2" />
+              Application Pending
+            </Button>
+          ) : (
+            <div className="relative group">
+              <Button
+                onClick={handleNavigateToForm}
+                className="bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/20 transition-all duration-300 hover:scale-105"
+              >
+                <Zap className="w-4 h-4 mr-2 fill-current" />
+                {user.nodeProviderStatus === 'rejected' ? 'Reapply' : 'Apply as Node Provider'}
+              </Button>
+              {/* Hover Hint Tooltip */}
+              <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-3 px-3 py-2 text-xs text-white bg-gray-900/90 border border-white/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10 pointer-events-none shadow-xl">
+                Start earning active income with your hardware
+                <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900/90 border-t border-l border-white/10 rotate-45"></div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
 }
 
 // Component sections
@@ -873,10 +940,11 @@ const ClientDashboard: React.FC = () => {
           </motion.div>
         )}
 
+        <NodeProviderCard />
         <StatsSection stats={stats} isLoading={isLoading} />
 
         {/* Main Content with Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs defaultValue="dashboard" className="space-y-6" onValueChange={setActiveTab}>
           <TabsList className="grid grid-cols-2 bg-gray-900/50 border border-white/10">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />

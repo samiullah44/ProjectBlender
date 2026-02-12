@@ -19,13 +19,15 @@ import {
   Bell,
   Search,
   CreditCard,
-  Cpu
+  Cpu,
+  ArrowLeftRight
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
+import { NotificationBell } from './NotificationBell'
 
 interface NavItem {
   label: string
@@ -47,7 +49,7 @@ const Navbar: React.FC = () => {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [scrolled, setScrolled] = useState(false)
 
-  const { user, isAuthenticated, logout } = useAuthStore()
+  const { user, isAuthenticated, logout, switchRole } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -121,21 +123,13 @@ const Navbar: React.FC = () => {
   ]
 
   const getModuleLinks = () => {
-    if (!user) return []
+    if (!isAuthenticated || !user) return []
 
-    const baseLinks = [
-      // {
-      //   label: 'Dashboard',
-      //   href: '/dashboard',
-      //   icon: <User className="w-4 h-4" />,
-      //   color: 'text-blue-400',
-      //   bgColor: 'bg-blue-500/10',
-      //   roles: ['client', 'admin'] as ('client' | 'node_provider' | 'admin')[]
-      // }
-    ]
+    const baseLinks: any[] = []
+    const hasRole = (role: string) => user.roles?.includes(role as any) || user.role === role;
+    const activeRole = user.primaryRole || user.role;
 
-    // Add client dashboard link for clients and admins
-    if (user.role === 'client' || user.role === 'admin') {
+    if (hasRole('client') || hasRole('admin')) {
       baseLinks.push({
         label: 'Client Dashboard',
         href: '/client/dashboard',
@@ -146,8 +140,7 @@ const Navbar: React.FC = () => {
       })
     }
 
-    // Add node provider dashboard for node_providers and admins
-    if (user.role === 'node_provider' || user.role === 'admin') {
+    if (hasRole('node_provider') || hasRole('admin')) {
       baseLinks.push({
         label: 'Node Dashboard',
         href: '/node/dashboard',
@@ -158,8 +151,7 @@ const Navbar: React.FC = () => {
       })
     }
 
-    // Only show admin link to admins
-    if (user.role === 'admin') {
+    if (hasRole('admin')) {
       baseLinks.push({
         label: 'Admin Panel',
         href: '/admin/dashboard',
@@ -171,8 +163,11 @@ const Navbar: React.FC = () => {
     }
 
     const moduleLinks = baseLinks.filter(link => {
+      // Admins see all their related dashboards in the Navbar for easy access
+      if (hasRole('admin')) return true;
+
       if (!link.roles) return true;
-      return link.roles.includes(user.role as any);
+      return link.roles.includes(activeRole as any);
     });
 
     return moduleLinks;
@@ -320,8 +315,13 @@ const Navbar: React.FC = () => {
                 />
               </div> */}
 
+
+
               {isAuthenticated && user ? (
                 <>
+                  {/* Notifications */}
+                  <NotificationBell />
+
                   {/* Credits Display */}
                   <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                     <div className="flex items-center gap-2">
@@ -331,6 +331,66 @@ const Navbar: React.FC = () => {
                       </span>
                     </div>
                   </div>
+
+                  {/* Role Switcher */}
+                  {user.roles && user.roles.length > 1 && (
+                    <div className="flex items-center gap-2 bg-gray-900/50 p-1 rounded-lg border border-white/5 mx-2">
+                      {user.roles.includes('client') && (
+                        <button
+                          onClick={() => {
+                            switchRole('client').then(res => {
+                              if (res.success) navigate('/client/dashboard');
+                            });
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2",
+                            (user.primaryRole || user.role) === 'client'
+                              ? "bg-emerald-500 text-white shadow-lg"
+                              : "text-gray-400 hover:text-white hover:bg-white/5"
+                          )}
+                        >
+                          <User className="w-3.5 h-3.5" />
+                          Client
+                        </button>
+                      )}
+                      {user.roles.includes('node_provider') && (
+                        <button
+                          onClick={() => {
+                            switchRole('node_provider').then(res => {
+                              if (res.success) navigate('/node/dashboard');
+                            });
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2",
+                            (user.primaryRole || user.role) === 'node_provider'
+                              ? "bg-purple-600 text-white shadow-lg"
+                              : "text-gray-400 hover:text-white hover:bg-white/5"
+                          )}
+                        >
+                          <Server className="w-3.5 h-3.5" />
+                          Provider
+                        </button>
+                      )}
+                      {user.roles.includes('admin') && (
+                        <button
+                          onClick={() => {
+                            switchRole('admin').then(res => {
+                              if (res.success) navigate('/admin/dashboard');
+                            });
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2",
+                            (user.primaryRole || user.role) === 'admin'
+                              ? "bg-amber-600 text-white shadow-lg"
+                              : "text-gray-400 hover:text-white hover:bg-white/5"
+                          )}
+                        >
+                          <Shield className="w-3.5 h-3.5" />
+                          Admin
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {/* Module Links */}
                   {moduleLinks.length > 0 && (

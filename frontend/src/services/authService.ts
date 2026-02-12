@@ -20,14 +20,29 @@ export interface UserProfile {
     username: string
     name: string
     role: 'client' | 'node_provider' | 'admin'
+    roles?: ('client' | 'node_provider' | 'admin')[]
+    primaryRole?: 'client' | 'node_provider' | 'admin'
     credits: number
     isVerified: boolean
     provider?: 'google' | 'github' | 'local'
     nodeProvider?: {
-        nodeId?: string
-        nodeName?: string
+        // nodeId?: string
+        // nodeName?: string
         earnings: number
     }
+    nodeProviderStatus?: 'none' | 'pending' | 'approved' | 'rejected'
+    nodeProviderApplication?: {
+        operatingSystem: string
+        cpuModel: string
+        gpuModel: string
+        ramSize: number
+        storageSize: number
+        internetSpeed: number
+        country: string
+        ipAddress: string
+        additionalNotes?: string
+    }
+    rejectionReason?: string
     stats?: {
         jobsCreated: number
         framesRendered: number
@@ -42,12 +57,31 @@ export interface UserProfile {
     lastLoginAt?: string
 }
 
+export interface Application {
+    _id: string
+    name: string
+    email: string
+    nodeProviderApplicationDate: string
+    nodeProviderApplication?: {
+        operatingSystem: string
+        cpuModel: string
+        gpuModel: string
+        ramSize: number
+        storageSize: number
+        internetSpeed: number
+        country: string
+        ipAddress: string
+        additionalNotes?: string
+    }
+}
+
 export interface AuthResponse {
     success: boolean
     token?: string
     user?: UserProfile
     message?: string
     error?: string
+    applications?: Application[]
 }
 
 class AuthService {
@@ -135,6 +169,66 @@ class AuthService {
     async updateProfile(updates: Partial<Omit<UserProfile, 'id' | 'email' | 'role'>>): Promise<AuthResponse> {
         try {
             const response = await axiosInstance.put<AuthResponse>('/auth/profile', updates)
+            return response.data
+        } catch (error: any) {
+            throw this.handleError(error)
+        }
+    }
+
+    // Apply as Node Provider
+    async applyAsNodeProvider(applicationData: {
+        operatingSystem: string
+        cpuModel: string
+        gpuModel: string
+        ramSize: number
+        storageSize: number
+        internetSpeed: number
+        country: string
+        ipAddress: string
+        additionalNotes?: string
+    }): Promise<AuthResponse> {
+        try {
+            const response = await axiosInstance.post<AuthResponse>('/auth/apply-node-provider', applicationData)
+            return response.data
+        } catch (error: any) {
+            throw this.handleError(error)
+        }
+    }
+
+    // Get Applications (Admin)
+    async getApplications(): Promise<AuthResponse> {
+        try {
+            const response = await axiosInstance.get<AuthResponse>('/auth/admin/applications')
+            return response.data
+        } catch (error: any) {
+            throw this.handleError(error)
+        }
+    }
+
+    // Approve Application (Admin)
+    async approveApplication(userId: string): Promise<AuthResponse> {
+        try {
+            const response = await axiosInstance.post<AuthResponse>(`/auth/admin/applications/${userId}/approve`)
+            return response.data
+        } catch (error: any) {
+            throw this.handleError(error)
+        }
+    }
+
+    // Reject Application (Admin)
+    async rejectApplication(userId: string, reason: string): Promise<AuthResponse> {
+        try {
+            const response = await axiosInstance.post<AuthResponse>(`/auth/admin/applications/${userId}/reject`, { reason })
+            return response.data
+        } catch (error: any) {
+            throw this.handleError(error)
+        }
+    }
+
+    // Update Primary Role
+    async updatePrimaryRole(role: 'client' | 'node_provider' | 'admin'): Promise<AuthResponse> {
+        try {
+            const response = await axiosInstance.put<AuthResponse>('/auth/primary-role', { role })
             return response.data
         } catch (error: any) {
             throw this.handleError(error)

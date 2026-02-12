@@ -33,7 +33,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // Check role-based access
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
+  const userRoles = user.roles || (user.role ? [user.role] : [])
+  if (allowedRoles && !allowedRoles.some(role => userRoles.includes(role))) {
     return <Navigate to="/dashboard" replace />
   }
 

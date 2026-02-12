@@ -76,6 +76,8 @@ router.get('/google/callback', oauthLimiter, (req, res, next) => {
                     userId: user._id,
                     email: user.email,
                     role: user.role,
+                    roles: user.roles || [user.role],
+                    primaryRole: user.primaryRole,
                     username: user.username,
                     name: user.name
                 },
@@ -127,6 +129,8 @@ router.get('/github/callback', oauthLimiter, (req, res, next) => {
                     userId: user._id,
                     email: user.email,
                     role: user.role,
+                    roles: user.roles || [user.role],
+                    primaryRole: user.primaryRole,
                     username: user.username,
                     name: user.name
                 },
@@ -147,8 +151,13 @@ router.get('/github/callback', oauthLimiter, (req, res, next) => {
 // Protected routes
 router.get('/profile', authenticate, AuthController.getProfile);
 router.put('/profile', authenticate, AuthController.updateProfile);
+router.post('/apply-node-provider', authenticate, AuthController.applyAsNodeProvider);
+router.put('/primary-role', authenticate, AuthController.updatePrimaryRole);
 
 // Admin routes
 router.post('/add-credits', authenticate, authorize('admin'), AuthController.addCredits);
+router.get('/admin/applications', authenticate, authorize('admin'), AuthController.getApplications);
+router.post('/admin/applications/:userId/approve', authenticate, authorize('admin'), AuthController.approveApplication);
+router.post('/admin/applications/:userId/reject', authenticate, authorize('admin'), AuthController.rejectApplication);
 
 export default router;

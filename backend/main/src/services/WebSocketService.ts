@@ -34,9 +34,9 @@ export class WebSocketService {
           await this.handleMessage(client, message);
         } catch (error) {
           console.error('WebSocket message error:', error);
-          this.send(client, { 
-            type: 'error', 
-            message: 'Invalid message format' 
+          this.send(client, {
+            type: 'error',
+            message: 'Invalid message format'
           });
         }
       });
@@ -59,8 +59,8 @@ export class WebSocketService {
       });
 
       // Send welcome message
-      this.send(client, { 
-        type: 'connected', 
+      this.send(client, {
+        type: 'connected',
         message: 'WebSocket connected successfully',
         timestamp: Date.now()
       });
@@ -89,16 +89,16 @@ export class WebSocketService {
           this.send(client, { type: 'pong', timestamp: Date.now() });
           break;
         default:
-          this.send(client, { 
-            type: 'error', 
-            message: `Unknown message type: ${message.type}` 
+          this.send(client, {
+            type: 'error',
+            message: `Unknown message type: ${message.type}`
           });
       }
     } catch (error) {
       console.error('Error handling WebSocket message:', error);
-      this.send(client, { 
-        type: 'error', 
-        message: 'Internal server error' 
+      this.send(client, {
+        type: 'error',
+        message: 'Internal server error'
       });
     }
   }
@@ -107,20 +107,20 @@ export class WebSocketService {
     if (event.startsWith('job:')) {
       const jobId = event.split(':')[1];
       if (!jobId) {
-        this.send(client, { 
-          type: 'error', 
-          message: 'Invalid job ID format' 
+        this.send(client, {
+          type: 'error',
+          message: 'Invalid job ID format'
         });
         return;
       }
-      
+
       try {
         // Verify job exists
         const job = await Job.findOne({ jobId });
         if (!job) {
-          this.send(client, { 
-            type: 'error', 
-            message: `Job ${jobId} not found` 
+          this.send(client, {
+            type: 'error',
+            message: `Job ${jobId} not found`
           });
           return;
         }
@@ -145,9 +145,9 @@ export class WebSocketService {
         console.log(`📡 Client subscribed to job ${jobId}`);
       } catch (error) {
         console.error('Error subscribing to job:', error);
-        this.send(client, { 
-          type: 'error', 
-          message: 'Failed to subscribe to job' 
+        this.send(client, {
+          type: 'error',
+          message: 'Failed to subscribe to job'
         });
       }
     } else if (event.startsWith('node:')) {
@@ -162,7 +162,7 @@ export class WebSocketService {
     if (event.startsWith('job:')) {
       const jobId = event.split(':')[1];
       if (!jobId) return;
-      
+
       const subscribers = this.jobSubscriptions.get(jobId);
       if (subscribers) {
         subscribers.delete(client);
@@ -184,14 +184,14 @@ export class WebSocketService {
       if (message.nodeId) {
         client.nodeId = message.nodeId;
       }
-      this.send(client, { 
-        type: 'auth_success', 
-        message: 'Authentication successful' 
+      this.send(client, {
+        type: 'auth_success',
+        message: 'Authentication successful'
       });
     } catch (error) {
-      this.send(client, { 
-        type: 'auth_error', 
-        message: 'Authentication failed' 
+      this.send(client, {
+        type: 'auth_error',
+        message: 'Authentication failed'
       });
     }
   }
@@ -210,6 +210,26 @@ export class WebSocketService {
     }
   }
 
+  // Send message to a specific user
+  public emitToUser(userId: string, type: string, data: any) {
+    const message = {
+      type,
+      data,
+      timestamp: Date.now()
+    };
+    const messageJson = JSON.stringify(message);
+
+    for (const client of this.clients) {
+      if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+        try {
+          client.ws.send(messageJson);
+        } catch (error) {
+          console.error(`Error emitting to user ${userId}:`, error);
+        }
+      }
+    }
+  }
+
   // Broadcast job updates to all subscribed clients
   public async broadcastJobUpdate(jobId: string) {
     const subscribers = this.jobSubscriptions.get(jobId);
@@ -218,7 +238,7 @@ export class WebSocketService {
     try {
       const jobData = await this.getJobData(jobId);
       if (!jobData) return;
-      
+
       const updateMessage = {
         type: 'job_update',
         event: `job:${jobId}`,
@@ -227,7 +247,7 @@ export class WebSocketService {
       };
 
       const messageJson = JSON.stringify(updateMessage);
-      
+
       for (const client of subscribers) {
         if (client.ws.readyState === WebSocket.OPEN) {
           try {
@@ -263,7 +283,7 @@ export class WebSocketService {
     };
 
     const messageJson = JSON.stringify(updateMessage);
-    
+
     for (const client of this.clients) {
       if (client.subscriptions.has(`node:${nodeId}`) && client.ws.readyState === WebSocket.OPEN) {
         try {
@@ -284,7 +304,7 @@ export class WebSocketService {
     };
 
     const messageJson = JSON.stringify(updateMessage);
-    
+
     for (const client of this.clients) {
       if (client.ws.readyState === WebSocket.OPEN) {
         try {

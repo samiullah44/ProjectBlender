@@ -196,12 +196,17 @@ export class AuthController {
           username: user.username,
           name: user.name,
           role: user.role,
+          roles: user.roles,
+          primaryRole: user.primaryRole,
           credits: user.credits,
           isVerified: user.isVerified,
           provider: user.provider,
           stats: user.stats,
           preferences: user.preferences,
           nodeProvider: user.nodeProvider,
+          nodeProviderStatus: user.nodeProviderStatus,
+          nodeProviderApplication: user.nodeProviderApplication,
+          rejectionReason: user.rejectionReason,
           createdAt: user.createdAt,
           lastLoginAt: user.lastLoginAt
         }
@@ -374,5 +379,133 @@ export class AuthController {
       service: 'auth',
       version: '1.0.0'
     });
+  }
+
+  // Apply as Node Provider
+  static async applyAsNodeProvider(req: AuthRequest, res: Response) {
+    try {
+      const applicationData = req.body;
+      const result = await authService.applyForNodeProvider(req.user.userId, applicationData);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Apply as node provider error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to submit application'
+      });
+    }
+  }
+
+  // Approve Node Provider Application (Admin)
+  static async approveApplication(req: AuthRequest, res: Response) {
+    try {
+      const { userId } = req.params;
+      if (!userId || typeof userId !== 'string') {
+        return res.status(400).json({
+          success: false,
+          error: 'User ID is required'
+        });
+      }
+      const result = await authService.approveNodeProviderApplication(userId as string, req.user.userId);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Approve application error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to approve application'
+      });
+    }
+  }
+
+  // Reject Node Provider Application (Admin)
+  static async rejectApplication(req: AuthRequest, res: Response) {
+    try {
+      const { userId } = req.params;
+      const { reason } = req.body;
+
+      if (!userId || typeof userId !== 'string') {
+        return res.status(400).json({
+          success: false,
+          error: 'User ID is required'
+        });
+      }
+
+      if (!reason) {
+        return res.status(400).json({
+          success: false,
+          error: 'Rejection reason is required'
+        });
+      }
+
+      const result = await authService.rejectNodeProviderApplication(userId as string, req.user.userId, reason);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Reject application error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to reject application'
+      });
+    }
+  }
+
+  // Update Primary Role
+  static async updatePrimaryRole(req: AuthRequest, res: Response) {
+    try {
+      const { role } = req.body;
+
+      if (!role) {
+        return res.status(400).json({
+          success: false,
+          error: 'Role is required'
+        });
+      }
+
+      const result = await authService.updatePrimaryRole(req.user.userId, role);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Update primary role error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update primary role'
+      });
+    }
+  }
+
+  // Get Node Provider applications (Admin)
+  static async getApplications(req: AuthRequest, res: Response) {
+    try {
+      const applications = await authService.getNodeProviderApplications();
+
+      res.json({
+        success: true,
+        applications
+      });
+    } catch (error: any) {
+      console.error('Get applications error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get applications'
+      });
+    }
   }
 }

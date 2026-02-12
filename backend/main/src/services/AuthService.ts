@@ -1,11 +1,15 @@
+import * as mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import { User, IUser } from '../models/User';
+import { Application } from '../models/Application';
 import { OTP } from '../models/OTP';
 import { ResetToken } from '../models/ResetToken';
 import { env } from '../config/env';
 import { EmailService } from './EmailService';
 import { oauthService } from './OAuthService';
 import { generateOTP, generateToken } from '../utils/authUtils';
+import { notificationService } from './NotificationService';
+import { wsService } from '../app';
 
 const emailService = new EmailService();
 
@@ -466,7 +470,9 @@ export class AuthService {
       {
         userId: user._id,
         email: user.email,
-        role: user.role,
+        role: user.role, // Legacy fallback
+        roles: user.roles || [user.role],
+        primaryRole: user.primaryRole,
         username: user.username,
         name: user.name
       },
@@ -502,6 +508,291 @@ export class AuthService {
     }
     await user.deductCredits(amount);
     return user;
+  }
+  // Apply for Node Provider role with detailed application data
+  async applyForNodeProvider(userId: string, applicationData: {
+    operatingSystem: string;
+    cpuModel: string;
+    gpuModel: string;
+    ramSize: number;
+    storageSize: number;
+    internetSpeed: number;
+    country: string;
+    ipAddress: string;
+    additionalNotes?: string;
+  }): Promise<AuthResponse> {
+    try {
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'User not found'
+        };
+      }
+
+      if (user.roles && user.roles.includes('node_provider')) {
+        return {
+          success: false,
+          error: 'You are already a node provider'
+        };
+      }
+
+      if (user.nodeProviderStatus === 'pending') {
+        return {
+          success: false,
+          error: 'Application already pending'
+        };
+      }
+
+      user.nodeProviderStatus = 'pending';
+      user.nodeProviderApplicationDate = new Date();
+      user.nodeProviderApplication = applicationData;
+      user.rejectionReason = undefined;
+
+      await user.save();
+
+      // Create separate Application record
+      await Application.findOneAndUpdate(
+        { userId, status: 'pending' },
+        {
+          userId,
+          status: 'pending',
+          applicationData,
+          submittedAt: new Date()
+        },
+        { upsert: true, new: true }
+      );
+
+      // Emit system update for admins
+      wsService.broadcastSystemUpdate({ type: 'application_new' });
+
+      return {
+        success: true,
+        message: 'Application submitted successfully'
+      };
+    } catch (error) {
+      console.error('Apply for node provider error:', error);
+      return {
+        success: false,
+        error: 'Failed to submit application'
+      };
+    }
+  }
+
+  // Approve Node Provider Application
+  async approveNodeProviderApplication(userId: string, adminId: string): Promise<AuthResponse> {
+    try {
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'User not found'
+        };
+      }
+
+      if (user.nodeProviderStatus !== 'pending') {
+        return {
+          success: false,
+          error: 'No pending application found'
+        };
+      }
+
+      // Add node_provider to roles array
+      if (!user.roles.includes('node_provider')) {
+        user.roles.push('node_provider');
+      }
+
+      // Set primary role to node_provider if not already set
+      if (!user.primaryRole) {
+        user.primaryRole = 'node_provider';
+      }
+
+      user.nodeProviderStatus = 'approved';
+      user.rejectionReason = undefined;
+
+      await user.save();
+
+      // Update separate Application record
+      await Application.findOneAndUpdate(
+        { userId, status: 'pending' },
+        {
+          status: 'approved',
+          reviewedAt: new Date(),
+          reviewedBy: new mongoose.Types.ObjectId(adminId)
+        }
+      );
+
+      // Create notification
+      await notificationService.createNotification(
+        userId,
+        'application_approved',
+        'Application Approved! 🎉',
+        'Your node provider application has been approved. You can now start earning by contributing your hardware!',
+        { applicationId: userId }
+      );
+
+      wsService.emitToUser(userId, 'notification:new', {
+        notification: {
+          type: 'application_approved',
+          title: 'Application Approved! 🎉',
+          message: 'Your node provider application has been approved. You can now start earning by contributing your hardware!'
+        }
+      });
+
+      // Emit system update for admins
+      wsService.broadcastSystemUpdate({ type: 'application_status_change' });
+
+      return {
+        success: true,
+        message: 'Application approved successfully'
+      };
+    } catch (error) {
+      console.error('Approve application error:', error);
+      return {
+        success: false,
+        error: 'Failed to approve application'
+      };
+    }
+  }
+
+  // Reject Node Provider Application
+  async rejectNodeProviderApplication(userId: string, adminId: string, reason: string): Promise<AuthResponse> {
+    try {
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'User not found'
+        };
+      }
+
+      if (user.nodeProviderStatus !== 'pending') {
+        return {
+          success: false,
+          error: 'No pending application found'
+        };
+      }
+
+      user.nodeProviderStatus = 'rejected';
+      user.rejectionReason = reason;
+
+      await user.save();
+
+      // Update separate Application record
+      await Application.findOneAndUpdate(
+        { userId, status: 'pending' },
+        {
+          status: 'rejected',
+          rejectionReason: reason,
+          reviewedAt: new Date(),
+          reviewedBy: new mongoose.Types.ObjectId(adminId)
+        }
+      );
+
+      // Create notification
+      await notificationService.createNotification(
+        userId,
+        'application_rejected',
+        'Application Update',
+        `Your node provider application was not approved. Reason: ${reason}`,
+        { applicationId: userId, reason }
+      );
+
+      // Emit WebSocket event
+      wsService.emitToUser(userId, 'notification:new', {
+        notification: {
+          type: 'application_rejected',
+          title: 'Application Update',
+          message: `Your node provider application was not approved. Reason: ${reason}`
+        }
+      });
+
+      // Emit system update for admins
+      wsService.broadcastSystemUpdate({ type: 'application_status_change' });
+
+      return {
+        success: true,
+        message: 'Application rejected'
+      };
+    } catch (error) {
+      console.error('Reject application error:', error);
+      return {
+        success: false,
+        error: 'Failed to reject application'
+      };
+    }
+  }
+
+  // Update Primary Role
+  async updatePrimaryRole(userId: string, role: 'client' | 'node_provider' | 'admin'): Promise<AuthResponse> {
+    try {
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'User not found'
+        };
+      }
+
+      if (!user.roles.includes(role)) {
+        return {
+          success: false,
+          error: 'You do not have this role'
+        };
+      }
+
+      user.primaryRole = role;
+      await user.save();
+
+      return {
+        success: true,
+        message: 'Primary role updated successfully',
+        user: {
+          id: user._id.toString(),
+          email: user.email,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+          roles: user.roles,
+          primaryRole: user.primaryRole,
+          credits: user.credits,
+          isVerified: user.isVerified,
+          provider: user.provider,
+          nodeProvider: user.nodeProvider,
+          nodeProviderStatus: user.nodeProviderStatus,
+          stats: user.stats,
+          preferences: user.preferences,
+          createdAt: user.createdAt.toISOString(),
+          lastLoginAt: user.lastLoginAt?.toISOString()
+        }
+      };
+    } catch (error) {
+      console.error('Update primary role error:', error);
+      return {
+        success: false,
+        error: 'Failed to update primary role'
+      };
+    }
+  }
+
+  // Get Node Provider Applications (for admin)
+  async getNodeProviderApplications(): Promise<any[]> {
+    try {
+      const applications = await User.find({
+        nodeProviderStatus: 'pending'
+      })
+        .select('name email nodeProviderApplicationDate nodeProviderApplication')
+        .sort({ nodeProviderApplicationDate: -1 });
+
+      return applications;
+    } catch (error) {
+      console.error('Get applications error:', error);
+      throw error;
+    }
   }
 }
 

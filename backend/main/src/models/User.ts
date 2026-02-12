@@ -9,7 +9,9 @@ export interface IUser extends Document {
   name: string;
   password?: string;
   isVerified: boolean;
-  role: 'client' | 'node_provider' | 'admin';
+  // CHANGE 1: role → roles array (with backward compatibility)
+  roles: ('client' | 'node_provider' | 'admin')[];
+  role?: 'client' | 'node_provider' | 'admin'; // Kept for backward compatibility
   credits: number;
 
   // OAuth fields
@@ -20,12 +22,25 @@ export interface IUser extends Document {
   otp?: string;
   expiresAt?: Date;
 
-  // Node provider specific fields
+  // CHANGE 2: Node provider specific fields - REMOVED nodeId, nodeName
   nodeProvider?: {
-    nodeId?: string;
-    nodeName?: string;
     earnings: number;
   };
+  nodeProviderStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  nodeProviderApplicationDate?: Date;
+  nodeProviderApplication?: {
+    operatingSystem: string;
+    cpuModel: string;
+    gpuModel: string;
+    ramSize: number;
+    storageSize: number;
+    internetSpeed: number;
+    country: string;
+    ipAddress: string;
+    additionalNotes?: string;
+  };
+  primaryRole?: 'client' | 'node_provider' | 'admin';
+  rejectionReason?: string;
 
   // Preferences
   preferences?: {
@@ -57,6 +72,8 @@ export interface IUser extends Document {
   addCredits(amount: number): Promise<void>;
   deductCredits(amount: number): Promise<void>;
   addEarnings(amount: number): Promise<void>;
+  // NEW: Helper method
+  hasRole(role: string): boolean;
 }
 
 const userSchema = new Schema<IUser>(
@@ -88,10 +105,17 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: false
     },
+    // CHANGE 1: Keep old role field for backward compatibility
     role: {
       type: String,
       enum: ['client', 'node_provider', 'admin'],
       default: 'client'
+    },
+    // CHANGE 1: ADD new roles array
+    roles: {
+      type: [String],
+      enum: ['client', 'node_provider', 'admin'],
+      default: ['client']
     },
     credits: {
       type: Number,
@@ -105,14 +129,35 @@ const userSchema = new Schema<IUser>(
     providerId: String,
     otp: String,
     expiresAt: Date,
+    // CHANGE 2: Updated nodeProvider - REMOVED nodeId and nodeName
     nodeProvider: {
-      nodeId: String,
-      nodeName: String,
       earnings: {
         type: Number,
         default: 0
       }
     },
+    nodeProviderStatus: {
+      type: String,
+      enum: ['none', 'pending', 'approved', 'rejected'],
+      default: 'none'
+    },
+    nodeProviderApplicationDate: Date,
+    nodeProviderApplication: {
+      operatingSystem: String,
+      cpuModel: String,
+      gpuModel: String,
+      ramSize: Number,
+      storageSize: Number,
+      internetSpeed: Number,
+      country: String,
+      ipAddress: String,
+      additionalNotes: String
+    },
+    primaryRole: {
+      type: String,
+      enum: ['client', 'node_provider', 'admin']
+    },
+    rejectionReason: String,
     preferences: {
       defaultProjectId: {
         type: String,
@@ -148,9 +193,27 @@ const userSchema = new Schema<IUser>(
   }
 );
 
+// PRE-SAVE HOOK: Sync role with roles array for backward compatibility
+userSchema.pre('save', function (next) {
+  // If roles array exists, update legacy role field to first role
+  if (this.roles && this.roles.length > 0) {
+    this.role = this.roles[0];
+  }
+  // If only legacy role exists, migrate to roles array
+  else if (this.role && (!this.roles || this.roles.length === 0)) {
+    this.roles = [this.role];
+  }
+
+  // Auto-initialize nodeProvider for node_provider users
+  if (this.roles && this.roles.includes('node_provider') && !this.nodeProvider) {
+    this.nodeProvider = { earnings: 0 };
+  }
+
+  next();
+});
+
 // Hash password before saving (only for local auth)
 userSchema.pre('save', async function (next) {
-
   if (!this.isModified('password') || !this.password) return next();
 
   try {
@@ -166,6 +229,11 @@ userSchema.pre('save', async function (next) {
 userSchema.methods.comparePassword = async function (password: string): Promise<boolean> {
   if (!this.password) return false; // For OAuth users
   return bcrypt.compare(password, this.password);
+};
+
+// NEW: Helper method to check roles
+userSchema.methods.hasRole = function (role: string): boolean {
+  return this.roles && this.roles.includes(role);
 };
 
 // Update user credits
@@ -184,9 +252,9 @@ userSchema.methods.addCredits = async function (amount: number): Promise<void> {
   await this.save();
 };
 
-// Update node provider earnings
+// Update node provider earnings - UPDATED to use roles array
 userSchema.methods.addEarnings = async function (amount: number): Promise<void> {
-  if (this.role === 'node_provider' && this.nodeProvider) {
+  if (this.roles && this.roles.includes('node_provider') && this.nodeProvider) {
     this.nodeProvider.earnings += amount;
     this.stats!.totalEarned += amount;
     await this.save();
@@ -196,6 +264,7 @@ userSchema.methods.addEarnings = async function (amount: number): Promise<void> 
 // Indexes
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1 });
+userSchema.index({ roles: 1 }); // NEW: Index roles array
 userSchema.index({ credits: 1 });
 userSchema.index({ provider: 1, providerId: 1 }, { sparse: true });
 userSchema.index({ isVerified: 1 });

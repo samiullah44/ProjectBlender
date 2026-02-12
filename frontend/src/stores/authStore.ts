@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { axiosInstance } from '@/lib/axios'
 import { toast } from 'react-hot-toast'
+import { websocketService } from '@/services/websocketService'
 
 interface User {
     id: string
@@ -10,14 +11,29 @@ interface User {
     username: string
     name: string
     role: 'client' | 'node_provider' | 'admin'
+    roles?: ('client' | 'node_provider' | 'admin')[]
+    primaryRole?: 'client' | 'node_provider' | 'admin'
     credits: number
     isVerified: boolean
     provider?: 'google' | 'github' | 'local'
     nodeProvider?: {
-        nodeId?: string
-        nodeName?: string
+        // nodeId?: string
+        // nodeName?: string
         earnings: number
     }
+    nodeProviderStatus?: 'none' | 'pending' | 'approved' | 'rejected'
+    nodeProviderApplication?: {
+        operatingSystem: string
+        cpuModel: string
+        gpuModel: string
+        ramSize: number
+        storageSize: number
+        internetSpeed: number
+        country: string
+        ipAddress: string
+        additionalNotes?: string
+    }
+    rejectionReason?: string
     stats?: {
         jobsCreated: number
         framesRendered: number
@@ -63,6 +79,7 @@ interface AuthStore {
         google: string
         github: string
     }
+    switchRole: (role: 'client' | 'node_provider' | 'admin') => Promise<{ success: boolean; error?: string }>
     handleOAuthCallback: () => Promise<void>
 }
 
@@ -96,6 +113,7 @@ export const useAuthStore = create<AuthStore>()(
                         })
 
                         toast.success('Login successful!')
+                        websocketService.authenticate(user.id)
                         return { success: true }
                     } else {
                         set({
@@ -162,6 +180,7 @@ export const useAuthStore = create<AuthStore>()(
                         })
 
                         toast.success('Email verified successfully!')
+                        websocketService.authenticate(user.id)
                         return { success: true }
                     } else {
                         set({
@@ -319,6 +338,7 @@ export const useAuthStore = create<AuthStore>()(
                             user: response.data.user,
                             isLoading: false
                         })
+                        websocketService.authenticate(response.data.user.id)
                         return { success: true }
                     } else {
                         set({
@@ -341,6 +361,35 @@ export const useAuthStore = create<AuthStore>()(
             },
 
             clearError: () => set({ error: null }),
+
+            switchRole: async (role) => {
+                try {
+                    set({ isLoading: true, error: null })
+                    const response = await axiosInstance.put('/auth/primary-role', { role })
+
+                    if (response.data.success) {
+                        set(state => ({
+                            user: state.user ? { ...state.user, primaryRole: role } : null,
+                            isLoading: false
+                        }))
+                        toast.success(`Switched to ${role.replace('_', ' ')} view`)
+                        return { success: true }
+                    } else {
+                        set({
+                            error: response.data.error || 'Failed to switch role',
+                            isLoading: false
+                        })
+                        toast.error(response.data.error || 'Failed to switch role')
+                        return { success: false, error: response.data.error }
+                    }
+                } catch (error: any) {
+                    console.error('Switch role error:', error)
+                    const errorMessage = error.response?.data?.error || error.message || 'Failed to switch role'
+                    set({ error: errorMessage, isLoading: false })
+                    toast.error(errorMessage)
+                    return { success: false, error: errorMessage }
+                }
+            },
 
             getOAuthUrls: () => {
                 const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'

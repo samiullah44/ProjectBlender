@@ -17,10 +17,11 @@ import VerifyEmailPage from '@/pages/public/VerifyEmail'
 import ClientDashboard from '@/pages/client/Dashboard'
 import CreateJob from '@/pages/client/CreateJob'
 import JobDetails from '@/pages/client/JobDetails' // Add this import
+import ApplyNodeProvider from '@/pages/client/ApplyNodeProvider'
 // import ClientSettings from '@/pages/client/Settings'
 
 // Node Pages
-// import NodeDashboard from '@/pages/node/Dashboard'
+import NodeDashboard from '@/pages/node/Dashboard'
 // import NodeEarnings from '@/pages/node/Earnings'
 // import NodeMachines from '@/pages/node/Machines'
 
@@ -28,6 +29,7 @@ import JobDetails from '@/pages/client/JobDetails' // Add this import
 import AdminDashboard from '@/pages/admin/Dashboard'
 import AdminJobs from '@/pages/admin/Jobs'
 import AdminJobDetails from '@/pages/admin/JobDetails'
+import AdminApplications from '@/pages/admin/Applications'
 
 // Protected Route Component
 import { ProtectedRoute } from '@/components/layout/ProtectedLayout'
@@ -101,6 +103,11 @@ function App() {
             {/* Public Routes with Navbar */}
             <Route element={<MainLayout />}>
               <Route path="/" element={<HomePage />} />
+              <Route path="/apply-node-provider" element={
+                <ProtectedRoute allowedRoles={['client', 'admin']}>
+                  <ApplyNodeProvider />
+                </ProtectedRoute>
+              } />
               {/* <Route path="/login" element={<LoginPage />} /> */}
               {/* <Route path="/register" element={<RegisterPage />} /> */}
 
@@ -137,7 +144,7 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['node_provider', 'admin']}>
                     <Routes>
-                      {/* <Route path="/dashboard" element={<NodeDashboard />} /> */}
+                      <Route path="/dashboard" element={<NodeDashboard />} />
                       {/* <Route path="/earnings" element={<NodeEarnings />} /> */}
                       {/* <Route path="/machines" element={<NodeMachines />} /> */}
                     </Routes>
@@ -154,6 +161,7 @@ function App() {
                       <Route path="/dashboard" element={<AdminDashboard />} />
                       <Route path="/jobs" element={<AdminJobs />} />
                       <Route path="/jobs/:jobId" element={<AdminJobDetails />} />
+                      <Route path="/applications" element={<AdminApplications />} />
                     </Routes>
                   </ProtectedRoute>
                 }

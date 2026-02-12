@@ -27,6 +27,7 @@ import { useNavigate } from 'react-router-dom'
 import jobStore, { type Job } from '@/stores/jobStore'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
+import { websocketService } from '@/services/websocketService'
 
 const AdminDashboard: React.FC = () => {
     const navigate = useNavigate()
@@ -39,10 +40,23 @@ const AdminDashboard: React.FC = () => {
         approveJob
     } = jobStore()
 
+    const [applicationsCount, setApplicationsCount] = useState(0)
     const [refreshing, setRefreshing] = useState(false)
 
     useEffect(() => {
         fetchData()
+
+        // Subscribe to live updates
+        const unsubscribe = websocketService.subscribeToSystem((data) => {
+            console.log('📢 Admin Dashboard received live update:', data)
+            if (data.type === 'application_new' || data.type === 'application_status_change' || data.type === 'system_stats') {
+                fetchData()
+            }
+        })
+
+        return () => {
+            unsubscribe()
+        }
     }, [])
 
     const fetchData = async () => {
@@ -50,7 +64,11 @@ const AdminDashboard: React.FC = () => {
             setRefreshing(true)
             await Promise.all([
                 getDashboardStats(),
-                refreshJobs()
+                refreshJobs(),
+                import('@/services/authService').then(async ({ authService }) => {
+                    const res = await authService.getApplications()
+                    if (res.success && res.applications) setApplicationsCount(res.applications.length)
+                })
             ])
         } catch (error) {
             console.error('Error fetching admin dashboard data:', error)
@@ -114,6 +132,15 @@ const AdminDashboard: React.FC = () => {
             color: 'text-red-400',
             bg: 'from-red-500/20 to-orange-500/20',
             description: 'Failed jobs'
+        },
+        {
+            label: 'Applications',
+            value: applicationsCount.toString(),
+            icon: Users,
+            color: 'text-amber-400',
+            bg: 'from-amber-500/20 to-yellow-500/20',
+            description: 'Pending review',
+            action: () => navigate('/admin/applications')
         }
     ]
 
@@ -154,6 +181,13 @@ const AdminDashboard: React.FC = () => {
                                 <Layers className="w-4 h-4 mr-2" />
                                 Manage Jobs
                             </Button>
+                            <Button
+                                onClick={() => navigate('/admin/applications')}
+                                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                            >
+                                <Users className="w-4 h-4 mr-2" />
+                                Manage Applications
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -168,8 +202,10 @@ const AdminDashboard: React.FC = () => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.1 }}
+                            onClick={(stat as any).action}
+                            className={(stat as any).action ? 'cursor-pointer' : ''}
                         >
-                            <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 hover:bg-gray-900/70 transition-all duration-300 hover:scale-[1.02] group">
+                            <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 hover:bg-gray-900/70 transition-all duration-300 hover:scale-[1.02] group h-full">
                                 <CardContent className="p-6">
                                     <div className="flex items-start justify-between">
                                         <div>
@@ -271,9 +307,9 @@ const AdminDashboard: React.FC = () => {
                                                 onClick={() => navigate(`/admin/jobs/${job.jobId}`)}
                                             >
                                                 <div className={`p-2 rounded-full ${job.status === 'completed' ? 'bg-emerald-500/20' :
-                                                        job.status === 'processing' ? 'bg-blue-500/20' :
-                                                            job.status === 'failed' ? 'bg-red-500/20' :
-                                                                'bg-amber-500/20'
+                                                    job.status === 'processing' ? 'bg-blue-500/20' :
+                                                        job.status === 'failed' ? 'bg-red-500/20' :
+                                                            'bg-amber-500/20'
                                                     }`}>
                                                     {job.status === 'completed' ? (
                                                         <CheckCircle className="w-4 h-4 text-emerald-400" />
@@ -289,9 +325,9 @@ const AdminDashboard: React.FC = () => {
                                                     <div className="font-medium truncate text-sm">{job.blendFileName}</div>
                                                     <div className="text-xs text-gray-400">
                                                         <Badge className={`mr-2 text-xs px-1.5 py-0 ${job.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
-                                                                job.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
-                                                                    job.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                                                                        'bg-amber-500/20 text-amber-400'
+                                                            job.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
+                                                                job.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                                                                    'bg-amber-500/20 text-amber-400'
                                                             }`}>
                                                             {job.status}
                                                         </Badge>

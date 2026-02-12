@@ -4,6 +4,7 @@ import { Job } from '../models/Job';
 import { IFrameAssignment } from '../types/job.types';
 import { AppError } from '../middleware/error';
 import { S3Service } from '../services/S3Service';
+import { AuthRequest } from '../middleware/auth';
 
 const s3Service = new S3Service();
 
@@ -166,6 +167,8 @@ export class NodeController {
   // Node registration with performance initialization
   static async registerNode(req: Request, res: Response): Promise<void> {
     try {
+      const authReq = req as AuthRequest;
+      const userId = authReq.user?.userId;
       const nodeInfo = req.body;
       const nodeId = nodeInfo.nodeId || `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const now = new Date();
@@ -179,6 +182,11 @@ export class NodeController {
         existingNode.updatedAt = now;
         existingNode.connectionCount = (existingNode.connectionCount || 0) + 1;
         existingNode.lastStatusChange = existingNode.status !== 'online' && existingNode.status !== 'busy' ? now : existingNode.lastStatusChange;
+
+        // Link node to user if not already linked (for backward compatibility)
+        if (!existingNode.userId && userId) {
+          existingNode.userId = userId;
+        }
 
         if (nodeInfo.hardware) existingNode.hardware = { ...existingNode.hardware, ...nodeInfo.hardware };
         if (nodeInfo.capabilities) existingNode.capabilities = { ...existingNode.capabilities, ...nodeInfo.capabilities };
@@ -219,6 +227,7 @@ export class NodeController {
         // Create new node with performance tracking
         const node = new Node({
           nodeId,
+          userId,
           name: nodeInfo.name || `Node-${nodeId.substring(0, 8)}`,
           status: 'online',
           os: nodeInfo.os || 'Unknown',
@@ -1159,7 +1168,29 @@ export class NodeController {
     try {
       await this.checkAndUpdateOfflineNodes();
 
-      const nodes = await Node.find().sort({ createdAt: -1 });
+      const authReq = req as AuthRequest;
+      const isAdmin = authReq.user?.role === 'admin' || authReq.user?.roles?.includes('admin');
+      const userId = authReq.user?.userId;
+
+      let query = {};
+      if (!isAdmin) {
+        if (!userId) {
+          res.json({
+            nodes: [],
+            statistics: {
+              total: 0,
+              online: 0,
+              offline: 0,
+              busy: 0,
+              onlinePercentage: 0
+            }
+          });
+          return;
+        }
+        query = { userId };
+      }
+
+      const nodes = await Node.find(query).sort({ createdAt: -1 });
       const now = new Date();
 
       const nodeList = nodes.map(node => {
@@ -1304,7 +1335,26 @@ export class NodeController {
   // Get node statistics with performance data
   static async getNodeStatistics(req: Request, res: Response): Promise<void> {
     try {
-      const nodes = await Node.find();
+      const authReq = req as AuthRequest;
+      const isAdmin = authReq.user?.role === 'admin' || authReq.user?.roles?.includes('admin');
+      const userId = authReq.user?.userId;
+
+      let query = {};
+      if (!isAdmin) {
+        if (!userId) {
+          res.json({
+            total: 0,
+            byStatus: { online: 0, offline: 0, busy: 0, maintenance: 0 },
+            byHardware: { totalCpuCores: 0, totalRamGB: 0, totalVRAMGB: 0, gpuCount: 0 },
+            performance: { totalJobsCompleted: 0, avgJobsPerNode: 0, totalConnections: 0, nodesWithPerformanceData: 0, avgFrameTime: "0.00", fastestNode: 'N/A', slowestNode: 'N/A' },
+            onlineStatus: { actuallyOnline: 0, markedOnline: 0 }
+          });
+          return;
+        }
+        query = { userId };
+      }
+
+      const nodes = await Node.find(query);
       const now = new Date();
 
       // Calculate performance statistics

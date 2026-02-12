@@ -1,5 +1,6 @@
 import express from 'express';
 import { NodeController } from '../../controllers/node';
+import { authenticate, authorize } from '../../middleware/auth';
 
 const router = express.Router();
 
@@ -22,10 +23,10 @@ router.post('/:nodeId/heartbeat', NodeController.heartbeat);
 router.post('/:nodeId/assign', NodeController.assignJob);
 router.post('/complete-frame/:nodeId', NodeController.frameCompleted);
 
-// Node information
-router.get('/', NodeController.getAllNodes);
-router.get('/statistics', NodeController.getNodeStatistics);
-router.get('/:nodeId', NodeController.getNode);
+// Node information - Protected
+router.get('/', authenticate, NodeController.getAllNodes);
+router.get('/statistics', authenticate, NodeController.getNodeStatistics);
+router.get('/:nodeId', authenticate, NodeController.getNode);
 
 // Job distribution reporting
 router.get('/job-distribution/:jobId', NodeController.getJobDistributionReport);
