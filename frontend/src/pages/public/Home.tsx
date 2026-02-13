@@ -1,27 +1,29 @@
 import React, { useEffect, useState } from 'react'
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion'
-import { 
-  Cpu, 
-  Zap, 
-  Cloud, 
-  Users, 
-  Shield, 
-  Rocket, 
+import {
+  Cpu,
+  Zap,
+  Cloud,
+  Users,
+  Shield,
+  Rocket,
   ChevronRight,
   BarChart3,
   Globe,
   Clock,
+  Server,
   Wallet,
   // Sparkles,
   ChevronLeft,
   ChevronRight as ChevronRightIcon
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 
 // Hero images array
-const HERO_IMAGES = ["/hero.jpg","/hero1.jpg"
-  ]
+const HERO_IMAGES = ["/hero.jpg", "/hero1.jpg"
+]
 
 const FEATURE_IMAGE_1 = "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=1080&q=80"
 // const FEATURE_IMAGE_2 = "https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&w=1080&q=80"
@@ -128,8 +130,8 @@ const HomePage: React.FC = () => {
               <div className="relative">
                 <div className={cn(
                   "w-3 h-3 rounded-full transition-all duration-300",
-                  currentImageIndex === index 
-                    ? "bg-white scale-110" 
+                  currentImageIndex === index
+                    ? "bg-white scale-110"
                     : "bg-white/30 hover:bg-white/50"
                 )} />
                 {currentImageIndex === index && (
@@ -151,7 +153,7 @@ const HomePage: React.FC = () => {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="max-w-6xl mx-auto"
           >
-            
+
             <div className="mb-8">
               <motion.h1
                 initial={{ opacity: 0, y: 30 }}
@@ -159,7 +161,7 @@ const HomePage: React.FC = () => {
                 transition={{ duration: 0.8, delay: 0.6 }}
                 className="text-5xl md:text-7xl lg:text-8xl font-black mb-6 leading-[0.9] tracking-tight"
               >
-                  RENDER
+                RENDER
                 <motion.span
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -170,7 +172,7 @@ const HomePage: React.FC = () => {
                 </motion.span>
               </motion.h1>
             </div>
-            
+
             {/* <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -187,15 +189,15 @@ const HomePage: React.FC = () => {
               </span>{' '}
               results in minutes, not days.
             </motion.p> */}
-            
+
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 1.2 }}
               className="flex flex-col sm:flex-row gap-6 justify-center items-center"
             >
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 className="group relative overflow-hidden bg-gradient-to-r from-emerald-600 via-cyan-600 to-blue-600 hover:from-emerald-700 hover:via-cyan-700 hover:to-blue-700 px-7 py-3.5 text-lg font-semibold rounded-2xl transition-all duration-300 hover:shadow-2xl hover:scale-105 active:scale-95"
               >
                 <span className="relative z-10 flex items-center">
@@ -204,7 +206,7 @@ const HomePage: React.FC = () => {
                 </span>
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </Button>
-              
+
               {/* <Button 
                 size="lg" 
                 variant="outline" 
@@ -217,7 +219,136 @@ const HomePage: React.FC = () => {
           </motion.div>
         </div>
 
-         
+
+      </section>
+      {/* 🎯 SERVICES SECTION - Dual CTA with Stylish Typography */}
+      <section id="services" className="py-32 relative overflow-hidden">
+        {/* Background */}
+        <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950" />
+
+        <div className="relative container mx-auto px-6">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+
+            <h2 className="font-display text-5xl md:text-6xl font-bold mb-6 tracking-tight">
+              <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
+                Render. Earn.
+              </span>
+              <span className="text-white"> Repeat.</span>
+            </h2>
+
+            <p className="font-sans text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
+              Whether you need horsepower or want to supply it —
+              <span className="text-white font-medium"> you belong here.</span>
+            </p>
+          </motion.div>
+
+          {/* Cards Grid */}
+          <div className="grid lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
+
+            {/* CARD 1: START RENDERING */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="group relative"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/10 to-cyan-600/10 rounded-3xl blur-xl group-hover:blur-2xl transition-all duration-500" />
+
+              <div className="relative h-full p-8 bg-gradient-to-br from-gray-900 to-gray-950 rounded-3xl border border-white/5 hover:border-emerald-500/30 transition-all duration-300">
+
+                {/* Title */}
+                <h3 className="font-display text-3xl font-bold text-white mb-3 tracking-tight">
+                  Need rendering <span className="text-emerald-400">power?</span>
+                </h3>
+
+                {/* Description */}
+                <p className="font-sans text-gray-400 mb-6 leading-relaxed">
+                  Upload your Blender project. Get frames back in minutes.
+                  <span className="block text-white/80 mt-1">Pay per frame. No commitments.</span>
+                </p>
+
+                {/* Specs */}
+                <div className="space-y-2 mb-8">
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <span className="font-mono text-xs uppercase tracking-wider text-gray-500">500+ RTX GPUS</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <span className="font-mono text-xs uppercase tracking-wider text-gray-500">2-5 MIN DELIVERY</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <span className="font-mono text-xs uppercase tracking-wider text-gray-500">FROM $0.08/FRAME</span>
+                  </div>
+                </div>
+
+                {/* Button */}
+                <Link to="/register">
+                  <Button className="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-emerald-500/50 py-6 group/btn">
+                    <span className="font-display text-lg tracking-wide">Start Rendering →</span>
+                  </Button>
+                </Link>
+              </div>
+            </motion.div>
+
+            {/* CARD 2: BECOME NODE PROVIDER */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="group relative"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-600/10 to-indigo-600/10 rounded-3xl blur-xl group-hover:blur-2xl transition-all duration-500" />
+
+              <div className="relative h-full p-8 bg-gradient-to-br from-gray-900 to-gray-950 rounded-3xl border border-white/5 hover:border-purple-500/30 transition-all duration-300">
+
+                {/* Title */}
+                <h3 className="font-display text-3xl font-bold text-white mb-3 tracking-tight">
+                  Got a <span className="text-purple-400">GPU?</span> Get paid.
+                </h3>
+
+                {/* Description */}
+                <p className="font-sans text-gray-400 mb-6 leading-relaxed">
+                  Turn your idle hardware into passive income.
+                  <span className="block text-white/80 mt-1">We handle the jobs. You collect earnings.</span>
+                </p>
+
+                {/* Specs */}
+                <div className="space-y-2 mb-8">
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                    <span className="font-mono text-xs uppercase tracking-wider text-gray-500">RTX 2060+ / RX 6600+</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                    <span className="font-mono text-xs uppercase tracking-wider text-gray-500">~$0.15/HR • 24/7 PASSIVE</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                    <span className="font-mono text-xs uppercase tracking-wider text-gray-500">PAYPAL • CRYPTO • BANK</span>
+                  </div>
+                </div>
+
+                {/* Button */}
+                <Link to="/apply-node-provider">
+                  <Button className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white border-0 py-6 group/btn shadow-lg shadow-purple-600/25">
+                    <span className="font-display text-lg tracking-wide">Apply as Provider →</span>
+                  </Button>
+                </Link>
+              </div>
+            </motion.div>
+          </div>
+
+        </div>
       </section>
 
       {/* Stats Section */}
@@ -281,11 +412,11 @@ const HomePage: React.FC = () => {
                 </div>
                 <h3 className="text-3xl font-bold">Lightning Fast GPU Acceleration</h3>
                 <p className="text-gray-400 leading-relaxed">
-                  Leverage NVIDIA RTX, CUDA, and OptiX across our global network. 
+                  Leverage NVIDIA RTX, CUDA, and OptiX across our global network.
                   Render complex scenes with ray tracing in record time.
                 </p>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-6">
                 {performanceFeatures.map((feature, index) => (
                   <motion.div
@@ -303,7 +434,7 @@ const HomePage: React.FC = () => {
                 ))}
               </div>
             </motion.div>
-            
+
             <motion.div
               initial={{ opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -318,7 +449,7 @@ const HomePage: React.FC = () => {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
               </div>
-              
+
               {/* Floating card */}
               <motion.div
                 animate={{ y: [0, -10, 0] }}
@@ -355,7 +486,7 @@ const HomePage: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
               </div>
             </motion.div>
-            
+
             <motion.div
               initial={{ opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -369,11 +500,11 @@ const HomePage: React.FC = () => {
                 </div>
                 <h3 className="text-3xl font-bold">Global Distributed Network</h3>
                 <p className="text-gray-400 leading-relaxed">
-                  Tap into a worldwide network of high-performance nodes. 
+                  Tap into a worldwide network of high-performance nodes.
                   Our intelligent load balancing ensures optimal performance 24/7.
                 </p>
               </div>
-              
+
               <div className="space-y-4">
                 {networkFeatures.map((feature, index) => (
                   <motion.div
@@ -399,47 +530,7 @@ const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <motion.section
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true }}
-        className="py-32 relative overflow-hidden"
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/10 via-purple-900/10 to-black" />
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
-        </div>
-        
-        <div className="relative container mx-auto px-6">
-          <div className="max-w-4xl mx-auto text-center">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              whileInView={{ scale: 1, opacity: 1 }}
-              viewport={{ once: true }}
-              className="bg-gradient-to-br from-gray-900/50 to-black/50 backdrop-blur-xl rounded-3xl border border-white/10 p-12 shadow-2xl"
-            >
-              <h2 className="text-4xl md:text-5xl font-bold mb-6">
-                Ready to Transform Your <span className="text-blue-400">Workflow</span>?
-              </h2>
-              <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
-                Join thousands of studios and artists who've accelerated their rendering pipeline.
-              </p>
-              
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-                  Start Free Trial
-                  <Rocket className="w-5 h-5 ml-2" />
-                </Button>
-                <Button size="lg" variant="outline" className="border-white/20 hover:bg-white/5">
-                  Schedule a Demo
-                </Button>
-              </div>
-              
-            </motion.div>
-          </div>
-        </div>
-      </motion.section>
+
 
       {/* Footer */}
       <footer className="py-12 border-t border-white/10">
@@ -459,7 +550,7 @@ const HomePage: React.FC = () => {
                 © 2024 BlenderFarm. All rights reserved.
               </div>
             </div>
-            
+
             <div className="flex gap-8 text-sm text-gray-400">
               <a href="#" className="hover:text-white transition-colors">Privacy</a>
               <a href="#" className="hover:text-white transition-colors">Terms</a>

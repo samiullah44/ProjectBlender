@@ -1,3 +1,4 @@
+// backend/src/models/Application.ts
 import { Schema, model, Document, Types } from 'mongoose'
 
 export interface IApplication extends Document {
@@ -6,10 +7,15 @@ export interface IApplication extends Document {
     applicationData: {
         operatingSystem: string
         cpuModel: string
+        cpuCores: number              // ✅ ADDED
         gpuModel: string
+        gpuVram: number                // ✅ ADDED
+        gpuCount: number                // ✅ ADDED
         ramSize: number
         storageSize: number
-        internetSpeed: number
+        storageType: 'ssd' | 'hdd'     // ✅ ADDED
+        internetSpeed: number           // Download speed
+        uploadSpeed: number              // ✅ ADDED
         country: string
         ipAddress: string
         additionalNotes?: string
@@ -38,59 +44,38 @@ const applicationSchema = new Schema<IApplication>(
             index: true
         },
         applicationData: {
-            operatingSystem: {
+            operatingSystem: { type: String, required: true },
+            cpuModel: { type: String, required: true },
+            cpuCores: { type: Number, required: true, min: 1 },        // ✅ ADDED
+            gpuModel: { type: String, required: true },
+            gpuVram: { type: Number, required: true, min: 1 },          // ✅ ADDED
+            gpuCount: { type: Number, default: 1, min: 1, max: 8 },     // ✅ ADDED
+            ramSize: { type: Number, required: true, min: 1 },
+            storageSize: { type: Number, required: true, min: 1 },
+            storageType: {                                               // ✅ ADDED
                 type: String,
-                required: true
+                enum: ['ssd', 'hdd'],
+                required: true,
+                default: 'ssd'
             },
-            cpuModel: {
-                type: String,
-                required: true
-            },
-            gpuModel: {
-                type: String,
-                required: true
-            },
-            ramSize: {
-                type: Number,
-                required: true
-            },
-            storageSize: {
-                type: Number,
-                required: true
-            },
-            internetSpeed: {
-                type: Number,
-                required: true
-            },
-            country: {
-                type: String,
-                required: true
-            },
-            ipAddress: {
-                type: String,
-                required: true
-            },
+            internetSpeed: { type: Number, required: true, min: 0 },    // Download
+            uploadSpeed: { type: Number, required: true, min: 0 },      // ✅ ADDED
+            country: { type: String, required: true },
+            ipAddress: { type: String, required: true },
             additionalNotes: String
         },
         rejectionReason: String,
-        submittedAt: {
-            type: Date,
-            default: Date.now,
-            required: true
-        },
+        submittedAt: { type: Date, default: Date.now, required: true },
         reviewedAt: Date,
-        reviewedBy: {
-            type: Schema.Types.ObjectId,
-            ref: 'User'
-        }
+        reviewedBy: { type: Schema.Types.ObjectId, ref: 'User' }
     },
-    {
-        timestamps: true
-    }
+    { timestamps: true }
 )
 
-// Indexes for efficient querying
+// Indexes
 applicationSchema.index({ userId: 1, status: 1 })
 applicationSchema.index({ status: 1, submittedAt: -1 })
+applicationSchema.index({ 'applicationData.gpuVram': 1 })          // ✅ ADDED
+applicationSchema.index({ 'applicationData.uploadSpeed': 1 })      // ✅ ADDED
 
 export const Application = model<IApplication>('Application', applicationSchema)

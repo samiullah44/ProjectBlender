@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, CheckCircle2, XCircle, Clock, Trash2 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notificationStore'
@@ -6,9 +6,12 @@ import { formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { useNavigate } from 'react-router-dom'
+import { useOnClickOutside } from '@/hooks/useOnClickOutside'
 
 export const NotificationBell: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false)
+    const containerRef = useRef<HTMLDivElement>(null)
+
     const {
         notifications,
         unreadCount,
@@ -19,6 +22,10 @@ export const NotificationBell: React.FC = () => {
         deleteNotification
     } = useNotificationStore()
     const navigate = useNavigate()
+
+    useOnClickOutside(containerRef, () => {
+        if (isOpen) setIsOpen(false)
+    })
 
     useEffect(() => {
         fetchUnreadCount()
@@ -56,7 +63,7 @@ export const NotificationBell: React.FC = () => {
     }
 
     return (
-        <div className="relative">
+        <div className="relative" ref={containerRef}>
             <button
                 onClick={handleToggle}
                 className="relative p-2 rounded-lg hover:bg-white/5 transition-colors group"

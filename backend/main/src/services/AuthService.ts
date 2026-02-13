@@ -19,7 +19,21 @@ export interface AuthResponse {
   user?: any;
   message?: string;
   error?: string;
+  autoApproved?: boolean; // Added for node provider application
 }
+
+const MIN_REQUIREMENTS = {
+  ramSize: 8,
+  gpuVram: 4,
+  storageSize: 100,
+  internetSpeed: 5, // Download
+  uploadSpeed: 5,
+  cpuCores: 4
+};
+
+const GPU_BLACKLIST = [
+  'gtx 750', 'gtx 650', 'gt 1030', 'gt 710', 'gt 730', 'quadro k620', 'nvs', 'intel hd', 'intel iris', 'amd radeon r5', 'amd radeon r7'
+];
 
 export class AuthService {
   // Register new user with OTP
@@ -509,14 +523,20 @@ export class AuthService {
     await user.deductCredits(amount);
     return user;
   }
-  // Apply for Node Provider role with detailed application data
+
+  // backend/src/services/authService.ts - AUTOMATED applyForNodeProvider
   async applyForNodeProvider(userId: string, applicationData: {
     operatingSystem: string;
     cpuModel: string;
+    cpuCores: number;
     gpuModel: string;
+    gpuVram: number;
+    gpuCount: number;
     ramSize: number;
     storageSize: number;
+    storageType: 'ssd' | 'hdd';
     internetSpeed: number;
+    uploadSpeed: number;
     country: string;
     ipAddress: string;
     additionalNotes?: string;
@@ -525,59 +545,151 @@ export class AuthService {
       const user = await User.findById(userId);
 
       if (!user) {
-        return {
-          success: false,
-          error: 'User not found'
-        };
+        return { success: false, error: 'User not found' };
       }
 
-      if (user.roles && user.roles.includes('node_provider')) {
-        return {
-          success: false,
-          error: 'You are already a node provider'
-        };
+      const existingRoles = user.roles || [];
+      if (existingRoles.includes('node_provider')) {
+        return { success: false, error: 'You are already a node provider' };
       }
 
       if (user.nodeProviderStatus === 'pending') {
-        return {
-          success: false,
-          error: 'Application already pending'
-        };
+        return { success: false, error: 'Application already pending' };
       }
 
-      user.nodeProviderStatus = 'pending';
-      user.nodeProviderApplicationDate = new Date();
-      user.nodeProviderApplication = applicationData;
-      user.rejectionReason = undefined;
+      // 🎯 Step 1: Automated Filtering
+      const autoResult = this.autoApproveApplication(applicationData);
+      const now = new Date();
+
+      // Update User Model
+      user.nodeProviderStatus = autoResult.approved ? 'approved' : 'rejected';
+      user.nodeProviderApplicationDate = now;
+      user.nodeProviderApplication = {
+        operatingSystem: applicationData.operatingSystem,
+        cpuModel: applicationData.cpuModel,
+        gpuModel: applicationData.gpuModel,
+        ramSize: applicationData.ramSize,
+        storageSize: applicationData.storageSize,
+        internetSpeed: applicationData.internetSpeed,
+        country: applicationData.country,
+        ipAddress: applicationData.ipAddress,
+        additionalNotes: applicationData.additionalNotes
+      };
+
+      if (autoResult.approved) {
+        if (!user.roles.includes('node_provider')) {
+          user.roles.push('node_provider');
+        }
+        if (!user.primaryRole || user.primaryRole === 'client') {
+          user.primaryRole = 'node_provider';
+        }
+        user.rejectionReason = undefined;
+      } else {
+        user.rejectionReason = autoResult.reason;
+      }
 
       await user.save();
 
-      // Create separate Application record
+      // 🎯 Step 2: Create Application Record (Always store for audit)
       await Application.findOneAndUpdate(
         { userId, status: 'pending' },
         {
           userId,
-          status: 'pending',
+          status: user.nodeProviderStatus as any,
           applicationData,
-          submittedAt: new Date()
+          rejectionReason: autoResult.approved ? undefined : autoResult.reason,
+          submittedAt: now,
+          reviewedAt: now, // Auto-reviewed!
+          reviewedBy: null // System auto-reviewed
         },
         { upsert: true, new: true }
       );
 
+      // 🎯 Step 3: Notifications (In-app and WebSocket ONLY)
+      const notificationTitle = autoResult.approved ? 'Application Approved! 🎉' : 'Application Update';
+      const notificationMessage = autoResult.approved
+        ? 'Your node provider application has been automatically approved! You can now access the Node Provider dashboard.'
+        : `Your application does not meet the minimum requirements at this time. Reason: ${autoResult.reason}`;
+
+      await notificationService.createNotification(
+        userId,
+        autoResult.approved ? 'application_approved' : 'application_rejected',
+        notificationTitle,
+        notificationMessage,
+        { autoApproved: autoResult.approved, reason: autoResult.reason }
+      );
+
+      wsService.emitToUser(userId, 'notification:new', {
+        notification: {
+          type: autoResult.approved ? 'application_approved' : 'application_rejected',
+          title: notificationTitle,
+          message: notificationMessage
+        }
+      });
+
       // Emit system update for admins
-      wsService.broadcastSystemUpdate({ type: 'application_new' });
+      wsService.broadcastSystemUpdate({ type: 'application_status_change' });
 
       return {
         success: true,
-        message: 'Application submitted successfully'
+        message: autoResult.approved
+          ? 'Congratulations! Your system meets the requirements and has been automatically approved.'
+          : `Application processed. Unfortunately, your system does not meet requirements: ${autoResult.reason}`,
+        user: autoResult.approved ? { role: user.role, roles: user.roles, primaryRole: user.primaryRole } : undefined,
+        autoApproved: autoResult.approved
       };
     } catch (error) {
       console.error('Apply for node provider error:', error);
-      return {
-        success: false,
-        error: 'Failed to submit application'
-      };
+      return { success: false, error: 'Failed to process application' };
     }
+  }
+
+  private autoApproveApplication(data: any): { approved: boolean; reason?: string } {
+    const errors: string[] = [];
+
+    // 1. RAM Check
+    if (data.ramSize < MIN_REQUIREMENTS.ramSize) {
+      errors.push(`RAM: ${data.ramSize}GB (Min ${MIN_REQUIREMENTS.ramSize}GB)`);
+    }
+
+    // 2. VRAM Check
+    if (data.gpuVram < MIN_REQUIREMENTS.gpuVram) {
+      errors.push(`VRAM: ${data.gpuVram}GB (Min ${MIN_REQUIREMENTS.gpuVram}GB)`);
+    }
+
+    // 3. CPU Cores Check
+    if (data.cpuCores < MIN_REQUIREMENTS.cpuCores) {
+      errors.push(`CPU Cores: ${data.cpuCores} (Min ${MIN_REQUIREMENTS.cpuCores})`);
+    }
+
+    // 4. Storage Check
+    if (data.storageSize < MIN_REQUIREMENTS.storageSize) {
+      errors.push(`Storage: ${data.storageSize}GB (Min ${MIN_REQUIREMENTS.storageSize}GB)`);
+    }
+
+    // 5. Network Speed Check
+    if (data.internetSpeed < MIN_REQUIREMENTS.internetSpeed) {
+      errors.push(`Download: ${data.internetSpeed}Mbps (Min ${MIN_REQUIREMENTS.internetSpeed}Mbps)`);
+    }
+    if (data.uploadSpeed < MIN_REQUIREMENTS.uploadSpeed) {
+      errors.push(`Upload: ${data.uploadSpeed}Mbps (Min ${MIN_REQUIREMENTS.uploadSpeed}Mbps)`);
+    }
+
+    // 6. GPU Blacklist Check
+    const gpuModelLower = data.gpuModel.toLowerCase();
+    const isBlacklisted = GPU_BLACKLIST.some(blacklisted => gpuModelLower.includes(blacklisted));
+    if (isBlacklisted) {
+      errors.push(`GPU Model: "${data.gpuModel}" is not compatible with our rendering engine.`);
+    }
+
+    if (errors.length === 0) {
+      return { approved: true };
+    }
+
+    return {
+      approved: false,
+      reason: errors.join('. ')
+    };
   }
 
   // Approve Node Provider Application
@@ -782,13 +894,27 @@ export class AuthService {
   // Get Node Provider Applications (for admin)
   async getNodeProviderApplications(): Promise<any[]> {
     try {
-      const applications = await User.find({
-        nodeProviderStatus: 'pending'
-      })
-        .select('name email nodeProviderApplicationDate nodeProviderApplication')
-        .sort({ nodeProviderApplicationDate: -1 });
+      // Fetch from Application model to get full history and all data fields
+      const applications = await Application.find()
+        .populate('userId', 'name email')
+        .sort({ submittedAt: -1 })
+        .lean();
 
-      return applications;
+      // Map to a cleaner format for the frontend
+      return applications.map((app: any) => ({
+        _id: app._id,
+        userId: app.userId?._id,
+        name: app.userId?.name || 'Unknown',
+        email: app.userId?.email || 'Unknown',
+        status: app.status,
+        applicationData: app.applicationData,
+        submittedAt: app.submittedAt,
+        reviewedAt: app.reviewedAt,
+        rejectionReason: app.rejectionReason,
+        // Fallback for frontend compatibility
+        nodeProviderApplicationDate: app.submittedAt,
+        nodeProviderApplication: app.applicationData
+      }));
     } catch (error) {
       console.error('Get applications error:', error);
       throw error;

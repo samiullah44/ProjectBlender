@@ -59,20 +59,29 @@ export interface UserProfile {
 
 export interface Application {
     _id: string
+    userId: string
     name: string
     email: string
+    status: 'pending' | 'approved' | 'rejected'
     nodeProviderApplicationDate: string
     nodeProviderApplication?: {
         operatingSystem: string
         cpuModel: string
+        cpuCores: number
         gpuModel: string
+        gpuVram: number
+        gpuCount: number
         ramSize: number
         storageSize: number
+        storageType: 'ssd' | 'hdd'
         internetSpeed: number
+        uploadSpeed: number
         country: string
         ipAddress: string
         additionalNotes?: string
     }
+    rejectionReason?: string
+    reviewedAt?: string
 }
 
 export interface AuthResponse {
@@ -82,6 +91,7 @@ export interface AuthResponse {
     message?: string
     error?: string
     applications?: Application[]
+    autoApproved?: boolean
 }
 
 class AuthService {
@@ -175,14 +185,19 @@ class AuthService {
         }
     }
 
-    // Apply as Node Provider
+    // services/authService.ts - Update applyAsNodeProvider interface
     async applyAsNodeProvider(applicationData: {
         operatingSystem: string
         cpuModel: string
+        cpuCores: number              // ✅ ADDED
         gpuModel: string
+        gpuVram: number                // ✅ ADDED
+        gpuCount: number                // ✅ ADDED
         ramSize: number
         storageSize: number
-        internetSpeed: number
+        storageType: 'ssd' | 'hdd'     // ✅ ADDED
+        internetSpeed: number           // Download
+        uploadSpeed: number              // ✅ ADDED
         country: string
         ipAddress: string
         additionalNotes?: string

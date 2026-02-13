@@ -2,16 +2,16 @@ import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
     Cpu,
-    HardDrive,
     Wifi,
-    Globe,
-    Zap,
     DollarSign,
     TrendingUp,
     Shield,
     CheckCircle,
     Loader2,
-    ArrowLeft
+    ArrowLeft,
+    AlertCircle,
+    Server,
+    XCircle
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card'
@@ -21,10 +21,20 @@ import { authService } from '@/services/authService'
 import { toast } from 'react-hot-toast'
 import { useAuthStore } from '@/stores/authStore'
 
+// GPU Blacklist - same as backend
+const GPU_BLACKLIST = [
+    'intel hd', 'intel uhd', 'intel iris', 'vega 3', 'vega 6', 'vega 8',
+    'gt 710', 'gt 720', 'gt 730', 'gt 740', 'gt 1030', 'gtx 1630',
+    'mx110', 'mx130', 'mx150', 'mx230', 'mx250', 'mx330', 'mx350',
+    'radeon r5', 'radeon r7', 'radeon hd', 'geforce 710', 'geforce 720',
+    'geforce 730', 'geforce 740', 'geforce gt 610', 'geforce gt 630'
+];
+
 const ApplyNodeProvider: React.FC = () => {
     const navigate = useNavigate()
     const { getProfile } = useAuthStore()
     const [loading, setLoading] = useState(false)
+    const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
     const [formData, setFormData] = useState({
         operatingSystem: '',
         cpuModel: '',
@@ -34,51 +44,220 @@ const ApplyNodeProvider: React.FC = () => {
         internetSpeed: '',
         country: '',
         ipAddress: '',
-        additionalNotes: ''
+        additionalNotes: '',
+        gpuVram: '',
+        cpuCores: '',
+        uploadSpeed: '',
+        storageType: 'ssd',
+        gpuCount: '1',
     })
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
         setFormData({
             ...formData,
-            [e.target.name]: e.target.value
-        })
+            [name]: value
+        });
+
+        // Clear validation error for this field when user types
+        if (validationErrors[name]) {
+            setValidationErrors({
+                ...validationErrors,
+                [name]: ''
+            });
+        }
     }
+
+    // 🎯 VALIDATION FUNCTIONS - Same as backend
+    const validateGPU = (gpuModel: string, gpuVram: string): string | null => {
+        const lowerGpu = gpuModel.toLowerCase();
+        const vram = parseInt(gpuVram);
+
+        // Check blacklist
+        for (const badGpu of GPU_BLACKLIST) {
+            if (lowerGpu.includes(badGpu)) {
+                return `GPU "${gpuModel}" is not supported (integrated or too weak)`;
+            }
+        }
+
+        // Check VRAM minimum
+        if (vram < 4) {
+            return 'Minimum 4GB VRAM required';
+        }
+
+        // Check for high-end GPUs with correct VRAM
+        if (lowerGpu.includes('4090') && vram < 24) {
+            return 'RTX 4090 must have 24GB VRAM';
+        }
+        if (lowerGpu.includes('4080') && vram < 16) {
+            return 'RTX 4080 must have 16GB VRAM';
+        }
+        if (lowerGpu.includes('3090') && vram < 24) {
+            return 'RTX 3090 must have 24GB VRAM';
+        }
+        if (lowerGpu.includes('3080') && vram < 10) {
+            return 'RTX 3080 must have at least 10GB VRAM';
+        }
+        if (lowerGpu.includes('3070') && vram < 8) {
+            return 'RTX 3070 must have 8GB VRAM';
+        }
+        if (lowerGpu.includes('3060') && vram < 12 && !lowerGpu.includes('3060 ti')) {
+            return 'RTX 3060 usually has 12GB VRAM';
+        }
+
+        return null;
+    };
+
+    const validateCPU = (cpuModel: string, cpuCores: string): string | null => {
+        const cores = parseInt(cpuCores);
+        const lowerCpu = cpuModel.toLowerCase();
+
+        if (cores < 4) {
+            return 'Minimum 4 CPU cores required';
+        }
+
+        if (lowerCpu.includes('i3') && cores > 4) {
+            return 'i3 processors typically have 4 cores or less';
+        }
+        if (lowerCpu.includes('pentium') || lowerCpu.includes('celeron')) {
+            return 'Pentium/Celeron processors not supported';
+        }
+        if (lowerCpu.includes('atom')) {
+            return 'Atom processors not supported';
+        }
+
+        return null;
+    };
+
+    // 🎯 MAIN VALIDATION FUNCTION - Runs before API call
+    const validateForm = (): boolean => {
+        const errors: Record<string, string> = {};
+
+        // Check required fields
+        const requiredFields = [
+            'operatingSystem', 'cpuModel', 'gpuModel', 'ramSize',
+            'storageSize', 'internetSpeed', 'uploadSpeed', 'country',
+            'ipAddress', 'gpuVram', 'cpuCores', 'storageType'
+        ];
+
+        for (const field of requiredFields) {
+            if (!formData[field as keyof typeof formData]) {
+                errors[field] = 'This field is required';
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setValidationErrors(errors);
+            return false;
+        }
+
+        // Numeric validations
+        const ram = parseInt(formData.ramSize);
+        if (ram < 8) {
+            errors.ramSize = 'Minimum 8GB RAM required';
+        }
+
+        const storage = parseInt(formData.storageSize);
+        if (storage < 256) {
+            errors.storageSize = 'Minimum 256GB storage required';
+        }
+
+        const download = parseInt(formData.internetSpeed);
+        if (download < 5) {
+            errors.internetSpeed = 'Minimum 5 Mbps download required';
+        }
+
+        const upload = parseInt(formData.uploadSpeed);
+        if (upload < 5) {
+            errors.uploadSpeed = 'Minimum 5 Mbps upload required';
+        }
+
+        const gpuVram = parseInt(formData.gpuVram);
+        if (gpuVram < 4) {
+            errors.gpuVram = 'Minimum 4GB GPU VRAM required';
+        }
+
+        const cpuCores = parseInt(formData.cpuCores);
+        if (cpuCores < 4) {
+            errors.cpuCores = 'Minimum 4 CPU cores required';
+        }
+
+        // GPU validation
+        const gpuError = validateGPU(formData.gpuModel, formData.gpuVram);
+        if (gpuError) {
+            errors.gpuModel = gpuError;
+        }
+
+        // CPU validation
+        const cpuError = validateCPU(formData.cpuModel, formData.cpuCores);
+        if (cpuError) {
+            errors.cpuModel = cpuError;
+        }
+
+        // Storage type warning (not a hard error)
+        if (formData.storageType === 'hdd') {
+            toast('HDD detected - SSD is strongly recommended for rendering', {
+                icon: '⚠️',
+                duration: 5000
+            });
+        }
+
+        setValidationErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
-        // Validation
-        if (!formData.operatingSystem || !formData.cpuModel || !formData.gpuModel ||
-            !formData.ramSize || !formData.storageSize || !formData.internetSpeed ||
-            !formData.country || !formData.ipAddress) {
-            toast.error('Please fill in all required fields')
-            return
+        // 🎯 RUN VALIDATION FIRST - Stop if invalid
+        if (!validateForm()) {
+            toast.error('Please fix the validation errors below');
+            return;
         }
 
         try {
             setLoading(true)
             const applicationData = {
-                ...formData,
+                operatingSystem: formData.operatingSystem,
+                cpuModel: formData.cpuModel,
+                cpuCores: parseInt(formData.cpuCores),
+                gpuModel: formData.gpuModel,
+                gpuVram: parseInt(formData.gpuVram),
+                gpuCount: parseInt(formData.gpuCount) || 1,
                 ramSize: parseInt(formData.ramSize),
                 storageSize: parseInt(formData.storageSize),
-                internetSpeed: parseInt(formData.internetSpeed)
+                storageType: formData.storageType as 'ssd' | 'hdd',
+                internetSpeed: parseInt(formData.internetSpeed),
+                uploadSpeed: parseInt(formData.uploadSpeed),
+                country: formData.country,
+                ipAddress: formData.ipAddress,
+                additionalNotes: formData.additionalNotes
             }
 
             const response = await authService.applyAsNodeProvider(applicationData)
 
             if (response.success) {
-                toast.success('Application submitted successfully!')
-                await getProfile()
-                navigate('/client/dashboard')
+                if (response.autoApproved) {
+                    toast.success('✅ Congratulations! Your application is approved for initial phase! Check your Node provider dashboard for node software.');
+                } else {
+                    toast.success('Application submitted successfully!');
+                }
+                await getProfile();
+                navigate('/client/dashboard');
             } else {
-                toast.error(response.error || 'Failed to submit application')
+                toast.error(response.error || 'Failed to submit application');
             }
         } catch (error: any) {
-            toast.error(error.message || 'Failed to submit application')
+            toast.error(error.message || 'Failed to submit application');
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
     }
+
+    // Helper to check if a field has error
+    const hasError = (fieldName: string): boolean => {
+        return !!validationErrors[fieldName];
+    };
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-black text-white">
@@ -154,7 +333,7 @@ const ApplyNodeProvider: React.FC = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="max-w-3xl mx-auto"
+                    className="max-w-4xl mx-auto"
                 >
                     <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm">
                         <CardHeader>
@@ -165,6 +344,47 @@ const ApplyNodeProvider: React.FC = () => {
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSubmit} className="space-y-8">
+                                {/* MINIMUM REQUIREMENTS BANNER */}
+                                <div className="p-4 rounded-lg bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30">
+                                    <div className="flex items-start gap-3">
+                                        <AlertCircle className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <h4 className="font-semibold text-purple-400 mb-1">Minimum Requirements</h4>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-300">
+                                                <span>• RAM: 8GB+</span>
+                                                <span>• VRAM: 4GB+</span>
+                                                <span>• CPU: 4+ cores</span>
+                                                <span>• Storage: 256GB+</span>
+                                                <span>• Download: 5+ Mbps</span>
+                                                <span>• Upload: 5+ Mbps</span>
+                                                <span>• GPU: No integrated</span>
+                                                <span>• SSD preferred</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Validation Summary - Show if there are errors */}
+                                {Object.keys(validationErrors).length > 0 && (
+                                    <div className="p-4 rounded-lg bg-red-500/20 border border-red-500/30">
+                                        <div className="flex items-start gap-3">
+                                            <XCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                                            <div>
+                                                <h4 className="font-semibold text-red-400 mb-2">
+                                                    Please fix the following errors:
+                                                </h4>
+                                                <ul className="list-disc list-inside space-y-1">
+                                                    {Object.values(validationErrors).map((error, index) => (
+                                                        <li key={index} className="text-sm text-red-300">
+                                                            {error}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* System Information */}
                                 <div>
                                     <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -181,7 +401,7 @@ const ApplyNodeProvider: React.FC = () => {
                                                 value={formData.operatingSystem}
                                                 onChange={handleChange}
                                                 placeholder="e.g., Windows 11, Ubuntu 22.04"
-                                                className="bg-white/5 border-white/10"
+                                                className={`bg-white/5 border-white/10 ${hasError('operatingSystem') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
                                                 required
                                             />
                                         </div>
@@ -195,7 +415,24 @@ const ApplyNodeProvider: React.FC = () => {
                                                 value={formData.cpuModel}
                                                 onChange={handleChange}
                                                 placeholder="e.g., Intel i7-12700K"
-                                                className="bg-white/5 border-white/10"
+                                                className={`bg-white/5 border-white/10 ${hasError('cpuModel') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2">
+                                                CPU Cores <span className="text-red-400">*</span>
+                                            </label>
+                                            <Input
+                                                name="cpuCores"
+                                                type="number"
+                                                value={formData.cpuCores}
+                                                onChange={handleChange}
+                                                placeholder="e.g., 8"
+                                                className={`bg-white/5 border-white/10 ${hasError('cpuCores') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                                                min="1"
+                                                max="128"
                                                 required
                                             />
                                         </div>
@@ -209,9 +446,44 @@ const ApplyNodeProvider: React.FC = () => {
                                                 value={formData.gpuModel}
                                                 onChange={handleChange}
                                                 placeholder="e.g., NVIDIA RTX 4090"
-                                                className="bg-white/5 border-white/10"
+                                                className={`bg-white/5 border-white/10 ${hasError('gpuModel') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
                                                 required
                                             />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2">
+                                                GPU VRAM (GB) <span className="text-red-400">*</span>
+                                            </label>
+                                            <Input
+                                                name="gpuVram"
+                                                type="number"
+                                                value={formData.gpuVram}
+                                                onChange={handleChange}
+                                                placeholder="e.g., 8, 12, 24"
+                                                className={`bg-white/5 border-white/10 ${hasError('gpuVram') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                                                min="1"
+                                                max="128"
+                                                step="1"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2">
+                                                Number of GPUs
+                                            </label>
+                                            <Input
+                                                name="gpuCount"
+                                                type="number"
+                                                value={formData.gpuCount}
+                                                onChange={handleChange}
+                                                placeholder="e.g., 1"
+                                                className="bg-white/5 border-white/10"
+                                                min="1"
+                                                max="8"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">Multiple GPUs earn more</p>
                                         </div>
 
                                         <div>
@@ -224,7 +496,9 @@ const ApplyNodeProvider: React.FC = () => {
                                                 value={formData.ramSize}
                                                 onChange={handleChange}
                                                 placeholder="e.g., 32"
-                                                className="bg-white/5 border-white/10"
+                                                className={`bg-white/5 border-white/10 ${hasError('ramSize') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                                                min="1"
+                                                max="2048"
                                                 required
                                             />
                                         </div>
@@ -238,10 +512,28 @@ const ApplyNodeProvider: React.FC = () => {
                                                 type="number"
                                                 value={formData.storageSize}
                                                 onChange={handleChange}
-                                                placeholder="e.g., 1000"
-                                                className="bg-white/5 border-white/10"
+                                                placeholder="e.g., 1000 for 1TB"
+                                                className={`bg-white/5 border-white/10 ${hasError('storageSize') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                                                min="1"
+                                                max="100000"
                                                 required
                                             />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2">
+                                                Storage Type <span className="text-red-400">*</span>
+                                            </label>
+                                            <select
+                                                name="storageType"
+                                                value={formData.storageType}
+                                                onChange={handleChange}
+                                                className={`w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white ${hasError('storageType') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                                                required
+                                            >
+                                                <option value="ssd">SSD (NVMe/SATA)</option>
+                                                <option value="hdd">HDD</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
@@ -255,7 +547,7 @@ const ApplyNodeProvider: React.FC = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium mb-2">
-                                                Internet Speed (Mbps) <span className="text-red-400">*</span>
+                                                Download Speed (Mbps) <span className="text-red-400">*</span>
                                             </label>
                                             <Input
                                                 name="internetSpeed"
@@ -263,9 +555,29 @@ const ApplyNodeProvider: React.FC = () => {
                                                 value={formData.internetSpeed}
                                                 onChange={handleChange}
                                                 placeholder="e.g., 100"
-                                                className="bg-white/5 border-white/10"
+                                                className={`bg-white/5 border-white/10 ${hasError('internetSpeed') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                                                min="1"
+                                                max="10000"
                                                 required
                                             />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2">
+                                                Upload Speed (Mbps) <span className="text-red-400">*</span>
+                                            </label>
+                                            <Input
+                                                name="uploadSpeed"
+                                                type="number"
+                                                value={formData.uploadSpeed}
+                                                onChange={handleChange}
+                                                placeholder="e.g., 50"
+                                                className={`bg-white/5 border-white/10 ${hasError('uploadSpeed') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                                                min="1"
+                                                max="10000"
+                                                required
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">Upload speed is critical for rendering</p>
                                         </div>
 
                                         <div>
@@ -277,12 +589,12 @@ const ApplyNodeProvider: React.FC = () => {
                                                 value={formData.country}
                                                 onChange={handleChange}
                                                 placeholder="e.g., United States"
-                                                className="bg-white/5 border-white/10"
+                                                className={`bg-white/5 border-white/10 ${hasError('country') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
                                                 required
                                             />
                                         </div>
 
-                                        <div className="md:col-span-2">
+                                        <div>
                                             <label className="block text-sm font-medium mb-2">
                                                 IP Address <span className="text-red-400">*</span>
                                             </label>
@@ -291,7 +603,7 @@ const ApplyNodeProvider: React.FC = () => {
                                                 value={formData.ipAddress}
                                                 onChange={handleChange}
                                                 placeholder="e.g., 192.168.1.1"
-                                                className="bg-white/5 border-white/10"
+                                                className={`bg-white/5 border-white/10 ${hasError('ipAddress') ? 'border-red-500 ring-1 ring-red-500' : ''}`}
                                                 required
                                             />
                                         </div>

@@ -9,6 +9,7 @@ import {
     CheckCircle2,
     XCircle,
     Info,
+    Download,
     ArrowUpRight,
     Search,
     Filter,
@@ -148,6 +149,17 @@ const NodeDashboard: React.FC = () => {
                     <p className="text-gray-400">Manage your distributed rendering hardware and track earnings.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <Button
+                        variant="outline"
+                        className="text-purple-400 border-purple-500/30 hover:bg-cyan-500/10 hidden md:flex items-center"
+                        onClick={() => toast.success('Beginning software download...')}
+                    >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download Node Software
+                        <span title="Download our dedicated rendering software to start contributing your local hardware.">
+                            <Info className="w-3.5 h-3.5 ml-2 opacity-50 cursor-help" />
+                        </span>
+                    </Button>
                     <Button variant="outline" className="border-gray-800 hover:bg-white/5 text-gray-300">
                         <Settings className="w-4 h-4 mr-2" />
                         Settings

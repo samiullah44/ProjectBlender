@@ -12,6 +12,7 @@ import LoginPage from '@/pages/public/Login'
 import RegisterPage from '@/pages/public/Register'
 import OAuthCallback from '@/pages/public/OAuthCallback'
 import VerifyEmailPage from '@/pages/public/VerifyEmail'
+import ScrollToTop from '@/components/layout/ScrollToTop'
 
 // Client Pages
 import ClientDashboard from '@/pages/client/Dashboard'
@@ -90,6 +91,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthInitializer>
         <Router>
+          <ScrollToTop />
           <Routes>
             {/* Auth Routes (without Navbar) */}
             <Route element={<AuthLayout />}>

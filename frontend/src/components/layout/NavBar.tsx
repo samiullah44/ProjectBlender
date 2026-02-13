@@ -1,5 +1,5 @@
 // components/layout/Navbar.tsx - UPDATED
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Menu,
@@ -28,6 +28,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
 import { NotificationBell } from './NotificationBell'
+import { useOnClickOutside } from '@/hooks/useOnClickOutside'
 
 interface NavItem {
   label: string
@@ -49,9 +50,15 @@ const Navbar: React.FC = () => {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [scrolled, setScrolled] = useState(false)
 
+  const userMenuRef = useRef<HTMLDivElement>(null)
+
   const { user, isAuthenticated, logout, switchRole } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
+
+  useOnClickOutside(userMenuRef, () => {
+    if (userMenuOpen) setUserMenuOpen(false)
+  })
 
   useEffect(() => {
     const handleScroll = () => {
@@ -414,7 +421,7 @@ const Navbar: React.FC = () => {
                   )}
 
                   {/* User Profile */}
-                  <div className="relative">
+                  <div className="relative" ref={userMenuRef}>
                     <button
                       onClick={() => setUserMenuOpen(!userMenuOpen)}
                       className="flex items-center gap-3 p-1 rounded-lg hover:bg-white/5 transition-colors"
