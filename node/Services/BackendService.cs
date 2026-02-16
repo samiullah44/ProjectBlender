@@ -17,12 +17,15 @@ using System.Runtime.InteropServices;
 using Newtonsoft.Json; 
 using System.Security.Authentication;
 using System.Collections.Concurrent;
+using BlendFarm.Node.Hardware;  // Add this at the top
+using BlendFarm.Node.Models;
 
 namespace BlendFarm.Node.Services
 {
     public class NodeBackendService : BackgroundService
     {
         private readonly ILogger<NodeBackendService> _logger;
+        private readonly ILoggerFactory _loggerFactory;
         private readonly PythonRunnerService _pythonRunner;
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
@@ -35,6 +38,8 @@ namespace BlendFarm.Node.Services
         private object _jobLock = new object();
         private bool _isBlenderAvailable = false;
         private ConcurrentDictionary<int, (string uploadUrl, string s3Key)> _frameUploadUrls;
+
+        private HardwareInfo _detectedHardware;
         
         // File cache for downloaded blend files
         private readonly ConcurrentDictionary<string, (string filePath, DateTime downloadedAt)> _blendFileCache;
@@ -42,10 +47,12 @@ namespace BlendFarm.Node.Services
 
         public NodeBackendService(
             ILogger<NodeBackendService> logger,
+             ILoggerFactory loggerFactory,
             PythonRunnerService pythonRunner,
             IConfiguration configuration)
         {
             _logger = logger;
+            _loggerFactory = loggerFactory;
             _pythonRunner = pythonRunner;
             _configuration = configuration;
             _nodeId = configuration["NodeSettings:NodeId"] ?? Guid.NewGuid().ToString();
@@ -90,11 +97,59 @@ namespace BlendFarm.Node.Services
                 return;
             }
 
-            // Detect hardware
-            var hardwareInfo = await DetectHardwareAsync();
+            // // Detect hardware
+            // var hardwareInfo = await DetectHardwareAsync();
+var hardwareDetector = new HardwareDetector(
+        _loggerFactory.CreateLogger<HardwareDetector>() 
+    );
+    // Detect ALL hardware with network test
+    _logger.LogInformation("🔍 Detecting complete system specifications...");
+    try
+    {
+        _detectedHardware = await hardwareDetector.DetectAllAsync(
+            _nodeId, 
+            _backendUrl  // Pass backend URL for network test
+        );
+        
+        // Print beautiful summary
+        _logger.LogInformation("═══════════════════════════════════════");
+        _logger.LogInformation($"📊 SYSTEM SPECIFICATIONS");
+        _logger.LogInformation($"CPU: {_detectedHardware.Cpu.Model}");
+        _logger.LogInformation($"    {_detectedHardware.Cpu.PhysicalCores} cores / {_detectedHardware.Cpu.LogicalCores} threads @ {_detectedHardware.Cpu.BaseClockGHz:F1}GHz");
+        _logger.LogInformation($"    AVX2: {_detectedHardware.Cpu.SupportsAVX2}");
+        _logger.LogInformation($"RAM: {_detectedHardware.Ram.TotalGB}GB ({_detectedHardware.Ram.AvailableGB}GB free) {_detectedHardware.Ram.Type} @ {_detectedHardware.Ram.SpeedMHz}MHz");
+        
+        foreach (var gpu in _detectedHardware.Gpus)
+        {
+            _logger.LogInformation($"GPU: {gpu.Model}");
+            _logger.LogInformation($"    {gpu.VramMB}MB VRAM | CUDA: {gpu.CudaSupported} | OptiX: {gpu.OptixSupported} | Driver: {gpu.DriverVersion}");
+        }
+        
+        _logger.LogInformation($"Storage: {_detectedHardware.Storage.TotalGB}GB total ({_detectedHardware.Storage.FreeGB}GB free) on {_detectedHardware.Storage.Type} ({_detectedHardware.Storage.ReadSpeedMBs:F0} MB/s read)");
+        _logger.LogInformation($"Network: ↑{_detectedHardware.Network.UploadSpeedMbps:F1} Mbps ↓{_detectedHardware.Network.DownloadSpeedMbps:F1} Mbps (latency: {_detectedHardware.Network.LatencyMs}ms)");
+        _logger.LogInformation($"OS: {_detectedHardware.Os.Name} {_detectedHardware.Os.Architecture}");
+        _logger.LogInformation($"Fingerprint: {_detectedHardware.HardwareFingerprint.Substring(0, 16)}...");
+        _logger.LogInformation("═══════════════════════════════════════");
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError($"❌ Hardware detection failed: {ex.Message}");
+        _logger.LogWarning("Using fallback hardware detection...");
+    // Create minimal hardware info
+    _detectedHardware = new HardwareInfo
+    {
+        NodeId = _nodeId,
+        Cpu = new CpuInfo { LogicalCores = Environment.ProcessorCount },
+        Ram = new RamInfo { TotalGB = 16 },
+        Gpus = new List<GpuInfo>(),
+        Storage = new StorageInfo { FreeGB = 100 },
+        Os = new OsInfo { Name = Environment.OSVersion.ToString() },
+        Network = new NetworkInfo { UploadSpeedMbps = 10, DownloadSpeedMbps = 50 }
+    };
+    }
 
             // Register with backend
-            var registered = await RegisterWithBackendAsync(hardwareInfo);
+            var registered = await RegisterWithBackendAsync(_detectedHardware);
             if (!registered)
             {
                 _logger.LogError("Failed to register with backend. Retrying in 30 seconds...");
@@ -343,175 +398,258 @@ namespace BlendFarm.Node.Services
             }
         }
 
-        private async Task<HardwareInfo> DetectHardwareAsync()
+
+   private async Task<bool> RegisterWithBackendAsync(HardwareInfo hardware)  // Parameter type changed
+{
+    int maxRetries = 5;
+    for (int retry = 0; retry < maxRetries; retry++)
+    {
+        try
         {
-            var info = new HardwareInfo
+            // ===== UPDATED WITH REAL HARDWARE DATA =====
+            var registrationData = new
             {
-                NodeId = _nodeId,
-                Os = GetOperatingSystemInfo(),
-                CpuCores = Environment.ProcessorCount,
-                GpuName = "Unknown",
-                GpuVRAM = 0,
-                RamGB = GetTotalMemoryGB(),
-                BlenderVersion = await GetBlenderVersionAsync()
+                nodeId = _nodeId,
+                name = $"Node-{Environment.MachineName}",
+                
+                // REAL OS info
+                os = hardware.Os.Name,
+                
+                // REAL hardware specs
+                hardware = new
+                {
+                    // CPU
+                    cpuModel = hardware.Cpu.Model,
+                    cpuCores = hardware.Cpu.PhysicalCores,
+                    cpuThreads = hardware.Cpu.LogicalCores,
+                    cpuSpeedGHz = hardware.Cpu.BaseClockGHz,
+                    cpuScore = CalculateCpuScore(hardware.Cpu),  // Updated method
+                    
+                    // GPU (first one for primary)
+                    gpuName = hardware.Gpus.FirstOrDefault()?.Model ?? "Unknown",
+                    gpuVRAM = hardware.Gpus.FirstOrDefault()?.VramMB ?? 0,
+                    gpuScore = CalculateGpuScore(hardware.Gpus.FirstOrDefault()),  // Updated method
+                    
+                    // All GPUs
+                    allGpus = hardware.Gpus.Select(g => new
+                    {
+                        model = g.Model,
+                        vramMB = g.VramMB,
+                        cudaSupported = g.CudaSupported,
+                        optixSupported = g.OptixSupported
+                    }),
+                    
+                    // RAM
+                    ramGB = hardware.Ram.TotalGB,
+                    ramAvailableGB = hardware.Ram.AvailableGB,
+                    ramType = hardware.Ram.Type,
+                    
+                    // Storage
+                    storageFreeGB = hardware.Storage.FreeGB,
+                    storageType = hardware.Storage.Type,
+                    
+                    // Network
+                    uploadSpeedMbps = hardware.Network.UploadSpeedMbps,
+                    downloadSpeedMbps = hardware.Network.DownloadSpeedMbps,
+                    latencyMs = hardware.Network.LatencyMs,
+                    
+                    // Blender
+                    blenderVersion = hardware.Os.DotNetVersion,  // Or get from your existing method
+                    
+                    // Hardware fingerprint for anti-cheat
+                    hardwareFingerprint = hardware.HardwareFingerprint
+                },
+                
+                // REAL capabilities based on hardware
+                capabilities = new
+                {
+                    supportedEngines = new[] { "CYCLES", "EEVEE" },
+                    supportedGPUs = hardware.Gpus.Any(g => g.CudaSupported) ? 
+                        new[] { "CUDA", "OPTIX" } : 
+                        hardware.Gpus.Any(g => g.HipSupported) ?
+                            new[] { "HIP" } : new[] { "CPU" },
+                    maxSamples = hardware.Ram.TotalGB >= 32 ? 4096 : 1024,
+                    maxResolutionX = hardware.Ram.TotalGB >= 16 ? 7680 : 3840,
+                    maxResolutionY = hardware.Ram.TotalGB >= 16 ? 4320 : 2160,
+                    supportsTiles = true,
+                    supportsAnimation = true,
+                    supportsImage = true,
+                    
+                    // Node tier based on REAL performance
+                    nodeTier = CalculateNodeTier(hardware)
+                },
+                
+                ipAddress = hardware.Network.LocalIP ?? GetLocalIPAddress(),
+                publicIp = hardware.Network.PublicIP,
+                status = "online",
+                
+                // When the hardware was verified
+                hardwareVerifiedAt = hardware.DetectedAt
             };
+            // ===== END UPDATED CODE =====
 
-            // Try to detect NVIDIA GPU
-            info.GpuName = await DetectNvidiaGpuAsync();
-            if (info.GpuName != "Unknown")
+            var json = JsonConvert.SerializeObject(registrationData);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            _logger.LogInformation($"📤 Registering with backend: {_backendUrl}/api/nodes/register");
+            
+            var response = await _httpClient.PostAsync("/api/nodes/register", content);
+
+            if (response.IsSuccessStatusCode)
             {
-                info.GpuVRAM = await DetectNvidiaVramAsync();
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation($"✅ Registered with backend: {responseContent}");
+                return true;
             }
-
-            return info;
-        }
-
-        private async Task<string> DetectNvidiaGpuAsync()
-        {
-            try
+            else
             {
-                var process = new Process
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError($"Registration failed (attempt {retry + 1}/{maxRetries}): {errorContent}");
+                
+                if (retry < maxRetries - 1)
                 {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "nvidia-smi",
-                        Arguments = "--query-gpu=name --format=csv,noheader",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                process.Start();
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-
-                if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
-                {
-                    return output.Trim();
+                    var delay = TimeSpan.FromSeconds(Math.Pow(2, retry));
+                    _logger.LogInformation($"Waiting {delay.TotalSeconds} seconds before retry...");
+                    await Task.Delay(delay);
+                    continue;
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogDebug($"NVIDIA GPU detection failed: {ex.Message}");
-            }
-
-            return "Unknown";
         }
-
-        private async Task<bool> RegisterWithBackendAsync(HardwareInfo hardware)
+        catch (Exception ex)
         {
-            int maxRetries = 5;
-            for (int retry = 0; retry < maxRetries; retry++)
+            _logger.LogError($"Registration error (attempt {retry + 1}/{maxRetries}): {ex.Message}");
+            
+            if (retry < maxRetries - 1)
             {
-                try
-                {
-                    var registrationData = new
-                    {
-                        nodeId = _nodeId,
-                        name = $"Node-{Environment.MachineName}",
-                        os = hardware.Os,
-                        hardware = new
-                        {
-                            cpuCores = hardware.CpuCores,
-                            cpuScore = CalculateCpuScore(),
-                            gpuName = hardware.GpuName,
-                            gpuVRAM = hardware.GpuVRAM,
-                            gpuScore = CalculateGpuScore(hardware.GpuName, hardware.GpuVRAM),
-                            ramGB = hardware.RamGB,
-                            blenderVersion = hardware.BlenderVersion
-                        },
-                        capabilities = new
-                        {
-                            supportedEngines = new[] { "CYCLES", "EEVEE" },
-                            supportedGPUs = hardware.GpuName != "Unknown" ? 
-                                new[] { "CUDA", "OPTIX" } : new[] { "CPU" },
-                            maxSamples = 4096,
-                            maxResolutionX = 7680,
-                            maxResolutionY = 4320,
-                            supportsTiles = true,
-                            supportsAnimation = true,
-                            supportsImage = true
-                        },
-                        ipAddress = GetLocalIPAddress(),
-                        status = "online"
-                    };
-
-                    var json = JsonConvert.SerializeObject(registrationData);
-                    var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                    _logger.LogInformation($"📤 Registering with backend: {_backendUrl}/api/nodes/register");
-                    
-                    var response = await _httpClient.PostAsync("/api/nodes/register", content);
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var responseContent = await response.Content.ReadAsStringAsync();
-                        _logger.LogInformation($"✅ Registered with backend: {responseContent}");
-                        return true;
-                    }
-                    else
-                    {
-                        var errorContent = await response.Content.ReadAsStringAsync();
-                        _logger.LogError($"Registration failed (attempt {retry + 1}/{maxRetries}): {errorContent}");
-                        
-                        if (retry < maxRetries - 1)
-                        {
-                            var delay = TimeSpan.FromSeconds(Math.Pow(2, retry));
-                            _logger.LogInformation($"Waiting {delay.TotalSeconds} seconds before retry...");
-                            await Task.Delay(delay);
-                            continue;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError($"Registration error (attempt {retry + 1}/{maxRetries}): {ex.Message}");
-                    
-                    if (retry < maxRetries - 1)
-                    {
-                        var delay = TimeSpan.FromSeconds(Math.Pow(2, retry));
-                        _logger.LogInformation($"Waiting {delay.TotalSeconds} seconds before retry...");
-                        await Task.Delay(delay);
-                        continue;
-                    }
-                }
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, retry));
+                _logger.LogInformation($"Waiting {delay.TotalSeconds} seconds before retry...");
+                await Task.Delay(delay);
+                continue;
             }
-
-            return false;
         }
+    }
 
-        private async void SendHeartbeat(object? state)
+    return false;
+}
+private async void SendHeartbeat(object? state)
+{
+    try
+    {
+        // Get real-time stats
+        var cpuUsage = await GetCpuUsageAsync();
+        var gpuUsage = await GetGpuUsageAsync();
+        var ramUsed = GetUsedMemoryMB();
+        var diskFree = GetFreeDiskSpaceMB();
+        
+        // Get GPU temperatures if available
+        var gpuTemps = new List<int>();
+        foreach (var gpu in _detectedHardware?.Gpus ?? new List<GpuInfo>())
         {
-            try
-            {
-                var heartbeatData = new
-                {
-                    status = "online",
-                    resources = new
-                    {
-                        cpuPercent = await GetCpuUsageAsync(),
-                        gpuPercent = await GetGpuUsageAsync(),
-                        ramUsedMB = GetUsedMemoryMB(),
-                        diskFreeMB = GetFreeDiskSpaceMB()
-                    },
-                    currentJob = GetCurrentJobId(),
-                    progress = GetCurrentProgress(),
-                    uptime = (int)(DateTime.UtcNow - Process.GetCurrentProcess().StartTime).TotalSeconds
-                };
-
-                var json = JsonConvert.SerializeObject(heartbeatData);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                await _httpClient.PostAsync($"/api/nodes/{_nodeId}/heartbeat", content);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Heartbeat failed: {ex.Message}");
-            }
+            if (gpu.Temperature > 0)
+                gpuTemps.Add(gpu.Temperature);
         }
 
+        var heartbeatData = new
+        {
+            nodeId = _nodeId,
+            status = string.IsNullOrEmpty(_currentJobId) ? "idle" : "rendering",
+            timestamp = DateTime.UtcNow,
+            resources = new
+            {
+                cpuPercent = cpuUsage,
+                cpuTemperature = 0, // Add if you implement
+                gpuPercent = gpuUsage,
+                gpuTemperatures = gpuTemps,
+                ramUsedMB = ramUsed,
+                ramTotalMB = _detectedHardware?.Ram.TotalMB ?? 0,
+                ramPercent = (int)((double)ramUsed / (_detectedHardware?.Ram.TotalMB ?? 1) * 100),
+                diskFreeMB = diskFree,
+                diskTotalMB = _detectedHardware?.Storage.TotalGB * 1024 ?? 0,
+                diskPercent = 100 - (int)((double)diskFree / (_detectedHardware?.Storage.TotalGB * 1024 ?? 1) * 100)
+            },
+            currentJob = GetCurrentJobId(),
+            progress = GetCurrentProgress(),
+            uptime = (int)(DateTime.UtcNow - Process.GetCurrentProcess().StartTime).TotalSeconds,
+            framesRendered = _detectedHardware?.Gpus.Sum(g => g.Utilization) ?? 0 // Placeholder
+        };
+
+        var json = JsonConvert.SerializeObject(heartbeatData);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        await _httpClient.PostAsync($"/api/nodes/{_nodeId}/heartbeat", content);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError($"Heartbeat failed: {ex.Message}");
+    }
+}
+// Add these helper methods to NodeBackendService.cs
+
+private int CalculateCpuScore(CpuInfo cpu)
+{
+    int score = 0;
+    
+    // Base score from cores and speed
+    score += cpu.PhysicalCores * 1000;
+    score += (int)(cpu.BaseClockGHz * 500);
+    
+    // Instruction set bonuses
+    if (cpu.SupportsAVX2) score += 2000;
+    if (cpu.SupportsAVX) score += 1000;
+    if (cpu.SupportsSSE42) score += 500;
+    
+    return score;
+}
+
+private int CalculateGpuScore(GpuInfo gpu)
+{
+    if (gpu == null) return 0;
+    
+    int score = 0;
+    
+    // VRAM score (roughly 1 point per MB)
+    score += (int)(gpu.VramMB / 10);
+    
+    // Architecture bonuses
+    if (gpu.CudaSupported) score += 5000;
+    if (gpu.OptixSupported) score += 3000;
+    if (gpu.Model.Contains("RTX")) score += 2000;
+    if (gpu.Model.Contains("GTX")) score += 1000;
+    
+    return score;
+}
+
+private int CalculateNodeTier(HardwareInfo hw)
+{
+    int totalScore = 0;
+    
+    // CPU contribution
+    totalScore += hw.Cpu.PhysicalCores * 100;
+    if (hw.Cpu.SupportsAVX2) totalScore += 200;
+    
+    // RAM contribution
+    totalScore += (int)(hw.Ram.TotalGB * 10);
+    
+    // GPU contribution (sum of all GPUs)
+    foreach (var gpu in hw.Gpus)
+    {
+        totalScore += (int)(gpu.VramMB / 100);  // 24GB VRAM = 240 points
+        if (gpu.CudaSupported) totalScore += 500;
+        if (gpu.OptixSupported) totalScore += 300;
+    }
+    
+    // Storage contribution (SSD bonus)
+    if (hw.Storage.IsSSD) totalScore += 100;
+    
+    // Network contribution
+    if (hw.Network.UploadSpeedMbps > 100) totalScore += 50;
+    
+    // Determine tier
+    if (totalScore > 2000) return 4;  // Enterprise
+    if (totalScore > 1000) return 3;  // High
+    if (totalScore > 500) return 2;   // Mid
+    return 1;                          // Low
+}
         private async Task PollForJobsAsync(CancellationToken cancellationToken)
         {
             // Check if we have a current job
@@ -1061,7 +1199,7 @@ namespace BlendFarm.Node.Services
             }
             
             _logger.LogError($"❌ Failed to get upload URL for frame {frame} after {maxRetries} attempts");
-            return (null, null);
+          return (null!, null!);
         }
         
         private async Task ReportCompletionAsync(string jobId, int frame, string s3Key, string outputPath, int renderTime, long fileSize, CancellationToken cancellationToken)
@@ -1143,10 +1281,17 @@ namespace BlendFarm.Node.Services
         }
 
         // Helper methods for system info
-        private string GetOperatingSystemInfo()
-        {
-            return $"{Environment.OSVersion.Platform} {Environment.OSVersion.Version}";
-        }
+       private OsInfo GetOperatingSystemInfo()
+{
+    return new OsInfo
+    {
+        Name = $"{Environment.OSVersion.Platform}",
+        Version = Environment.OSVersion.Version.ToString(),
+        Architecture = RuntimeInformation.OSArchitecture.ToString(),
+        Is64Bit = Environment.Is64BitOperatingSystem,
+        DotNetVersion = RuntimeInformation.FrameworkDescription
+    };
+}
 
         private async Task<float> GetCpuUsageAsync()
         {
@@ -1308,73 +1453,6 @@ namespace BlendFarm.Node.Services
                 _currentJobId = null!;
                 _currentProgress = 0;
             }
-        }
-
-        private int CalculateCpuScore()
-        {
-            return Environment.ProcessorCount * 1000;
-        }
-
-        private int CalculateGpuScore(string gpuName, int vramMB)
-        {
-            if (gpuName == "Unknown") return 0;
-            
-            if (vramMB >= 8000) return 5000;
-            if (vramMB >= 4000) return 3000;
-            return 1000;
-        }
-
-        private async Task<int> DetectNvidiaVramAsync()
-        {
-            try
-            {
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "nvidia-smi",
-                        Arguments = "--query-gpu=memory.total --format=csv,noheader",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                process.Start();
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-
-                if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
-                {
-                    var vramText = output.Trim();
-                    if (vramText.Contains("MiB"))
-                    {
-                        var vramValue = vramText.Replace(" MiB", "").Trim();
-                        if (int.TryParse(vramValue, out int vramMB))
-                        {
-                            return vramMB;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug($"NVIDIA VRAM detection failed: {ex.Message}");
-            }
-
-            return 0;
-        }
-
-        private class HardwareInfo
-        {
-            public string NodeId { get; set; }
-            public string Os { get; set; }
-            public int CpuCores { get; set; }
-            public string GpuName { get; set; }
-            public int GpuVRAM { get; set; }
-            public int RamGB { get; set; }
-            public string BlenderVersion { get; set; }
         }
 
         private class JobAssignmentResponse

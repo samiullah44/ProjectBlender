@@ -985,27 +985,27 @@ if ($blenderExe) {
             }
             
             // Build the host - pass blender path as parameter
-            var host = Host.CreateDefaultBuilder()
-                .ConfigureServices((context, services) =>
-                {
-                    // Register PythonRunnerService with the found blender path
-                    services.AddSingleton<PythonRunnerService>(provider => 
-                        new PythonRunnerService(
-                            provider.GetRequiredService<ILogger<PythonRunnerService>>(), 
-                            _blenderPath));
-                    
-                    // Register NodeBackendService
-                    services.AddHostedService<NodeBackendService>();
-                    
-                    // Configure logging
-                    services.AddLogging(configure =>
-                    {
-                        configure.AddConsole();
-                        configure.SetMinimumLevel(LogLevel.Information);
-                    });
-                })
-                .UseConsoleLifetime()
-                .Build();
+           var host = Host.CreateDefaultBuilder()
+    .ConfigureServices((context, services) =>
+    {
+        // Register PythonRunnerService
+        services.AddSingleton<PythonRunnerService>(provider => 
+            new PythonRunnerService(
+                provider.GetRequiredService<ILogger<PythonRunnerService>>(), 
+                _blenderPath));
+        
+        // Register NodeBackendService - ILoggerFactory will be auto-injected
+        services.AddHostedService<NodeBackendService>();
+        
+        // Configure logging
+        services.AddLogging(configure =>
+        {
+            configure.AddConsole();
+            configure.SetMinimumLevel(LogLevel.Information);
+        });
+    })
+    .UseConsoleLifetime()
+    .Build();
 
             Console.WriteLine("📋 Press Ctrl+C to stop the node");
             Console.WriteLine($"🔧 Version: 1.0 | Blender: {actualVersion} | .NET 10.0.102");

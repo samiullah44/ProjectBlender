@@ -16,7 +16,7 @@
     <TrimMode>link</TrimMode>
     
     <!-- Reduce warnings -->
-    <NoWarn>CS8600;CS8601;CS8602;CS8603;CS8604;CS8618</NoWarn>
+    <NoWarn>CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CA1416;$(NoWarn)</NoWarn>
     
     <!-- App info -->
     <AssemblyName>BlendFarm.Node</AssemblyName>
@@ -28,6 +28,8 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+     <PackageReference Include="System.Management" Version="10.0.3" />
+      <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.0" />
     <PackageReference Include="Grpc.Net.Client" Version="2.58.0" />
     <PackageReference Include="Google.Protobuf" Version="3.25.1" />
     <PackageReference Include="Grpc.Tools" Version="2.59.0">

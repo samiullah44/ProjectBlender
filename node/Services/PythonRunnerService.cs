@@ -199,7 +199,12 @@ namespace BlendFarm.Node.Services
                 var outputBuilder = new StringBuilder();
                 var errorBuilder = new StringBuilder();
                 var hasError = false;
-                var processExited = false;
+               bool processExited = false;
+process.Exited += (sender, e) =>
+{
+    processExited = true;
+    _logger.LogDebug("Blender process exited");
+};
                 
                 process.OutputDataReceived += (sender, e) =>
                 {
