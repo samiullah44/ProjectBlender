@@ -19,6 +19,8 @@ using System.Security.Authentication;
 using System.Collections.Concurrent;
 using BlendFarm.Node.Hardware;  // Add this at the top
 using BlendFarm.Node.Models;
+using BlendFarm.Node.Benchmark.Models;
+using BlendFarm.Node.Benchmark;
 
 namespace BlendFarm.Node.Services
 {
@@ -38,7 +40,9 @@ namespace BlendFarm.Node.Services
         private object _jobLock = new object();
         private bool _isBlenderAvailable = false;
         private ConcurrentDictionary<int, (string uploadUrl, string s3Key)> _frameUploadUrls;
-
+        private ComputeScoreService _computeScoreService;
+        private BenchmarkResult _benchmarkResult;
+        private ComputeScore _computeScore;
         private HardwareInfo _detectedHardware;
         
         // File cache for downloaded blend files
@@ -59,6 +63,7 @@ namespace BlendFarm.Node.Services
             _backendUrl = configuration["Backend:Url"] ?? "https://fpcp8k7whm.ap-south-1.awsapprunner.com";
             _frameUploadUrls = new ConcurrentDictionary<int, (string, string)>();
             _blendFileCache = new ConcurrentDictionary<string, (string, DateTime)>();
+             _computeScoreService = new ComputeScoreService(logger);
             
             // Configure HttpClient with better settings for AWS App Runner
             var handler = new HttpClientHandler
@@ -128,7 +133,7 @@ var hardwareDetector = new HardwareDetector(
         _logger.LogInformation($"Storage: {_detectedHardware.Storage.TotalGB}GB total ({_detectedHardware.Storage.FreeGB}GB free) on {_detectedHardware.Storage.Type} ({_detectedHardware.Storage.ReadSpeedMBs:F0} MB/s read)");
         _logger.LogInformation($"Network: ↑{_detectedHardware.Network.UploadSpeedMbps:F1} Mbps ↓{_detectedHardware.Network.DownloadSpeedMbps:F1} Mbps (latency: {_detectedHardware.Network.LatencyMs}ms)");
         _logger.LogInformation($"OS: {_detectedHardware.Os.Name} {_detectedHardware.Os.Architecture}");
-        _logger.LogInformation($"Fingerprint: {_detectedHardware.HardwareFingerprint.Substring(0, 16)}...");
+        _logger.LogInformation($"Fingerprint: {_detectedHardware.HardwareFingerprint.Substring(0, 40)}...");
         _logger.LogInformation("═══════════════════════════════════════");
     }
     catch (Exception ex)
@@ -147,6 +152,9 @@ var hardwareDetector = new HardwareDetector(
         Network = new NetworkInfo { UploadSpeedMbps = 10, DownloadSpeedMbps = 50 }
     };
     }
+
+            // Run benchmark if needed
+            await RunBenchmarkIfNeededAsync();
 
             // Register with backend
             var registered = await RegisterWithBackendAsync(_detectedHardware);
@@ -228,6 +236,42 @@ var hardwareDetector = new HardwareDetector(
                 _logger.LogError($"Cache cleanup failed: {ex.Message}");
             }
         }
+        private async Task RunBenchmarkIfNeededAsync()
+{
+    _logger.LogInformation("🎯 Checking benchmark status...");
+    
+    try
+    {
+        // Force benchmark on first run, otherwise use cache
+        var isFirstRun = !File.Exists(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "BlendFarm", "benchmark_cache.json"));
+        
+        _benchmarkResult = await _computeScoreService.GetOrRunBenchmarkAsync(isFirstRun);
+        
+        if (_benchmarkResult.IsComplete)
+        {
+            _computeScore = _computeScoreService.CalculateComputeScore(_benchmarkResult, _detectedHardware);
+            
+            _logger.LogInformation("═══════════════════════════════════════");
+            _logger.LogInformation($"🎯 COMPUTE PERFORMANCE");
+            _logger.LogInformation($"   GPU Score: {_computeScore.GpuScore:F0}");
+            _logger.LogInformation($"   CPU Score: {_computeScore.CpuScore:F0}");
+            _logger.LogInformation($"   Effective: {_computeScore.EffectiveScore:F0}");
+            _logger.LogInformation($"   Tier: {_computeScore.Tier}");
+            _logger.LogInformation($"   Blender: {_computeScore.BlenderVersion}");
+            _logger.LogInformation("═══════════════════════════════════════");
+        }
+        else
+        {
+            _logger.LogWarning($"⚠️ Benchmark incomplete: {_benchmarkResult.Error}");
+        }
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError($"❌ Benchmark failed: {ex.Message}");
+    }
+}
 
         private async Task VerifyBlenderAvailabilityAsync()
         {
@@ -479,6 +523,16 @@ var hardwareDetector = new HardwareDetector(
                     nodeTier = CalculateNodeTier(hardware)
                 },
                 
+                    // Benchmark scores
+                    performance = new
+                    {
+                        effectiveScore = _computeScore?.EffectiveScore ?? 0,
+                        gpuScore = _computeScore?.GpuScore ?? 0,
+                        cpuScore = _computeScore?.CpuScore ?? 0,
+                        tier = _computeScore?.Tier ?? "Unknown",
+                        benchmarkDate = _computeScore?.BenchmarkDate ?? DateTime.MinValue,
+                        blenderVersion = _computeScore?.BlenderVersion ?? "Unknown"
+                    },
                 ipAddress = hardware.Network.LocalIP ?? GetLocalIPAddress(),
                 publicIp = hardware.Network.PublicIP,
                 status = "online",

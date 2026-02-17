@@ -8,6 +8,8 @@ using System.Text.RegularExpressions;
 using System.Diagnostics;
 using Microsoft.Win32;
 using Newtonsoft.Json.Linq;
+using System.Management;
+using System.Collections.Generic;
 
 namespace BlendFarm.Node.Hardware
 {
@@ -62,73 +64,110 @@ namespace BlendFarm.Node.Hardware
 
             try
             {
-                // PRIMARY: GlobalMemoryStatusEx (ALWAYS works)
+                // PRIMARY: GlobalMemoryStatusEx (ALWAYS works) - NOW WITH DECIMALS
                 var memStatus = new MEMORYSTATUSEX();
                 memStatus.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
                 
                 if (GlobalMemoryStatusEx(ref memStatus))
                 {
-                    ram.TotalGB = memStatus.ullTotalPhys / (1024 * 1024 * 1024);
-                    ram.AvailableGB = memStatus.ullAvailPhys / (1024 * 1024 * 1024);
+                    // Convert to GB with 1 decimal place
+                    ram.TotalGB = Math.Round(memStatus.ullTotalPhys / (1024.0 * 1024.0 * 1024.0), 1);
+                    ram.AvailableGB = Math.Round(memStatus.ullAvailPhys / (1024.0 * 1024.0 * 1024.0), 1);
+                    
+                    _logger.LogDebug($"GlobalMemoryStatusEx: Total={ram.TotalGB}GB, Available={ram.AvailableGB}GB");
                 }
 
-                // Try WMI for type/speed
+                // Try multiple methods for RAM type and speed
+                bool typeDetected = false;
+
+                // METHOD 1: WMI (most accurate)
                 try
                 {
-                    using var searcher = new System.Management.ManagementObjectSearcher(
-                        "SELECT * FROM Win32_PhysicalMemory");
-                    
-                    ulong totalSpeed = 0;
-                    int moduleCount = 0;
-                    
-                    foreach (var item in searcher.Get())
+                    var (type, speed, moduleCount) = await GetRamInfoFromWmiAsync();
+                    if (!string.IsNullOrEmpty(type) && speed > 0)
                     {
-                        if (item["Speed"] != null)
-                        {
-                            totalSpeed += Convert.ToUInt64(item["Speed"]);
-                            moduleCount++;
-                        }
-                        
-                        if (item["Speed"] != null)
-                        {
-                            var speed = Convert.ToInt32(item["Speed"]);
-                            ram.SpeedMHz = Math.Max(ram.SpeedMHz, speed);
-                            
-                            ram.Type = speed switch
-                            {
-                                >= 6400 => "DDR5",
-                                >= 3200 => "DDR4",
-                                >= 1600 => "DDR3",
-                                _ => "DDR"
-                            };
-                        }
-                    }
-                    
-                    if (moduleCount > 0)
-                    {
-                        ram.SpeedMHz = (int)(totalSpeed / (ulong)moduleCount);
+                        ram.Type = type;
+                        ram.SpeedMHz = speed;
+                        typeDetected = true;
+                        _logger.LogDebug($"WMI detected: {type} @ {speed}MHz across {moduleCount} modules");
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug($"WMI RAM detection failed, trying PowerShell: {ex.Message}");
-                    
-                    // FALLBACK: PowerShell
-                    var (type, speed) = await GetRamInfoFromPowerShellAsync();
+                    _logger.LogDebug($"WMI RAM detection failed: {ex.Message}");
+                }
+
+                // METHOD 2: PowerShell (if WMI fails)
+                if (!typeDetected)
+                {
+                    try
+                    {
+                        var (type, speed, moduleCount) = await GetRamInfoFromPowerShellAsync();
+                        if (!string.IsNullOrEmpty(type) && speed > 0)
+                        {
+                            ram.Type = type;
+                            ram.SpeedMHz = speed;
+                            typeDetected = true;
+                            _logger.LogDebug($"PowerShell detected: {type} @ {speed}MHz across {moduleCount} modules");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug($"PowerShell RAM detection failed: {ex.Message}");
+                    }
+                }
+
+                // METHOD 3: Registry + CPU-based estimation
+                if (!typeDetected)
+                {
+                    var (type, speed) = GetRamInfoFromRegistry();
                     if (!string.IsNullOrEmpty(type))
                     {
                         ram.Type = type;
                         ram.SpeedMHz = speed;
-                    }
-                    
-                    // Try Registry as last resort
-                    if (string.IsNullOrEmpty(ram.Type))
-                    {
-                        var registryInfo = GetRamInfoFromRegistry();
-                        ram.Type = registryInfo.type;
-                        ram.SpeedMHz = registryInfo.speed;
+                        typeDetected = true;
+                        _logger.LogDebug($"Registry/CPU estimation: {type} @ {speed}MHz");
                     }
                 }
+
+                // METHOD 4: Command line tools (wmic)
+                if (!typeDetected)
+                {
+                    try
+                    {
+                        var (type, speed) = await GetRamInfoFromWmicAsync();
+                        if (!string.IsNullOrEmpty(type))
+                        {
+                            ram.Type = type;
+                            ram.SpeedMHz = speed;
+                            typeDetected = true;
+                            _logger.LogDebug($"WMIC detected: {type} @ {speed}MHz");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug($"WMIC detection failed: {ex.Message}");
+                    }
+                }
+
+                // Final fallback
+                if (!typeDetected)
+                {
+                    ram.Type = "Unknown";
+                    ram.SpeedMHz = EstimateRamSpeedFromCpu();
+                    _logger.LogDebug($"Using CPU-based estimation: {ram.SpeedMHz}MHz");
+                }
+
+                // Log total modules/slots if available
+                try
+                {
+                    var slots = await GetRamSlotInfoAsync();
+                    if (slots > 0)
+                    {
+                        _logger.LogDebug($"Detected {slots} RAM modules installed");
+                    }
+                }
+                catch { }
             }
             catch (Exception ex)
             {
@@ -139,14 +178,169 @@ namespace BlendFarm.Node.Hardware
             return ram;
         }
 
-        private async Task<(string type, int speed)> GetRamInfoFromPowerShellAsync()
+        private async Task<(string type, int speed, int moduleCount)> GetRamInfoFromWmiAsync()
+        {
+            string type = "Unknown";
+            int speed = 3200;
+            int moduleCount = 0;
+            List<int> speeds = new List<int>();
+            List<int> typeCodes = new List<int>();
+
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_PhysicalMemory");
+                
+                foreach (var item in searcher.Get())
+                {
+                    moduleCount++;
+                    
+                    // Get speed
+                    if (item["Speed"] != null && int.TryParse(item["Speed"].ToString(), out int moduleSpeed))
+                    {
+                        speeds.Add(moduleSpeed);
+                    }
+                    
+                    // Get memory type from SMBIOSMemoryType
+                    if (item["SMBIOSMemoryType"] != null && int.TryParse(item["SMBIOSMemoryType"].ToString(), out int typeCode))
+                    {
+                        typeCodes.Add(typeCode);
+                    }
+                    
+                    // Also check MemoryType (older systems)
+                    if (item["MemoryType"] != null && int.TryParse(item["MemoryType"].ToString(), out int memType) && typeCodes.Count == 0)
+                    {
+                        typeCodes.Add(memType);
+                    }
+                }
+
+                // Calculate average speed
+                if (speeds.Count > 0)
+                {
+                    speed = (int)Math.Round(speeds.Average());
+                }
+
+                // Determine RAM type from type codes
+                if (typeCodes.Count > 0)
+                {
+                    int mainTypeCode = typeCodes.GroupBy(x => x)
+                                                .OrderByDescending(g => g.Count())
+                                                .First().Key;
+                    
+                    type = mainTypeCode switch
+                    {
+                        34 => "DDR5",
+                        26 => "DDR4",
+                        24 => "DDR3",
+                        21 => "DDR2",
+                        20 => "DDR",
+                        0 => "Unknown",
+                        _ => mainTypeCode >= 34 ? "DDR5" : 
+                             mainTypeCode >= 26 ? "DDR4" : 
+                             mainTypeCode >= 24 ? "DDR3" : "Unknown"
+                    };
+                }
+                else if (speed >= 6400)
+                {
+                    type = "DDR5";
+                }
+                else if (speed >= 3200)
+                {
+                    type = "DDR4";
+                }
+                else if (speed >= 1600)
+                {
+                    type = "DDR3";
+                }
+                else if (speed >= 800)
+                {
+                    type = "DDR2";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug($"WMI detailed detection failed: {ex.Message}");
+                throw;
+            }
+
+            return (type, speed, moduleCount);
+        }
+
+        private async Task<(string type, int speed, int moduleCount)> GetRamInfoFromPowerShellAsync()
         {
             try
             {
                 var psi = new ProcessStartInfo
                 {
                     FileName = "powershell.exe",
-                    Arguments = "Get-WmiObject -Class Win32_PhysicalMemory | Select-Object Speed, SMBIOSMemoryType | ConvertTo-Json",
+                    Arguments = "Get-WmiObject -Class Win32_PhysicalMemory | Select-Object Speed, SMBIOSMemoryType, MemoryType, Capacity | ConvertTo-Json",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = System.Text.Encoding.UTF8
+                };
+                
+                using var process = Process.Start(psi);
+                if (process != null)
+                {
+                    var output = await process.StandardOutput.ReadToEndAsync();
+                    await process.WaitForExitAsync();
+                    
+                    if (!string.IsNullOrWhiteSpace(output) && output != "null" && output != "[]")
+                    {
+                        var token = JToken.Parse(output);
+                        var modules = token is JArray ? token as JArray : new JArray { token };
+                        
+                        int moduleCount = modules.Count;
+                        List<int> speeds = new List<int>();
+                        List<int> typeCodes = new List<int>();
+                        
+                        foreach (var module in modules)
+                        {
+                            // Get speed
+                            if (module["Speed"] != null)
+                            {
+                                int speed = module["Speed"].ToObject<int>();
+                                if (speed > 0) speeds.Add(speed);
+                            }
+                            
+                            // Get SMBIOS type
+                            if (module["SMBIOSMemoryType"] != null)
+                            {
+                                int typeCode = module["SMBIOSMemoryType"].ToObject<int>();
+                                if (typeCode > 0) typeCodes.Add(typeCode);
+                            }
+                            
+                            // Fallback to MemoryType
+                            if (typeCodes.Count == 0 && module["MemoryType"] != null)
+                            {
+                                int memType = module["MemoryType"].ToObject<int>();
+                                if (memType > 0) typeCodes.Add(memType);
+                            }
+                        }
+                        
+                        int avgSpeed = speeds.Count > 0 ? (int)Math.Round(speeds.Average()) : 3200;
+                        string type = DetermineRamType(typeCodes, avgSpeed);
+                        
+                        return (type, avgSpeed, moduleCount);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug($"PowerShell RAM detection failed: {ex.Message}");
+            }
+            
+            return ("Unknown", 3200, 0);
+        }
+
+        private async Task<(string type, int speed)> GetRamInfoFromWmicAsync()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "wmic",
+                    Arguments = "memorychip get Speed,MemoryType,SMBIOSMemoryType /format:csv",
                     RedirectStandardOutput = true,
                     UseShellExecute = false,
                     CreateNoWindow = true
@@ -158,36 +352,86 @@ namespace BlendFarm.Node.Hardware
                     var output = await process.StandardOutput.ReadToEndAsync();
                     await process.WaitForExitAsync();
                     
-                    if (!string.IsNullOrWhiteSpace(output) && output != "null")
+                    var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                    List<int> speeds = new List<int>();
+                    List<int> typeCodes = new List<int>();
+                    
+                    foreach (var line in lines.Skip(1)) // Skip header
                     {
-                        dynamic result = Newtonsoft.Json.JsonConvert.DeserializeObject(output);
-                        if (result != null)
+                        var parts = line.Split(',');
+                        if (parts.Length >= 3)
                         {
-                            if (result is Newtonsoft.Json.Linq.JArray array && array.Count > 0)
-                            {
-                                int speed = array[0]["Speed"]?.ToObject<int>() ?? 3200;
-                                int typeCode = array[0]["SMBIOSMemoryType"]?.ToObject<int>() ?? 0;
-                                
-                                string type = typeCode switch
-                                {
-                                    34 => "DDR5",
-                                    26 => "DDR4",
-                                    24 => "DDR3",
-                                    _ => "Unknown"
-                                };
-                                
-                                return (type, speed);
-                            }
+                            if (int.TryParse(parts[1], out int speed) && speed > 0)
+                                speeds.Add(speed);
+                            
+                            if (parts.Length >= 3 && int.TryParse(parts[2], out int typeCode))
+                                typeCodes.Add(typeCode);
                         }
                     }
+                    
+                    int avgSpeed = speeds.Count > 0 ? (int)Math.Round(speeds.Average()) : 3200;
+                    string type = DetermineRamType(typeCodes, avgSpeed);
+                    
+                    return (type, avgSpeed);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogDebug($"PowerShell RAM detection failed: {ex.Message}");
+                _logger.LogDebug($"WMIC detection failed: {ex.Message}");
             }
             
             return ("Unknown", 3200);
+        }
+
+        private async Task<int> GetRamSlotInfoAsync()
+        {
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_PhysicalMemory");
+                int count = 0;
+                foreach (var item in searcher.Get())
+                {
+                    count++;
+                }
+                return count;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private string DetermineRamType(List<int> typeCodes, int speed)
+        {
+            if (typeCodes.Count > 0)
+            {
+                int mainTypeCode = typeCodes.GroupBy(x => x)
+                                            .OrderByDescending(g => g.Count())
+                                            .First().Key;
+                
+                return mainTypeCode switch
+                {
+                    34 => "DDR5",
+                    26 => "DDR4",
+                    24 => "DDR3",
+                    21 => "DDR2",
+                    20 => "DDR",
+                    0 => "Unknown",
+                    _ => mainTypeCode >= 34 ? "DDR5" : 
+                         mainTypeCode >= 26 ? "DDR4" : 
+                         mainTypeCode >= 24 ? "DDR3" : "Unknown"
+                };
+            }
+            
+            // Fallback to speed-based detection
+            return speed switch
+            {
+                >= 6400 => "DDR5",
+                >= 3200 => "DDR4",
+                >= 1600 => "DDR3",
+                >= 800 => "DDR2",
+                _ => "Unknown"
+            };
         }
 
         private (string type, int speed) GetRamInfoFromRegistry()
@@ -197,22 +441,54 @@ namespace BlendFarm.Node.Hardware
                 using var key = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
                 if (key != null)
                 {
-                    // This is a rough estimate based on CPU generation
                     var cpuName = key.GetValue("ProcessorNameString")?.ToString() ?? "";
                     
-                    if (cpuName.Contains("12th") || cpuName.Contains("13th") || cpuName.Contains("14th"))
+                    // Based on CPU generation
+                    if (cpuName.Contains("12th") || cpuName.Contains("13th") || cpuName.Contains("14th") || 
+                        cpuName.Contains("Ryzen 7") || cpuName.Contains("Ryzen 9"))
                         return ("DDR5", 5600);
-                    else if (cpuName.Contains("10th") || cpuName.Contains("11th") || cpuName.Contains("Ryzen 5"))
+                    else if (cpuName.Contains("10th") || cpuName.Contains("11th") || cpuName.Contains("Ryzen 5") || 
+                             cpuName.Contains("Ryzen 3") || cpuName.Contains("Xeon"))
                         return ("DDR4", 3200);
-                    else if (cpuName.Contains("7th") || cpuName.Contains("8th") || cpuName.Contains("9th"))
+                    else if (cpuName.Contains("6th") || cpuName.Contains("7th") || cpuName.Contains("8th") || 
+                             cpuName.Contains("9th"))
                         return ("DDR4", 2666);
+                    else if (cpuName.Contains("2nd") || cpuName.Contains("3rd") || cpuName.Contains("4th") || 
+                             cpuName.Contains("5th"))
+                        return ("DDR3", 1600);
                     else
-                        return ("DDR4", 3200); // Modern default
+                        return ("DDR4", 3200);
                 }
             }
             catch { }
             
             return ("Unknown", 3200);
+        }
+
+        private int EstimateRamSpeedFromCpu()
+        {
+            try
+            {
+                using var key = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+                if (key != null)
+                {
+                    var cpuName = key.GetValue("ProcessorNameString")?.ToString() ?? "";
+                    
+                    if (cpuName.Contains("Xeon") || cpuName.Contains("E3-1270"))
+                        return 1600; // Your Xeon E3-1270 v3 uses DDR3 @ 1600MHz
+                    else if (cpuName.Contains("12th") || cpuName.Contains("13th"))
+                        return 5600;
+                    else if (cpuName.Contains("10th") || cpuName.Contains("11th"))
+                        return 3200;
+                    else if (cpuName.Contains("6th") || cpuName.Contains("7th") || cpuName.Contains("8th") || cpuName.Contains("9th"))
+                        return 2666;
+                    else if (cpuName.Contains("2nd") || cpuName.Contains("3rd") || cpuName.Contains("4th") || cpuName.Contains("5th"))
+                        return 1600;
+                }
+            }
+            catch { }
+            
+            return 3200;
         }
 
         private async Task<RamInfo> DetectLinuxRamAsync()
@@ -227,14 +503,14 @@ namespace BlendFarm.Node.Hardware
                 if (totalMatch.Success)
                 {
                     var totalKB = ulong.Parse(totalMatch.Groups[1].Value);
-                    ram.TotalGB = totalKB / (1024 * 1024);
+                    ram.TotalGB = Math.Round(totalKB / (1024.0 * 1024.0), 1);
                 }
                 
                 var availMatch = Regex.Match(memInfo, @"MemAvailable:\s+(\d+) kB");
                 if (availMatch.Success)
                 {
                     var availKB = ulong.Parse(availMatch.Groups[1].Value);
-                    ram.AvailableGB = availKB / (1024 * 1024);
+                    ram.AvailableGB = Math.Round(availKB / (1024.0 * 1024.0), 1);
                 }
                 
                 try
@@ -270,14 +546,14 @@ namespace BlendFarm.Node.Hardware
                 var totalStr = await RunBashCommandAsync("sysctl -n hw.memsize");
                 if (ulong.TryParse(totalStr, out ulong totalBytes))
                 {
-                    ram.TotalGB = totalBytes / (1024 * 1024 * 1024);
+                    ram.TotalGB = Math.Round(totalBytes / (1024.0 * 1024.0 * 1024.0), 1);
                 }
                 
                 var freeStr = await RunBashCommandAsync("memory_pressure | grep \"System-wide memory free percentage:\"");
                 var percentMatch = Regex.Match(freeStr, @"(\d+)%");
                 if (percentMatch.Success && int.TryParse(percentMatch.Groups[1].Value, out int freePercent))
                 {
-                    ram.AvailableGB = (ulong)((double)ram.TotalGB * freePercent / 100.0);
+                    ram.AvailableGB = Math.Round((double)ram.TotalGB * freePercent / 100.0, 1);
                 }
                 
                 var cpuType = await RunBashCommandAsync("sysctl -n machdep.cpu.brand_string");
@@ -328,8 +604,8 @@ namespace BlendFarm.Node.Hardware
             
             return new RamInfo
             {
-                TotalGB = (ulong)(totalBytes / (1024 * 1024 * 1024)),
-                AvailableGB = (ulong)((totalBytes - GC.GetTotalMemory(false)) / (1024 * 1024 * 1024)),
+                TotalGB = Math.Round(totalBytes / (1024.0 * 1024.0 * 1024.0), 1),
+                AvailableGB = Math.Round((totalBytes - GC.GetTotalMemory(false)) / (1024.0 * 1024.0 * 1024.0), 1),
                 Type = "Unknown",
                 SpeedMHz = 3200
             };

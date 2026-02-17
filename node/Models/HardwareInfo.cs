@@ -34,14 +34,15 @@ namespace BlendFarm.Node.Models
     }
 
     public class RamInfo
-    {
-        public ulong TotalGB { get; set; }                // 32
-        public ulong AvailableGB { get; set; }            // 28.5
-        public ulong TotalMB => TotalGB * 1024;
-        public ulong AvailableMB => AvailableGB * 1024;
-        public string Type { get; set; }                  // "DDR4" or "DDR5"
-        public int SpeedMHz { get; set; }                 // 3200
-    }
+{
+    public double TotalGB { get; set; }        // Changed from ulong to double
+    public double AvailableGB { get; set; }     // Changed from ulong to double
+    public ulong TotalMB => (ulong)(TotalGB * 1024);
+    public ulong AvailableMB => (ulong)(AvailableGB * 1024);
+    public string Type { get; set; }            // "DDR3", "DDR4", "DDR5"
+    public int SpeedMHz { get; set; }           // 1600, 3200, 5600 etc.
+}
+
 
     public class GpuInfo
     {
