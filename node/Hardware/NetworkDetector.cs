@@ -212,7 +212,28 @@ namespace BlendFarm.Node.Hardware
             }
             catch (Exception ex)
             {
-                _logger.LogInformation($"Speedtest CLI not available: {ex.Message}");
+                _logger.LogWarning($"Speedtest CLI failed or not available: {ex.Message}");
+                if (ex.Message.Contains("429"))
+                {
+                    _logger.LogWarning("⚠️ Speedtest CLI returned 429 (Too Many Requests).");
+                }
+                
+                // Strategy 2: Try Python-based Speedtest (User Request)
+                try
+                {
+                    _logger.LogInformation("🐍 Attempting Python-based speedtest fallback...");
+                    var pythonResult = await MeasureSpeedUsingPythonCLI();
+                    if (pythonResult.download > 0.1)
+                    {
+                        _logger.LogInformation($"✅ Python Speedtest: ↓{pythonResult.download:F1} Mbps ↑{pythonResult.upload:F1} Mbps");
+                        return (pythonResult.upload, pythonResult.download);
+                    }
+                }
+                catch (Exception pex)
+                {
+                    _logger.LogWarning($"Python speedtest failed: {pex.Message}");
+                }
+                
                 _logger.LogInformation("Falling back to HTTP-based speed test...");
             }
 
@@ -308,6 +329,73 @@ namespace BlendFarm.Node.Hardware
             
             var jsonOutput = output.ToString();
             return ParseSpeedtestJSON(jsonOutput);
+        }
+
+        private async Task<(double upload, double download)> MeasureSpeedUsingPythonCLI()
+        {
+            try
+            {
+                var pythonScriptUrl = "https://raw.githubusercontent.com/PeterLinuxOSS/speedtest-cli/master/speedtest.py";
+                
+                _logger.LogInformation("📥 Downloading speedtest.py script...");
+                var scriptContent = await _httpClient.GetStringAsync(pythonScriptUrl);
+                
+                var tempPath = Path.Combine(Path.GetTempPath(), "speedtest_temp.py");
+                await File.WriteAllTextAsync(tempPath, scriptContent);
+                
+                _logger.LogInformation("🚀 Running Python speedtest...");
+                
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = "python",
+                    Arguments = $"\"{tempPath}\" --simple",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var process = new Process { StartInfo = processInfo };
+                var output = new System.Text.StringBuilder();
+                
+                process.OutputDataReceived += (sender, e) => {
+                    if (!string.IsNullOrEmpty(e.Data)) output.AppendLine(e.Data);
+                };
+
+                process.Start();
+                process.BeginOutputReadLine();
+                
+                var completed = await Task.Run(() => process.WaitForExit(60000));
+                
+                if (!completed)
+                {
+                    process.Kill();
+                    throw new Exception("Python speedtest timed out");
+                }
+
+                // Parse simple output:
+                // Ping: 25.123 ms
+                // Download: 50.45 Mbit/s
+                // Upload: 10.12 Mbit/s
+                var result = output.ToString();
+                double download = 0, upload = 0;
+                
+                var downloadMatch = System.Text.RegularExpressions.Regex.Match(result, @"Download:\s+([\d.]+)");
+                var uploadMatch = System.Text.RegularExpressions.Regex.Match(result, @"Upload:\s+([\d.]+)");
+                
+                if (downloadMatch.Success) download = double.Parse(downloadMatch.Groups[1].Value);
+                if (uploadMatch.Success) upload = double.Parse(uploadMatch.Groups[1].Value);
+                
+                // Cleanup
+                try { File.Delete(tempPath); } catch {}
+                
+                return (upload, download);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"Python speedtest failed: {ex.Message}");
+                throw;
+            }
         }
 
         private (double upload, double download, double latency) ParseSpeedtestJSON(string json)

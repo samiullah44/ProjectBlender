@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.IO.Compression;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using BlendFarm.Node.Benchmark.Models;
@@ -33,13 +34,12 @@ namespace BlendFarm.Node.Benchmark
             Directory.CreateDirectory(_config.BenchmarkDir);
             Directory.CreateDirectory(_config.ResultsDir);
 
-            var benchmarkExe = Path.Combine(_config.BenchmarkDir, "benchmark-launcher.exe");
-
-            // Check if already downloaded
-            if (File.Exists(benchmarkExe))
+            // Check if already downloaded - search for the executable
+            var existingExe = FindBenchmarkCli(_config.BenchmarkDir);
+            if (!string.IsNullOrEmpty(existingExe))
             {
-                _logger.LogInformation("✅ Benchmark CLI already exists");
-                return benchmarkExe;
+                _logger.LogInformation($"✅ Benchmark CLI already exists at: {existingExe}");
+                return existingExe;
             }
 
             _logger.LogInformation("⬇️ Downloading Blender Benchmark CLI...");
@@ -80,6 +80,13 @@ namespace BlendFarm.Node.Benchmark
                 ZipFile.ExtractToDirectory(zipPath, _config.BenchmarkDir, true);
                 File.Delete(zipPath);
 
+                // Find the executable after extraction
+                var benchmarkExe = FindBenchmarkCli(_config.BenchmarkDir);
+                if (string.IsNullOrEmpty(benchmarkExe))
+                {
+                    throw new FileNotFoundException("Could not find benchmark-launcher executable after extraction.");
+                }
+
                 _logger.LogInformation($"✅ Benchmark CLI ready at: {benchmarkExe}");
                 return benchmarkExe;
             }
@@ -88,6 +95,74 @@ namespace BlendFarm.Node.Benchmark
                 _logger.LogError($"❌ Failed to download benchmark CLI: {ex.Message}");
                 throw;
             }
+        }
+
+        public async Task ResetCacheAsync()
+        {
+            _logger.LogInformation("🧹 Clearing Blender Benchmark CLI cache and logs...");
+            
+            var benchmarkExe = FindBenchmarkCli(_config.BenchmarkDir);
+            if (!string.IsNullOrEmpty(benchmarkExe))
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = benchmarkExe,
+                    Arguments = "clear_cache",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = _config.BenchmarkDir
+                };
+
+                try
+                {
+                    using var process = Process.Start(psi);
+                    await process.WaitForExitAsync();
+                    _logger.LogInformation("✅ CLI internal cache cleared.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning($"Failed to run CLI clear_cache: {ex.Message}");
+                }
+            }
+
+            // Manual cleanup of AppData (last resort or for locked files)
+            var appDataPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "blender-benchmark-launcher"
+            );
+
+            if (Directory.Exists(appDataPath))
+            {
+                try
+                {
+                    foreach (var file in Directory.GetFiles(appDataPath))
+                    {
+                        try { File.Delete(file); } catch { /* Ignore locked files */ }
+                    }
+                    _logger.LogInformation($"✅ Manual cleanup of {appDataPath} completed.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning($"Manual cleanup failed: {ex.Message}");
+                }
+            }
+        }
+
+        private string FindBenchmarkCli(string directory)
+        {
+            if (!Directory.Exists(directory)) return null;
+
+            // Try clear specific names first
+            var specificNames = new[] { "benchmark-launcher-cli.exe", "benchmark-launcher.exe" };
+            foreach (var name in specificNames)
+            {
+                var files = Directory.GetFiles(directory, name, SearchOption.AllDirectories);
+                if (files.Length > 0) return files[0];
+            }
+
+            return null;
         }
     }
 }

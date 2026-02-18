@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using System.Text.Json;
+using Newtonsoft.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using BlendFarm.Node.Benchmark.Models;
@@ -35,7 +35,7 @@ namespace BlendFarm.Node.Benchmark
             try
             {
                 var json = await File.ReadAllTextAsync(_cachePath);
-                var result = JsonSerializer.Deserialize<BenchmarkResult>(json);
+                var result = JsonConvert.DeserializeObject<BenchmarkResult>(json);
 
                 if (result != null && result.IsValid())
                 {
@@ -57,7 +57,7 @@ namespace BlendFarm.Node.Benchmark
         {
             try
             {
-                var json = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+                var json = JsonConvert.SerializeObject(result, Formatting.Indented);
                 await File.WriteAllTextAsync(_cachePath, json);
                 _logger.LogDebug("✅ Benchmark cached successfully");
             }
@@ -75,7 +75,7 @@ namespace BlendFarm.Node.Benchmark
             try
             {
                 var json = File.ReadAllText(_cachePath);
-                var cached = JsonSerializer.Deserialize<BenchmarkResult>(json);
+                var cached = JsonConvert.DeserializeObject<BenchmarkResult>(json);
 
                 if (cached == null) return true;
                 if (!cached.IsValid()) return true;

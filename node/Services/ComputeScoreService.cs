@@ -24,48 +24,49 @@ namespace BlendFarm.Node.Services
 
         public async Task<BenchmarkResult> GetOrRunBenchmarkAsync(bool force = false)
         {
-            // Check cache first
             if (!force)
             {
                 var cached = await _cache.GetCachedBenchmarkAsync();
                 if (cached != null)
-                {
                     return cached;
-                }
             }
 
-            _logger.LogInformation("🏁 No valid cached benchmark found. Running new benchmark...");
+            _logger.LogInformation("🏁 No cached benchmark found. Running new benchmark...");
 
             try
             {
-                // Download benchmark CLI if needed
-                var benchmarkExe = await _downloader.EnsureBenchmarkAsync();
+                var vray = new VRayBenchmark(_logger, _config);
+                var result = await vray.RunBenchmarkAsync();
 
-                // Run benchmark
-                var runner = new BlenderBenchmarkRunner(_logger, _config, benchmarkExe);
-                var result = await runner.RunFullBenchmarkAsync();
+                if (result.IsComplete && (result.CpuScore > 0 || result.GpuScore > 0))
+                {
+                    await _cache.SaveBenchmarkAsync(result);
+                    return result;
+                }
+
+                _logger.LogWarning("⚠️ V-Ray benchmark failed, falling back to Blender...");
+                var benchmarkExe = await _downloader.EnsureBenchmarkAsync();
+                var blenderRunner = new BlenderBenchmarkRunner(_logger, _config, benchmarkExe);
+                result = await blenderRunner.RunFullBenchmarkAsync();
+                result.BenchmarkType = "Blender";
 
                 if (result.IsComplete)
-                {
-                    // Cache results
                     await _cache.SaveBenchmarkAsync(result);
-                }
 
                 return result;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"❌ Benchmark failed: {ex.Message}");
-                
-                // Return a minimal result with error
+                _logger.LogError($"❌ Benchmark process failed: {ex.Message}");
                 return new BenchmarkResult
                 {
                     RunDate = DateTime.UtcNow,
                     IsComplete = false,
                     Error = ex.Message,
-                    GpuScore = 0,
                     CpuScore = 0,
-                    EffectiveScore = 0
+                    GpuScore = 0,
+                    EffectiveScore = 0,
+                    BenchmarkType = "Unknown"
                 };
             }
         }
@@ -74,9 +75,9 @@ namespace BlendFarm.Node.Services
         {
             return new ComputeScore
             {
-                EffectiveScore = benchmark.EffectiveScore,
-                GpuScore = benchmark.GpuScore,
                 CpuScore = benchmark.CpuScore,
+                GpuScore = benchmark.GpuScore,
+                EffectiveScore = benchmark.EffectiveScore,
                 Tier = DetermineTier(benchmark.EffectiveScore),
                 BenchmarkDate = benchmark.RunDate,
                 BlenderVersion = benchmark.BlenderVersion,

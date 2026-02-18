@@ -22,9 +22,10 @@ namespace BlendFarm.Node.Benchmark.Models
         // Status
         public bool IsComplete { get; set; }
         public string Error { get; set; }
+        public string BenchmarkType { get; set; } // "Blender" or "V-Ray"
         
         // Cache validity
-        public bool IsValid() => (DateTime.UtcNow - RunDate).TotalDays < 7;
+        public bool IsValid() => IsComplete && (GpuScore > 0 || CpuScore > 0) && (DateTime.UtcNow - RunDate).TotalDays < 7;
     }
 
     public class SceneResult
@@ -35,14 +36,31 @@ namespace BlendFarm.Node.Benchmark.Models
         public double RenderTime { get; set; }
         public int Samples { get; set; }
     }
-
-    public class BenchmarkConfiguration
+public class BenchmarkConfiguration
+{
+    // Blender Benchmark (fallback)
+    public string DownloadUrl { get; set; } = "https://download.blender.org/release/BlenderBenchmark2.0/launcher/benchmark-launcher-cli-3.2.0-windows.zip";
+    
+    // V-Ray Benchmark (primary)
+    public string VRayDownloadUrl { get; set; } = "https://download.chaos.com/api/v3/builds/latest/download?product=V-Ray+Benchmark&build-type=official&tags=windows-x64-cli";
+    
+    // Fallback URLs for V-Ray
+    public List<string> VRayFallbackUrls { get; set; } = new()
     {
-        public string DownloadUrl { get; set; } = "https://download.blender.org/release/BlenderBenchmark2.0/benchmark-launcher-2.0.5-windows.zip";
-        public string BenchmarkDir { get; set; }
-        public string ResultsDir { get; set; }
-        public List<string> Scenes { get; set; } = new() { "monster", "classroom", "bmw" };
-        public List<string> Devices { get; set; } = new() { "CPU", "CUDA", "OPTIX" };
-        public int TimeoutMinutes { get; set; } = 10;
-    }
+        "https://download.chaos.com/vray-benchmark-cli-windows.exe",
+        "https://download.chaosgroup.com/vray-benchmark-cli-windows.exe",
+        "https://files.chaosgroup.com/vray-benchmark-cli-windows.exe"
+    };
+    
+    // Directories
+    public string BenchmarkDir { get; set; }
+    public string ResultsDir { get; set; }
+    public string VRayBenchmarkDir { get; set; }
+    public string VRayResultsDir { get; set; }
+    
+    // Test settings
+    public List<string> Scenes { get; set; } = new() { "monster", "classroom", "bmw" };
+    public List<string> Devices { get; set; } = new() { "CPU", "CUDA", "OPTIX" };
+    public int TimeoutMinutes { get; set; } = 10;
+}
 }
