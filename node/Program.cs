@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using BlendFarm.Node.Services;
 using System;
 using System.IO;
@@ -983,11 +984,42 @@ if ($blenderExe) {
                 File.WriteAllText(Path.Combine(scriptsDir, "render.py"), 
                     "# Render script will be generated automatically");
             }
+            // Handle Persistent Friendly Name
+            var exePath = Environment.ProcessPath ?? AppDomain.CurrentDomain.BaseDirectory;
+            var baseDir = Path.GetDirectoryName(exePath) ?? AppDomain.CurrentDomain.BaseDirectory;
             
+            // Ensure appsettings.json exists (David fallback)
+            EnsureAppSettingsExists(baseDir);
+
+            var config = new ConfigurationBuilder()
+                .SetBasePath(baseDir)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
+
+            string currentFriendlyName = config["NodeSettings:FriendlyName"] ?? "node_auto";
+            string finalFriendlyName = currentFriendlyName;
+
+            if (currentFriendlyName == "node_auto")
+            {
+                Console.Write("\n🏷️  Enter a friendly name for this node (e.g. 'David-node') or leave empty for auto: ");
+                string inputName = Console.ReadLine();
+                if (!string.IsNullOrWhiteSpace(inputName))
+                {
+                    finalFriendlyName = inputName.Trim();
+                    SaveFriendlyName(finalFriendlyName);
+                    Console.WriteLine($"✅ Friendly name '{finalFriendlyName}' saved to appsettings.json");
+                }
+            }
+
+            var identityService = new NodeIdentityService(finalFriendlyName == "node_auto" ? null : finalFriendlyName);
+
             // Build the host - pass blender path as parameter
            var host = Host.CreateDefaultBuilder()
     .ConfigureServices((context, services) =>
     {
+        // Register identity service
+        services.AddSingleton(identityService);
+
         // Register PythonRunnerService
         services.AddSingleton<PythonRunnerService>(provider => 
             new PythonRunnerService(
@@ -1012,6 +1044,84 @@ if ($blenderExe) {
             Console.WriteLine(new string('═', 50));
             
             await host.RunAsync();
+        }
+
+        private static void SaveFriendlyName(string name)
+        {
+            try
+            {
+                var exePath = Environment.ProcessPath ?? AppDomain.CurrentDomain.BaseDirectory;
+                var baseDir = Path.GetDirectoryName(exePath) ?? AppDomain.CurrentDomain.BaseDirectory;
+                var appSettingsPath = Path.Combine(baseDir, "appsettings.json");
+                if (!File.Exists(appSettingsPath)) return;
+
+                var json = File.ReadAllText(appSettingsPath);
+                dynamic config = Newtonsoft.Json.JsonConvert.DeserializeObject(json);
+                
+                if (config.NodeSettings == null) config.NodeSettings = new Newtonsoft.Json.Linq.JObject();
+                config.NodeSettings.FriendlyName = name;
+
+                string updatedJson = Newtonsoft.Json.JsonConvert.SerializeObject(config, Newtonsoft.Json.Formatting.Indented);
+                File.WriteAllText(appSettingsPath, updatedJson);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Failed to save friendly name to appsettings.json: {ex.Message}");
+            }
+        }
+
+        private static void EnsureAppSettingsExists(string baseDir)
+        {
+            var appSettingsPath = Path.Combine(baseDir, "appsettings.json");
+            if (File.Exists(appSettingsPath)) return;
+
+            try
+            {
+                Console.WriteLine("📄 appsettings.json not found. Generating default configuration...");
+                var defaultConfig = new
+                {
+                    Logging = new
+                    {
+                        LogLevel = new
+                        {
+                            Default = "Information",
+                            Microsoft = "Warning",
+                            Microsoft_Hosting_Lifetime = "Information",
+                            System_Net_Http_HttpClient = "Warning"
+                        }
+                    },
+                    NodeSettings = new
+                    {
+                        NodeId = "node_auto",
+                        FriendlyName = "node_auto",
+                        MaxConcurrentJobs = 1,
+                        HeartbeatIntervalSeconds = 30,
+                        BlenderPath = "blender",
+                        EnableDebugLogging = true,
+                        DownloadRetryCount = 3,
+                        DownloadTimeoutMinutes = 15
+                    },
+                    Backend = new
+                    {
+                        Url = "http://localhost:3000",
+                        HealthCheckEndpoint = "/health",
+                        ApiTimeoutSeconds = 120,
+                        EnableSslVerification = true
+                    }
+                };
+
+                // Fix dot in keys which dynamic doesn't like well
+                string json = Newtonsoft.Json.JsonConvert.SerializeObject(defaultConfig, Newtonsoft.Json.Formatting.Indented)
+                    .Replace("Microsoft_Hosting_Lifetime", "Microsoft.Hosting.Lifetime")
+                    .Replace("System_Net_Http_HttpClient", "System.Net.Http.HttpClient");
+
+                File.WriteAllText(appSettingsPath, json);
+                Console.WriteLine($"✅ Generated: {appSettingsPath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Failed to generate default appsettings.json: {ex.Message}");
+            }
         }
         
         static async Task CreateTestBlendFileAsync()

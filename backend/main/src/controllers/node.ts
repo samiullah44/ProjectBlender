@@ -5,6 +5,7 @@ import { IFrameAssignment } from '../types/job.types';
 import { AppError } from '../middleware/error';
 import { S3Service } from '../services/S3Service';
 import { AuthRequest } from '../middleware/auth';
+import os from 'os';
 
 const s3Service = new S3Service();
 
@@ -172,6 +173,45 @@ export class NodeController {
       const nodeInfo = req.body;
       const nodeId = nodeInfo.nodeId || `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const now = new Date();
+      const incomingFingerprint: string | undefined = nodeInfo.hardware?.hardwareFingerprint
+        || nodeInfo.hardwareFingerprint;
+
+      // ── Security: Block duplicate hardware registrations ──────────────────
+      if (incomingFingerprint) {
+        const hwMatch = await Node.findOne({ hardwareFingerprint: incomingFingerprint });
+        if (hwMatch && hwMatch.nodeId !== nodeId) {
+          // Same hardware, but a DIFFERENT nodeId → duplicate device
+          if (hwMatch.status !== 'offline') {
+            // Active duplicate → reject
+            console.warn(`🚫 Duplicate hardware fingerprint from ${nodeId} — already registered as ${hwMatch.nodeId}`);
+            res.status(409).json({
+              error: 'HARDWARE_ALREADY_REGISTERED',
+              message: 'This hardware is already registered under a different node. Only one node per physical machine is allowed.',
+              existingNodeId: hwMatch.nodeId
+            });
+            return;
+          } else {
+            // The previous node with this hardware is offline → reuse its record
+            console.log(`🔄 Reclaiming offline node ${hwMatch.nodeId} for hardware fingerprint re-registration as ${nodeId}`);
+            hwMatch.nodeId = nodeId;
+            hwMatch.status = 'online';
+            hwMatch.lastHeartbeat = now;
+            hwMatch.updatedAt = now;
+            hwMatch.connectionCount = (hwMatch.connectionCount || 0) + 1;
+            if (userId) hwMatch.userId = userId as any;
+            if (nodeInfo.hardware) hwMatch.hardware = { ...hwMatch.hardware, ...nodeInfo.hardware };
+            (hwMatch as any).hardwareFingerprint = incomingFingerprint;
+            (hwMatch as any).publicIp = nodeInfo.publicIp || hwMatch.ipAddress;
+            (hwMatch as any).hostname = nodeInfo.hostname || os.hostname();
+            if (nodeInfo.name) hwMatch.name = nodeInfo.name;
+            await hwMatch.save();
+            console.log(`🔒 Node hardware reclaimed: ${nodeInfo.name || nodeId} (fp: ${incomingFingerprint.substring(0, 8)}...)`);
+            res.json({ success: true, message: 'Node re-registered (hardware reclaimed)', nodeId, heartbeatInterval: 30000 });
+            return;
+          }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       const existingNode = await Node.findOne({ nodeId });
 
@@ -185,11 +225,34 @@ export class NodeController {
 
         // Link node to user if not already linked (for backward compatibility)
         if (!existingNode.userId && userId) {
-          existingNode.userId = userId;
+          existingNode.userId = userId as any;
         }
 
-        if (nodeInfo.hardware) existingNode.hardware = { ...existingNode.hardware, ...nodeInfo.hardware };
-        if (nodeInfo.capabilities) existingNode.capabilities = { ...existingNode.capabilities, ...nodeInfo.capabilities };
+        if (nodeInfo.hardware) {
+          existingNode.hardware = {
+            ...existingNode.hardware,
+            ...nodeInfo.hardware
+          };
+        }
+        if (nodeInfo.capabilities) {
+          existingNode.capabilities = {
+            ...existingNode.capabilities,
+            ...nodeInfo.capabilities
+          };
+        }
+        if (nodeInfo.performance) {
+          existingNode.performance = {
+            ...(existingNode.performance || {}),
+            ...nodeInfo.performance
+          };
+        }
+
+        // Persist fingerprint / IP fields
+        if (incomingFingerprint) existingNode.hardwareFingerprint = incomingFingerprint;
+        if (nodeInfo.publicIp) existingNode.publicIp = nodeInfo.publicIp;
+        if (nodeInfo.hostname) existingNode.hostname = nodeInfo.hostname;
+        if (nodeInfo.hardwareVerifiedAt) existingNode.hardwareVerifiedAt = nodeInfo.hardwareVerifiedAt;
+        if (nodeInfo.name) existingNode.name = nodeInfo.name;
 
         // Initialize performance tracking if not exists
         if (!existingNode.performance) {
@@ -197,21 +260,22 @@ export class NodeController {
             framesRendered: 0,
             totalRenderTime: 0,
             avgFrameTime: 0,
-            reliabilityScore: 1.0,
+            reliabilityScore: 100,
             lastUpdated: now
           };
         }
 
         await existingNode.save();
 
-        console.log(`🔄 Node reconnected: ${nodeId} (status: ${existingNode.status})`);
+        console.log(`🔄 Node reconnected: ${existingNode.name || nodeId} (${existingNode.status})`);
 
-        // Broadcast node registration via WebSocket
+        // Broadcast node registration via WebSocket (include all hardware data)
         const wsService = NodeController.getWsService(req);
         if (wsService) {
           wsService.broadcastNodeUpdate(nodeId, {
             status: existingNode.status,
             hardware: existingNode.hardware,
+            performance: existingNode.performance,
             lastHeartbeat: existingNode.lastHeartbeat,
             registeredAt: now.toISOString()
           });
@@ -231,31 +295,42 @@ export class NodeController {
           name: nodeInfo.name || `Node-${nodeId.substring(0, 8)}`,
           status: 'online',
           os: nodeInfo.os || 'Unknown',
-          hardware: nodeInfo.hardware || {
+          hardware: {
             cpuCores: 1,
-            cpuScore: 1000,
+            cpuScore: 0,
             gpuName: 'Unknown',
             gpuVRAM: 0,
             gpuScore: 0,
-            ramGB: 8,
-            blenderVersion: 'unknown'
+            ramGB: 0,
+            blenderVersion: 'unknown',
+            ...nodeInfo.hardware
           },
-          capabilities: nodeInfo.capabilities || {
+          capabilities: {
             supportedEngines: ['CYCLES', 'EEVEE'],
             supportedGPUs: ['CUDA', 'OPTIX'],
-            maxSamples: 4096,
-            maxResolutionX: 7680,
-            maxResolutionY: 4320,
-            supportsTiles: true
+            maxSamples: 1024,
+            maxResolutionX: 3840,
+            maxResolutionY: 2160,
+            supportsTiles: true,
+            ...nodeInfo.capabilities
           },
           performance: {
+            tier: 'Unknown',
+            effectiveScore: 0,
+            gpuScore: 0,
+            cpuScore: 0,
             framesRendered: 0,
             totalRenderTime: 0,
             avgFrameTime: 0,
-            reliabilityScore: 1.0,
-            lastUpdated: now
+            reliabilityScore: 100,
+            lastUpdated: now,
+            ...nodeInfo.performance
           },
           ipAddress: nodeInfo.ipAddress || '127.0.0.1',
+          hardwareFingerprint: incomingFingerprint,
+          publicIp: nodeInfo.publicIp,
+          hostname: nodeInfo.hostname,
+          hardwareVerifiedAt: nodeInfo.hardwareVerifiedAt || now,
           lastHeartbeat: now,
           lastStatusChange: now,
           connectionCount: 1,
@@ -266,7 +341,7 @@ export class NodeController {
 
         await node.save();
 
-        console.log('✅ Node registered:', nodeId);
+        console.log('✅ Node registered:', nodeId, incomingFingerprint ? `(fp: ${incomingFingerprint.substring(0, 12)}…)` : '');
 
         // Broadcast new node registration via WebSocket
         const wsService = NodeController.getWsService(req);
@@ -375,8 +450,8 @@ export class NodeController {
           timestamp: now
         });
 
-        if (node.resourceHistory.length > 10) {
-          node.resourceHistory = node.resourceHistory.slice(-10);
+        if (node.resourceHistory.length > 20) {
+          node.resourceHistory = node.resourceHistory.slice(-20);
         }
       }
 
@@ -385,7 +460,16 @@ export class NodeController {
         node.set('currentProgress', heartbeatData.progress);
       }
 
-      // Update performance metrics if frame render time is provided
+      // Update performance metrics if provided
+      if (heartbeatData.performance && node.performance) {
+        node.performance = {
+          ...JSON.parse(JSON.stringify(node.performance)),
+          ...heartbeatData.performance,
+          lastUpdated: now
+        };
+      }
+
+      // Update legacy metrics if frame render time is provided
       if (heartbeatData.lastFrameTime && node.performance) {
         const framesRendered = (node.performance.framesRendered || 0) + 1;
         const totalTime = (node.performance.totalRenderTime || 0) + heartbeatData.lastFrameTime;
@@ -395,11 +479,11 @@ export class NodeController {
         node.performance.avgFrameTime = totalTime / framesRendered;
         node.performance.lastUpdated = now;
 
-        // Update reliability score (simple implementation)
+        // Update reliability score
         if (heartbeatData.frameSuccess === true) {
-          node.performance.reliabilityScore = Math.min(1.0, (node.performance.reliabilityScore || 1.0) * 1.01);
+          node.performance.reliabilityScore = Math.min(100, (node.performance.reliabilityScore || 100) + 1);
         } else if (heartbeatData.frameSuccess === false) {
-          node.performance.reliabilityScore = Math.max(0.1, (node.performance.reliabilityScore || 1.0) * 0.9);
+          node.performance.reliabilityScore = Math.max(10, (node.performance.reliabilityScore || 100) - 5);
         }
       }
 
@@ -738,7 +822,24 @@ export class NodeController {
         // Broadcast job assignment via WebSocket
         const wsService = NodeController.getWsService(req);
         if (wsService) {
-          // Broadcast job update
+          // Push job directly to the node if it is connected via WebSocket
+          const wsDelivered = wsService.sendToNode(nodeId, {
+            type: 'job_assigned',
+            jobId: result.jobId,
+            frames: assignedFrames,
+            blendFileUrl,
+            frameUploadUrls,
+            settings: result.settings,
+            totalFrames: result.frames.total,
+            selectedFrames: result.frames.selected || [],
+            assignedFramesCount: assignedFrames.length,
+            jobProgress: progress
+          });
+          if (wsDelivered) {
+            console.log(`📡 Job pushed to node ${nodeId} via WebSocket`);
+          }
+
+          // Broadcast job update to dashboard
           await wsService.broadcastJobUpdate(result.jobId);
 
           // Broadcast node update

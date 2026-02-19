@@ -13,6 +13,8 @@ namespace BlendFarm.Node.Models
         public StorageInfo Storage { get; set; } = new();
         public OsInfo Os { get; set; } = new();
         public NetworkInfo Network { get; set; } = new();
+        public IpInfo Ip { get; set; } = new();
+        public FingerprintInfo Fingerprint { get; set; } = new();
         public string HardwareFingerprint { get; set; }
     }
 
@@ -31,6 +33,7 @@ namespace BlendFarm.Node.Models
         public bool SupportsSSE42 { get; set; }
         public int L2CacheKB { get; set; }
         public int L3CacheKB { get; set; }
+        public int CpuScore { get; set; }                // Benchmarked or heuristic score
     }
 
     public class RamInfo
@@ -62,6 +65,7 @@ namespace BlendFarm.Node.Models
         public int CoreCount { get; set; }                 // CUDA cores / Stream processors
         public int Temperature { get; set; }                // Current temp (if available)
         public int Utilization { get; set; }                // Current usage %
+        public int GpuScore { get; set; }                   // Benchmarked or heuristic score
     }
 
     public class StorageInfo
@@ -97,5 +101,20 @@ namespace BlendFarm.Node.Models
         public string PublicIP { get; set; }                // "203.0.113.1"
         public string MacAddress { get; set; }              // "00-14-22-01-23-45"
         public string InterfaceName { get; set; }           // "Ethernet"
+    }
+
+    public class IpInfo
+    {
+        public string Hostname { get; set; }                 // "DESKTOP-ABC123"
+        public string LocalIP { get; set; }                  // "192.168.1.100" (preferred outbound LAN IP)
+        public List<string> AllLocalIPs { get; set; } = new(); // All active LAN IPs
+        public string PublicIP { get; set; }                 // "203.0.113.1" (WAN / internet-visible IP)
+    }
+
+    public class FingerprintInfo
+    {
+        public string BiosUuid { get; set; }           // UEFI / BIOS UUID (most unique)
+        public string MotherboardSerial { get; set; }  // Win32_BaseBoard.SerialNumber
+        public string DiskSerial { get; set; }         // Win32_DiskDrive Index=0
     }
 }

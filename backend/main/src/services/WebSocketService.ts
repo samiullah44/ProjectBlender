@@ -9,12 +9,15 @@ interface Client {
   subscriptions: Set<string>;
   userId?: string;
   nodeId?: string;
+  isNode?: boolean;   // true when this is a C# node client (not a browser)
 }
 
 export class WebSocketService {
   private wss: WebSocketServer;
   private clients: Set<Client> = new Set();
   private jobSubscriptions: Map<string, Set<Client>> = new Map();
+  // keyed by nodeId — only one entry per node (latest connection wins)
+  private nodeClients: Map<string, Client> = new Map();
 
   constructor(server: Server) {
     this.wss = new WebSocketServer({ server });
@@ -44,6 +47,11 @@ export class WebSocketService {
       ws.on('close', () => {
         console.log(`❌ WebSocket connection closed`);
         this.clients.delete(client);
+        // If this was a node, clear its WS connection state
+        if (client.isNode && client.nodeId) {
+          this.nodeClients.delete(client.nodeId);
+          this.markNodeWsDisconnected(client.nodeId).catch(() => { });
+        }
         // Clean up subscriptions
         for (const [jobId, clients] of this.jobSubscriptions) {
           clients.delete(client);
@@ -87,6 +95,16 @@ export class WebSocketService {
           break;
         case 'ping':
           this.send(client, { type: 'pong', timestamp: Date.now() });
+          break;
+        // ── Node-originated messages ──────────────────────────────────────
+        case 'node_connect':
+          await this.handleNodeConnect(client, message);
+          break;
+        case 'heartbeat':
+          await this.handleNodeHeartbeat(client, message);
+          break;
+        case 'pong':
+          // Echo from node — no action needed
           break;
         default:
           this.send(client, {
@@ -174,6 +192,133 @@ export class WebSocketService {
     client.subscriptions.delete(event);
     console.log(`📡 Client unsubscribed from ${event}`);
   }
+
+  // ── Node connection & heartbeat handlers ──────────────────────────────────
+
+  private async handleNodeConnect(client: Client, message: any): Promise<void> {
+    const { nodeId, hardwareFingerprint, hostname, localIP, publicIP } = message;
+    if (!nodeId) {
+      this.send(client, { type: 'error', message: 'node_connect requires nodeId' });
+      return;
+    }
+
+    client.nodeId = nodeId;
+    client.isNode = true;
+    // Replace any stale connection for this node
+    const existing = this.nodeClients.get(nodeId);
+    if (existing && existing !== client) {
+      existing.ws.close(1000, 'replaced by newer connection');
+      this.clients.delete(existing);
+    }
+    this.nodeClients.set(nodeId, client);
+
+    try {
+      await Node.updateOne(
+        { nodeId },
+        {
+          $set: {
+            wsConnected: true,
+            wsConnectedAt: new Date(),
+            status: 'online',
+            lastHeartbeat: new Date(),
+            updatedAt: new Date(),
+            ...(hardwareFingerprint && { hardwareFingerprint }),
+            ...(publicIP && { publicIp: publicIP }),
+            ...(hostname && { hostname }),
+            ...(localIP && { ipAddress: localIP })
+          }
+        }
+      );
+    } catch (err) {
+      console.error(`Failed to update node ${nodeId} on WS connect:`, err);
+    }
+
+    console.log(`✅ Node connected via WebSocket: ${nodeId}`);
+    this.send(client, { type: 'ack', nodeId, message: 'connected', timestamp: Date.now() });
+
+    // Notify dashboard
+    this.broadcastSystemUpdate({ type: 'node_ws_connected', data: { nodeId, timestamp: Date.now() } });
+  }
+
+  private async handleNodeHeartbeat(client: Client, message: any): Promise<void> {
+    const nodeId = client.nodeId || message.nodeId;
+    if (!nodeId) return;
+
+    const now = new Date();
+    try {
+      const resources = message.resources || {};
+
+      await Node.updateOne(
+        { nodeId },
+        {
+          $set: {
+            lastHeartbeat: now,
+            updatedAt: now,
+            status: 'online',
+            'lastResources': { ...resources, timestamp: now }
+          },
+          $push: {
+            resourceHistory: {
+              $each: [{ ...resources, timestamp: now }],
+              $slice: -10
+            }
+          }
+        }
+      );
+    } catch (err) {
+      console.error(`Failed to update node ${nodeId} heartbeat:`, err);
+    }
+
+    console.log(`💓 WS Heartbeat from ${nodeId}`);
+
+    // Acknowledge back to node
+    this.send(client, { type: 'ack', nodeId, timestamp: Date.now() });
+
+    // Broadcast heartbeat to dashboard subscribers
+    this.broadcastSystemUpdate({
+      type: 'node_heartbeat',
+      data: { nodeId, status: 'online', timestamp: now.toISOString() }
+    });
+    await this.broadcastNodeUpdate(nodeId, {
+      status: 'online',
+      lastHeartbeat: now,
+      resources: message.resources
+    });
+  }
+
+  private async markNodeWsDisconnected(nodeId: string): Promise<void> {
+    try {
+      await Node.updateOne(
+        { nodeId },
+        { $set: { wsConnected: false, updatedAt: new Date() } }
+      );
+    } catch { /* ignore */ }
+    console.log(`⚠️  Node ${nodeId} WS disconnected`);
+    this.broadcastSystemUpdate({ type: 'node_ws_disconnected', data: { nodeId, timestamp: Date.now() } });
+  }
+
+  // ── Node-push API (used by NodeController to push jobs to nodes) ──────────
+
+  /** Push a message directly to a connected node, returns true if delivered */
+  public sendToNode(nodeId: string, data: any): boolean {
+    const client = this.nodeClients.get(nodeId);
+    if (!client || client.ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      client.ws.send(JSON.stringify({ ...data, timestamp: Date.now() }));
+      return true;
+    } catch (err) {
+      console.error(`Failed to send to node ${nodeId}:`, err);
+      return false;
+    }
+  }
+
+  /** Returns true if the node has an active WS connection */
+  public isNodeConnected(nodeId: string): boolean {
+    const client = this.nodeClients.get(nodeId);
+    return !!client && client.ws.readyState === WebSocket.OPEN;
+  }
+
+  // ── Auth handler ──────────────────────────────────────────────────────────
 
   private async handleAuth(client: Client, message: any) {
     try {

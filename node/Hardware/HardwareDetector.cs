@@ -15,6 +15,8 @@ namespace BlendFarm.Node.Hardware
         private readonly StorageDetector _storageDetector;
         private readonly OsDetector _osDetector;
         private readonly NetworkDetector _networkDetector;
+        private readonly IpDetector _ipDetector;
+        private readonly FingerprintDetector _fingerprintDetector;
 
         public HardwareDetector(ILogger<HardwareDetector> logger)
         {
@@ -25,6 +27,8 @@ namespace BlendFarm.Node.Hardware
             _storageDetector = new StorageDetector(logger);
             _osDetector = new OsDetector(logger);
             _networkDetector = new NetworkDetector(logger);
+            _ipDetector = new IpDetector(logger);
+            _fingerprintDetector = new FingerprintDetector(logger);
         }
 
         public async Task<HardwareInfo> DetectAllAsync(string nodeId, string? serverUrl = null)
@@ -75,8 +79,24 @@ namespace BlendFarm.Node.Hardware
                     _logger.LogInformation($"✅ Network: ↑{hardware.Network.UploadSpeedMbps:F1} Mbps ↓{hardware.Network.DownloadSpeedMbps:F1} Mbps");
                 }
 
-                // Step 7: Generate fingerprint
+                // Step 7: IP Detection
+                _logger.LogInformation("📡 Detecting IP addresses...");
+                hardware.Ip = await _ipDetector.DetectAsync();
+                _logger.LogInformation($"✅ IP — Local: {hardware.Ip.LocalIP}  |  Public: {hardware.Ip.PublicIP}  |  Host: {hardware.Ip.Hostname}");
+
+                // Step 8: Hardware identity (BIOS UUID, MB serial, disk serial)
+                _logger.LogInformation("🔏 Collecting hardware identity components...");
+                hardware.Fingerprint = new FingerprintInfo
+                {
+                    BiosUuid          = _fingerprintDetector.GetBiosUuid(),
+                    MotherboardSerial = _fingerprintDetector.GetMotherboardSerial(),
+                    DiskSerial        = _fingerprintDetector.GetDiskSerial()
+                };
+                _logger.LogInformation($"✅ BIOS UUID: {hardware.Fingerprint.BiosUuid}");
+
+                // Step 9: Generate composite fingerprint (SHA-256)
                 hardware.HardwareFingerprint = GenerateFingerprint(hardware);
+                _logger.LogInformation($"✅ Hardware fingerprint: {hardware.HardwareFingerprint.Substring(0, Math.Min(40, hardware.HardwareFingerprint.Length))}…");
 
                 _logger.LogInformation("✅ Complete hardware detection finished!");
                 return hardware;
@@ -90,6 +110,7 @@ namespace BlendFarm.Node.Hardware
 
         private string GenerateFingerprint(HardwareInfo hw)
         {
+            // Layer 1: hardware metrics (varies if you swap components)
             var components = new[]
             {
                 hw.Cpu.Model,
@@ -97,14 +118,19 @@ namespace BlendFarm.Node.Hardware
                 hw.Ram.TotalGB.ToString(),
                 string.Join("|", hw.Gpus.Select(g => $"{g.Model}-{g.VramMB}")),
                 hw.Storage.DriveLetter,
-                hw.Os.Version
+                hw.Os.Version,
+
+                // Layer 2: hardware identity (survives OS reinstall)
+                hw.Fingerprint?.BiosUuid          ?? "Unknown",
+                hw.Fingerprint?.MotherboardSerial  ?? "Unknown",
+                hw.Fingerprint?.DiskSerial         ?? "Unknown"
             };
 
             using var sha256 = System.Security.Cryptography.SHA256.Create();
             var hash = sha256.ComputeHash(
                 System.Text.Encoding.UTF8.GetBytes(string.Join("|", components))
             );
-            
+
             return Convert.ToBase64String(hash);
         }
     }

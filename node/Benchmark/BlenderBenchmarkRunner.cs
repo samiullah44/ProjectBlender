@@ -1,11 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using BlendFarm.Node.Benchmark.Models;
 
 namespace BlendFarm.Node.Benchmark
@@ -31,7 +33,8 @@ namespace BlendFarm.Node.Benchmark
             var result = new BenchmarkResult
             {
                 RunDate = DateTime.UtcNow,
-                Scenes = new List<SceneResult>()
+                Scenes = new List<SceneResult>(),
+                BenchmarkType = "Blender"
             };
 
             try
@@ -45,8 +48,8 @@ namespace BlendFarm.Node.Benchmark
                 if (cpuResults.Any())
                 {
                     result.Scenes.AddRange(cpuResults);
-                    result.CpuRenderTime = cpuResults.Average(r => r.RenderTime);
                     result.CpuScore = (int)cpuResults.Average(r => r.Score);
+                    // REMOVED: result.CpuRenderTime = cpuResults.Average(r => r.RenderTime);
                 }
                 else
                 {
@@ -82,7 +85,7 @@ namespace BlendFarm.Node.Benchmark
                     result.Scenes.AddRange(gpuResults);
                     var gpuAvg = gpuResults.Average(r => r.Score);
                     result.GpuScore = (int)gpuAvg;
-                    result.GpuRenderTime = gpuResults.Average(r => r.RenderTime);
+                    // REMOVED: result.GpuRenderTime = gpuResults.Average(r => r.RenderTime);
                 }
                 else
                 {
@@ -172,6 +175,7 @@ namespace BlendFarm.Node.Benchmark
             if (process.ExitCode != 0)
             {
                 _logger.LogError($"Benchmark process exited with code {process.ExitCode}");
+                
                 if (error.Contains("panic") || error.Contains("invalid memory address"))
                 {
                     _logger.LogCritical("🔥 Benchmark CLI crashed/panicked. This might be a systemic issue or hardware detection failure.");
@@ -264,10 +268,7 @@ namespace BlendFarm.Node.Benchmark
 
         private async Task<bool> CheckDeviceSupportAsync(string device)
         {
-            // The list-devices command might have changed too or output format differ.
-            // But let's assume it keeps similar text output for now or we might need to adjust.
-            // v3: benchmark-launcher-cli list-devices
-             var psi = new ProcessStartInfo
+            var psi = new ProcessStartInfo
             {
                 FileName = _benchmarkExe,
                 Arguments = "list-devices",
@@ -282,7 +283,6 @@ namespace BlendFarm.Node.Benchmark
                 var output = await process.StandardOutput.ReadToEndAsync();
                 await process.WaitForExitAsync();
                 
-                // device type might be strictly uppercase in check
                 return output.Contains(device, StringComparison.OrdinalIgnoreCase);
             }
             catch
@@ -293,8 +293,6 @@ namespace BlendFarm.Node.Benchmark
 
         private async Task<string> GetBlenderVersionAsync()
         {
-            // Query CLI for available blender versions
-            // Command: benchmark-launcher-cli blender list
             var psi = new ProcessStartInfo
             {
                 FileName = _benchmarkExe,
@@ -312,32 +310,15 @@ namespace BlendFarm.Node.Benchmark
                 var output = await process.StandardOutput.ReadToEndAsync();
                 await process.WaitForExitAsync();
 
-                // Output format example:
-                // 3.6.0
-                // 4.0.0
-                // 4.1.0 ...
-                // OR
-                // installed: ...
-                // available: ...
-                
-                // Let's look for version patterns X.Y.Z
                 var matches = Regex.Matches(output, @"(\d+\.\d+\.\d+)");
                 if (matches.Count > 0)
                 {
-                    // Get the last one (assuming it's the latest) or sort them
                     var versions = matches.Cast<Match>()
                         .Select(m => m.Value)
-                        .OrderByDescending(v => v) // Simple string sort might fail for 4.10 vs 4.2 but simplified
+                        .OrderByDescending(v => Version.TryParse(v, out var ver) ? ver : new Version(0, 0))
                         .ToList();
                     
-                    // Better version sorting
-                    versions.Sort((a, b) => {
-                        var vA = Version.TryParse(a, out var verA) ? verA : new Version(0, 0);
-                        var vB = Version.TryParse(b, out var verB) ? verB : new Version(0, 0);
-                        return vB.CompareTo(vA); // Descending
-                    });
-
-                    // Prefer 4.1.0 as it's stable, but filter out 4.5.0 which we know is broken on some systems
+                    // Filter out known broken versions
                     var filteredVersions = versions.Where(v => !v.StartsWith("4.5")).ToList();
                     
                     var preferredVersion = filteredVersions.FirstOrDefault(v => v.StartsWith("4.1"));
@@ -349,7 +330,6 @@ namespace BlendFarm.Node.Benchmark
                 }
                 
                 _logger.LogWarning($"Could not parse versions from output: {output}");
-                // Fallback to a safe default if detection fails but we know 4.0.0 is likely valid
                 return "4.0.0"; 
             }
             catch (Exception ex)

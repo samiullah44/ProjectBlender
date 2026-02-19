@@ -31,7 +31,10 @@ namespace BlendFarm.Node.Services
         private readonly PythonRunnerService _pythonRunner;
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
-        private readonly string _nodeId;
+        private readonly NodeIdentityService _identityService;
+        private string _nodeId;
+        private string _friendlyName;
+        private string _nodeDisplayName;
         private readonly string _backendUrl;
         private Timer _heartbeatTimer;
         private string _currentJobId;
@@ -53,12 +56,14 @@ namespace BlendFarm.Node.Services
             ILogger<NodeBackendService> logger,
              ILoggerFactory loggerFactory,
             PythonRunnerService pythonRunner,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            NodeIdentityService identityService)
         {
             _logger = logger;
             _loggerFactory = loggerFactory;
             _pythonRunner = pythonRunner;
             _configuration = configuration;
+            _identityService = identityService;
             _nodeId = configuration["NodeSettings:NodeId"] ?? Guid.NewGuid().ToString();
             _backendUrl = configuration["Backend:Url"] ?? "https://fpcp8k7whm.ap-south-1.awsapprunner.com";
             _frameUploadUrls = new ConcurrentDictionary<int, (string, string)>();
@@ -113,12 +118,28 @@ var hardwareDetector = new HardwareDetector(
     {
         _detectedHardware = await hardwareDetector.DetectAllAsync(
             _nodeId, 
-            _backendUrl  // Pass backend URL for network test
+            _backendUrl
         );
-        
-        // Print beautiful summary
+
+        // If NodeId is default or empty, generate a stable unique identity
+        if (string.IsNullOrEmpty(_nodeId) || _nodeId == "node_auto" || _nodeId == "node_1" || 
+            _nodeId.StartsWith("node-") && _nodeId.Length > 20) 
+        {
+            var stableId = GenerateStableNodeId(_detectedHardware);
+            _nodeId = stableId;
+            _detectedHardware.NodeId = stableId;
+        }
+
+        // Determine Friendly Name
+        _friendlyName = _identityService.UserProvidedName ?? _configuration["NodeSettings:FriendlyName"] ?? "node_auto";
+        _nodeDisplayName = GenerateFriendlyDisplayName(_friendlyName, _detectedHardware);
+
         _logger.LogInformation("═══════════════════════════════════════");
-        _logger.LogInformation($"📊 SYSTEM SPECIFICATIONS");
+        _logger.LogInformation($"🚀 BLENDFARM NODE: {_nodeDisplayName}");
+        _logger.LogInformation($"🆔 ID: {_nodeId}");
+        _logger.LogInformation("═══════════════════════════════════════");
+        
+        _logger.LogInformation("📊 SYSTEM SPECIFICATIONS");
         _logger.LogInformation($"CPU: {_detectedHardware.Cpu.Model}");
         _logger.LogInformation($"    {_detectedHardware.Cpu.PhysicalCores} cores / {_detectedHardware.Cpu.LogicalCores} threads @ {_detectedHardware.Cpu.BaseClockGHz:F1}GHz");
         _logger.LogInformation($"    AVX2: {_detectedHardware.Cpu.SupportsAVX2}");
@@ -162,42 +183,54 @@ var hardwareDetector = new HardwareDetector(
             {
                 _logger.LogError("Failed to register with backend. Retrying in 30 seconds...");
                 await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
-                // Try to restart the service
                 await ExecuteAsync(stoppingToken);
                 return;
             }
 
-            // Test backend connection
-            if (!await TestBackendConnectionAsync())
+            // ── WebSocket connection (replaces REST heartbeat + job polling) ──────
+            _logger.LogInformation("🔌 Starting persistent WebSocket connection to backend...");
+            using var wsService = new NodeWebSocketService(
+                _logger,
+                _configuration,
+                _detectedHardware,
+                _nodeId);
+
+            // Forward WS job-push to existing ProcessJobAsync logic
+            wsService.OnJobAssigned += async (assignment) =>
             {
-                _logger.LogError("Cannot connect to backend. Service will retry periodically.");
-            }
+                _ = ProcessJobAsync(assignment, stoppingToken);
+            };
 
-            // Start heartbeat
-            _heartbeatTimer = new Timer(SendHeartbeat, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
+            // WS runs until cancellation or unrecoverable error.
+            // REST fallback polling (legacy) runs in parallel and only does work
+            // when the WS is not connected.
+            var wsTask = wsService.RunAsync(stoppingToken);
 
-            // Start job polling
-            while (!stoppingToken.IsCancellationRequested)
+            var fallbackPollTask = Task.Run(async () =>
             {
-                try
+                while (!stoppingToken.IsCancellationRequested)
                 {
-                    await PollForJobsAsync(stoppingToken);
-                    await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                    try
+                    {
+                        // Only poll via REST if WS is not connected
+                        if (!wsService.IsConnected)
+                        {
+                            _logger.LogWarning("⚡ WS disconnected, falling back to REST job poll...");
+                            await PollForJobsAsync(stoppingToken);
+                        }
+                        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError($"Fallback poll error: {ex.Message}");
+                        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                    }
                 }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError($"Job polling error: {ex.Message}");
-                    await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
-                }
-            }
+            }, stoppingToken);
 
-            // Clean up
-            _heartbeatTimer?.Dispose();
-            
+            await Task.WhenAll(wsTask, fallbackPollTask);
+
             // Clean up cached files on shutdown
             await CleanupCacheAsync();
         }
@@ -261,6 +294,13 @@ var hardwareDetector = new HardwareDetector(
             _logger.LogInformation($"   Tier: {_computeScore.Tier}");
             _logger.LogInformation($"   Blender: {_computeScore.BlenderVersion}");
             _logger.LogInformation("═══════════════════════════════════════");
+
+            // Sync benchmark scores back to the hardware object for heuristics fallback
+            _detectedHardware.Cpu.CpuScore = (int)_computeScore.CpuScore;
+            if (_detectedHardware.Gpus.Any())
+            {
+                _detectedHardware.Gpus[0].GpuScore = (int)_computeScore.GpuScore;
+            }
         }
         else
         {
@@ -454,7 +494,7 @@ var hardwareDetector = new HardwareDetector(
             var registrationData = new
             {
                 nodeId = _nodeId,
-                name = $"Node-{Environment.MachineName}",
+                name = _nodeDisplayName,
                 
                 // REAL OS info
                 os = hardware.Os.Name,
@@ -533,8 +573,14 @@ var hardwareDetector = new HardwareDetector(
                         benchmarkDate = _computeScore?.BenchmarkDate ?? DateTime.MinValue,
                         blenderVersion = _computeScore?.BlenderVersion ?? "Unknown"
                     },
-                ipAddress = hardware.Network.LocalIP ?? GetLocalIPAddress(),
-                publicIp = hardware.Network.PublicIP,
+                ipAddress = _detectedHardware?.Ip?.LocalIP ?? hardware.Network.LocalIP ?? GetLocalIPAddress(),
+                publicIp  = _detectedHardware?.Ip?.PublicIP ?? hardware.Network.PublicIP,
+                hostname  = _detectedHardware?.Ip?.Hostname ?? Environment.MachineName,
+                // Hardware identity for duplicate-node blocking
+                hardwareFingerprint = hardware.HardwareFingerprint,
+                biosUuid            = hardware.Fingerprint?.BiosUuid,
+                motherboardSerial   = hardware.Fingerprint?.MotherboardSerial,
+                diskSerial          = hardware.Fingerprint?.DiskSerial,
                 status = "online",
                 
                 // When the hardware was verified
@@ -552,7 +598,7 @@ var hardwareDetector = new HardwareDetector(
             if (response.IsSuccessStatusCode)
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
-                _logger.LogInformation($"✅ Registered with backend: {responseContent}");
+                _logger.LogInformation($"✅ Registered with backend: {_nodeDisplayName} (ID: {_nodeId})");
                 return true;
             }
             else
@@ -584,6 +630,38 @@ var hardwareDetector = new HardwareDetector(
     }
 
     return false;
+}
+
+private string GenerateStableNodeId(HardwareInfo hardware)
+{
+    // Use machine name as a readable prefix
+    string machineName = Environment.MachineName.ToLower().Replace(" ", "-");
+    
+    // Hash the hardware fingerprint to get a stable unique hex string (shortened)
+    string fingerprint = hardware.HardwareFingerprint ?? "unknown";
+    using (var sha256 = System.Security.Cryptography.SHA256.Create())
+    {
+        var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(fingerprint));
+        var hex = BitConverter.ToString(hash).Replace("-", "").ToLower().Substring(0, 12);
+        return $"{machineName}-{hex}";
+    }
+}
+
+private string GenerateFriendlyDisplayName(string friendlyName, HardwareInfo hardware)
+{
+    string hashPart = "";
+    if (hardware.HardwareFingerprint != null && hardware.HardwareFingerprint.Length >= 6)
+    {
+        hashPart = hardware.HardwareFingerprint.Substring(0, 6);
+    }
+
+    if (string.IsNullOrEmpty(friendlyName) || friendlyName == "node_auto")
+    {
+        return $"Node-{Environment.MachineName}-{hashPart}";
+    }
+    
+    // User gave a name, append hash to ensure uniqueness but keep it readable
+    return $"{friendlyName}-{hashPart}";
 }
 private async void SendHeartbeat(object? state)
 {
@@ -641,40 +719,43 @@ private async void SendHeartbeat(object? state)
 
 private int CalculateCpuScore(CpuInfo cpu)
 {
+    // If benchmark score exists, use it
+    if (cpu.CpuScore > 0) return cpu.CpuScore;
+
     int score = 0;
-    
-    // Base score from cores and speed
+    // Base score from cores and speed (heuristic fallback)
     score += cpu.PhysicalCores * 1000;
     score += (int)(cpu.BaseClockGHz * 500);
-    
-    // Instruction set bonuses
     if (cpu.SupportsAVX2) score += 2000;
     if (cpu.SupportsAVX) score += 1000;
     if (cpu.SupportsSSE42) score += 500;
-    
     return score;
 }
 
-private int CalculateGpuScore(GpuInfo gpu)
+private int CalculateGpuScore(GpuInfo? gpu)
 {
     if (gpu == null) return 0;
     
+    // If benchmark score exists, use it
+    if (gpu.GpuScore > 0) return gpu.GpuScore;
+
     int score = 0;
-    
-    // VRAM score (roughly 1 point per MB)
-    score += (int)(gpu.VramMB / 10);
-    
-    // Architecture bonuses
+    // Heuristic fallback
+    score += (int)(gpu.VramMB / 128);
     if (gpu.CudaSupported) score += 5000;
     if (gpu.OptixSupported) score += 3000;
-    if (gpu.Model.Contains("RTX")) score += 2000;
-    if (gpu.Model.Contains("GTX")) score += 1000;
-    
+    score += gpu.CoreCount * 2;
     return score;
 }
 
-private int CalculateNodeTier(HardwareInfo hw)
+private string CalculateNodeTier(HardwareInfo hw)
 {
+    // If we have a real benchmark tier, use it
+    if (_computeScore != null && !string.IsNullOrEmpty(_computeScore.Tier) && _computeScore.Tier != "Unknown")
+    {
+        return _computeScore.Tier;
+    }
+
     int totalScore = 0;
     
     // CPU contribution
@@ -692,17 +773,11 @@ private int CalculateNodeTier(HardwareInfo hw)
         if (gpu.OptixSupported) totalScore += 300;
     }
     
-    // Storage contribution (SSD bonus)
-    if (hw.Storage.IsSSD) totalScore += 100;
-    
-    // Network contribution
-    if (hw.Network.UploadSpeedMbps > 100) totalScore += 50;
-    
-    // Determine tier
-    if (totalScore > 2000) return 4;  // Enterprise
-    if (totalScore > 1000) return 3;  // High
-    if (totalScore > 500) return 2;   // Mid
-    return 1;                          // Low
+    // Decide tier
+    if (totalScore > 3000) return "Enterprise";
+    if (totalScore > 2000) return "High";
+    if (totalScore > 1000) return "Mid";
+    return "Low";
 }
         private async Task PollForJobsAsync(CancellationToken cancellationToken)
         {
@@ -727,7 +802,7 @@ private int CalculateNodeTier(HardwareInfo hw)
                     var responseJson = await assignmentResponse.Content.ReadAsStringAsync(cancellationToken);
                     _logger.LogInformation($"📥 Job assignment response: {responseJson}");
                     
-                    var assignment = JsonConvert.DeserializeObject<JobAssignmentResponse>(responseJson);
+                    var assignment = JsonConvert.DeserializeObject<JobAssignment>(responseJson);
                     
                     if (assignment?.JobId != null && assignment.Frames?.Count > 0)
                     {
@@ -755,7 +830,7 @@ private int CalculateNodeTier(HardwareInfo hw)
             }
         }
 
-        private async Task ProcessJobAsync(JobAssignmentResponse assignment, CancellationToken cancellationToken)
+        private async Task ProcessJobAsync(JobAssignment assignment, CancellationToken cancellationToken)
         {
             lock (_jobLock)
             {
@@ -1509,68 +1584,5 @@ private int CalculateNodeTier(HardwareInfo hw)
             }
         }
 
-        private class JobAssignmentResponse
-        {
-            [JsonProperty("jobId")]
-            public string? JobId { get; set; }
-            
-            [JsonProperty("frames")]
-            public List<int>? Frames { get; set; }
-            
-            [JsonProperty("blendFileUrl")]
-            public string? BlendFileUrl { get; set; }
-            
-            [JsonProperty("frameUploadUrls")]
-            public Dictionary<string, FrameUploadInfo>? FrameUploadUrls { get; set; }
-            
-            [JsonProperty("settings")]
-            public RenderSettings? Settings { get; set; }
-            
-            [JsonProperty("totalFrames")]
-            public int? TotalFrames { get; set; }
-            
-            [JsonProperty("assignedFramesCount")]
-            public int? AssignedFramesCount { get; set; }
-            
-            [JsonProperty("jobProgress")]
-            public int? JobProgress { get; set; }
-            
-            [JsonProperty("isResume")]
-            public bool? IsResume { get; set; }
-        }
-
-        private class FrameUploadInfo
-        {
-            [JsonProperty("uploadUrl")]
-            public string UploadUrl { get; set; }
-            
-            [JsonProperty("s3Key")]
-            public string S3Key { get; set; }
-        }
-
-        private class UploadUrlResponse
-        {
-            [JsonProperty("success")]
-            public bool Success { get; set; }
-            
-            [JsonProperty("uploadUrl")]
-            public string UploadUrl { get; set; }
-            
-            [JsonProperty("s3Key")]
-            public string S3Key { get; set; }
-        }
-
-        private class RenderSettings
-        {
-            public string? Engine { get; set; }
-            public string? Device { get; set; }
-            public int Samples { get; set; }
-            public int ResolutionX { get; set; }
-            public int ResolutionY { get; set; }
-            public string? Denoiser { get; set; }
-            public int TileSize { get; set; }
-            public string? OutputFormat { get; set; } = "PNG";
-            public int CreditsPerFrame { get; set; } = 1;
-        }
     }
 }
