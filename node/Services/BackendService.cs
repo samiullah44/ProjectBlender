@@ -65,7 +65,7 @@ namespace BlendFarm.Node.Services
             _configuration = configuration;
             _identityService = identityService;
             _nodeId = configuration["NodeSettings:NodeId"] ?? Guid.NewGuid().ToString();
-            _backendUrl = configuration["Backend:Url"] ?? "http://localhost:3000";
+            _backendUrl = configuration["Backend:Url"] ?? "http://192.168.1.30:3000";
             _frameUploadUrls = new ConcurrentDictionary<int, (string, string)>();
             _blendFileCache = new ConcurrentDictionary<string, (string, DateTime)>();
              _computeScoreService = new ComputeScoreService(logger);
@@ -208,6 +208,9 @@ var hardwareDetector = new HardwareDetector(
 
             var fallbackPollTask = Task.Run(async () =>
             {
+                // Give the WebSocket a chance to connect first before we start complaining
+                await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+                
                 while (!stoppingToken.IsCancellationRequested)
                 {
                     try
@@ -491,100 +494,100 @@ var hardwareDetector = new HardwareDetector(
         try
         {
             // ===== UPDATED WITH REAL HARDWARE DATA =====
-            var registrationData = new
+            var registrationData = new Dictionary<string, object>
             {
-                nodeId = _nodeId,
-                name = _nodeDisplayName,
+                ["nodeId"] = _nodeId,
+                ["name"] = _nodeDisplayName,
                 
                 // REAL OS info
-                os = hardware.Os.Name,
+                ["os"] = hardware.Os.Name,
                 
                 // REAL hardware specs
-                hardware = new
+                ["hardware"] = new Dictionary<string, object>
                 {
                     // CPU
-                    cpuModel = hardware.Cpu.Model,
-                    cpuCores = hardware.Cpu.PhysicalCores,
-                    cpuThreads = hardware.Cpu.LogicalCores,
-                    cpuSpeedGHz = hardware.Cpu.BaseClockGHz,
-                    cpuScore = CalculateCpuScore(hardware.Cpu),  // Updated method
+                    ["cpuModel"] = hardware.Cpu.Model,
+                    ["cpuCores"] = hardware.Cpu.PhysicalCores,
+                    ["cpuThreads"] = hardware.Cpu.LogicalCores,
+                    ["cpuSpeedGHz"] = hardware.Cpu.BaseClockGHz,
+                    ["cpuScore"] = CalculateCpuScore(hardware.Cpu),  // Updated method
                     
                     // GPU (first one for primary)
-                    gpuName = hardware.Gpus.FirstOrDefault()?.Model ?? "Unknown",
-                    gpuVRAM = hardware.Gpus.FirstOrDefault()?.VramMB ?? 0,
-                    gpuScore = CalculateGpuScore(hardware.Gpus.FirstOrDefault()),  // Updated method
+                    ["gpuName"] = hardware.Gpus.FirstOrDefault()?.Model ?? "Unknown",
+                    ["gpuVRAM"] = hardware.Gpus.FirstOrDefault()?.VramMB ?? 0,
+                    ["gpuScore"] = CalculateGpuScore(hardware.Gpus.FirstOrDefault()),  // Updated method
                     
                     // All GPUs
-                    allGpus = hardware.Gpus.Select(g => new
+                    ["allGpus"] = hardware.Gpus.Select(g => new Dictionary<string, object>
                     {
-                        model = g.Model,
-                        vramMB = g.VramMB,
-                        cudaSupported = g.CudaSupported,
-                        optixSupported = g.OptixSupported
-                    }),
+                        ["model"] = g.Model,
+                        ["vramMB"] = g.VramMB,
+                        ["cudaSupported"] = g.CudaSupported,
+                        ["optixSupported"] = g.OptixSupported
+                    }).ToList(),
                     
                     // RAM
-                    ramGB = hardware.Ram.TotalGB,
-                    ramAvailableGB = hardware.Ram.AvailableGB,
-                    ramType = hardware.Ram.Type,
+                    ["ramGB"] = hardware.Ram.TotalGB,
+                    ["ramAvailableGB"] = hardware.Ram.AvailableGB,
+                    ["ramType"] = hardware.Ram.Type,
                     
                     // Storage
-                    storageFreeGB = hardware.Storage.FreeGB,
-                    storageType = hardware.Storage.Type,
+                    ["storageFreeGB"] = hardware.Storage.FreeGB,
+                    ["storageType"] = hardware.Storage.Type,
                     
                     // Network
-                    uploadSpeedMbps = hardware.Network.UploadSpeedMbps,
-                    downloadSpeedMbps = hardware.Network.DownloadSpeedMbps,
-                    latencyMs = hardware.Network.LatencyMs,
+                    ["uploadSpeedMbps"] = hardware.Network.UploadSpeedMbps,
+                    ["downloadSpeedMbps"] = hardware.Network.DownloadSpeedMbps,
+                    ["latencyMs"] = hardware.Network.LatencyMs,
                     
                     // Blender
-                    blenderVersion = hardware.Os.DotNetVersion,  // Or get from your existing method
+                    ["blenderVersion"] = hardware.Os.DotNetVersion,  // Or get from your existing method
                     
                     // Hardware fingerprint for anti-cheat
-                    hardwareFingerprint = hardware.HardwareFingerprint
+                    ["hardwareFingerprint"] = hardware.HardwareFingerprint
                 },
                 
                 // REAL capabilities based on hardware
-                capabilities = new
+                ["capabilities"] = new Dictionary<string, object>
                 {
-                    supportedEngines = new[] { "CYCLES", "EEVEE" },
-                    supportedGPUs = hardware.Gpus.Any(g => g.CudaSupported) ? 
+                    ["supportedEngines"] = new[] { "CYCLES", "EEVEE" },
+                    ["supportedGPUs"] = hardware.Gpus.Any(g => g.CudaSupported) ? 
                         new[] { "CUDA", "OPTIX" } : 
                         hardware.Gpus.Any(g => g.HipSupported) ?
                             new[] { "HIP" } : new[] { "CPU" },
-                    maxSamples = hardware.Ram.TotalGB >= 32 ? 4096 : 1024,
-                    maxResolutionX = hardware.Ram.TotalGB >= 16 ? 7680 : 3840,
-                    maxResolutionY = hardware.Ram.TotalGB >= 16 ? 4320 : 2160,
-                    supportsTiles = true,
-                    supportsAnimation = true,
-                    supportsImage = true,
+                    ["maxSamples"] = hardware.Ram.TotalGB >= 32 ? 4096 : 1024,
+                    ["maxResolutionX"] = hardware.Ram.TotalGB >= 16 ? 7680 : 3840,
+                    ["maxResolutionY"] = hardware.Ram.TotalGB >= 16 ? 4320 : 2160,
+                    ["supportsTiles"] = true,
+                    ["supportsAnimation"] = true,
+                    ["supportsImage"] = true,
                     
                     // Node tier based on REAL performance
-                    nodeTier = CalculateNodeTier(hardware)
+                    ["nodeTier"] = CalculateNodeTier(hardware)
                 },
                 
-                    // Benchmark scores
-                    performance = new
-                    {
-                        effectiveScore = _computeScore?.EffectiveScore ?? 0,
-                        gpuScore = _computeScore?.GpuScore ?? 0,
-                        cpuScore = _computeScore?.CpuScore ?? 0,
-                        tier = _computeScore?.Tier ?? "Unknown",
-                        benchmarkDate = _computeScore?.BenchmarkDate ?? DateTime.MinValue,
-                        blenderVersion = _computeScore?.BlenderVersion ?? "Unknown"
-                    },
-                ipAddress = _detectedHardware?.Ip?.LocalIP ?? hardware.Network.LocalIP ?? GetLocalIPAddress(),
-                publicIp  = _detectedHardware?.Ip?.PublicIP ?? hardware.Network.PublicIP,
-                hostname  = _detectedHardware?.Ip?.Hostname ?? Environment.MachineName,
+                // Benchmark scores
+                ["performance"] = new Dictionary<string, object>
+                {
+                    ["effectiveScore"] = _computeScore?.EffectiveScore ?? 0,
+                    ["gpuScore"] = _computeScore?.GpuScore ?? 0,
+                    ["cpuScore"] = _computeScore?.CpuScore ?? 0,
+                    ["tier"] = _computeScore?.Tier ?? "Unknown",
+                    ["benchmarkDate"] = _computeScore?.BenchmarkDate ?? DateTime.MinValue,
+                    ["blenderVersion"] = _computeScore?.BlenderVersion ?? "Unknown"
+                },
+                ["ipAddress"] = _detectedHardware?.Ip?.LocalIP ?? hardware.Network.LocalIP ?? GetLocalIPAddress(),
+                ["publicIp"]  = _detectedHardware?.Ip?.PublicIP ?? hardware.Network.PublicIP,
+                ["hostname"]  = _detectedHardware?.Ip?.Hostname ?? Environment.MachineName,
                 // Hardware identity for duplicate-node blocking
-                hardwareFingerprint = hardware.HardwareFingerprint,
-                biosUuid            = hardware.Fingerprint?.BiosUuid,
-                motherboardSerial   = hardware.Fingerprint?.MotherboardSerial,
-                diskSerial          = hardware.Fingerprint?.DiskSerial,
-                status = "online",
+                ["hardwareFingerprint"] = hardware.HardwareFingerprint,
+                ["biosUuid"]            = hardware.Fingerprint?.BiosUuid,
+                ["motherboardSerial"]   = hardware.Fingerprint?.MotherboardSerial,
+                ["diskSerial"]          = hardware.Fingerprint?.DiskSerial,
+                ["status"] = "online",
                 
                 // When the hardware was verified
-                hardwareVerifiedAt = hardware.DetectedAt
+                ["hardwareVerifiedAt"] = hardware.DetectedAt
             };
             // ===== END UPDATED CODE =====
 

@@ -6,6 +6,9 @@ namespace BlendFarm.Node.Models
 {
     public class JobAssignment
     {
+        [JsonConstructor]
+        public JobAssignment() { }
+
         [JsonProperty("jobId")]
         public string? JobId { get; set; }
         
@@ -39,6 +42,9 @@ namespace BlendFarm.Node.Models
 
     public class FrameUploadInfo
     {
+        [JsonConstructor]
+        public FrameUploadInfo() { }
+
         [JsonProperty("uploadUrl")]
         public string UploadUrl { get; set; }
         
@@ -48,6 +54,9 @@ namespace BlendFarm.Node.Models
 
     public class RenderSettings
     {
+        [JsonConstructor]
+        public RenderSettings() { }
+
         public string? Engine { get; set; }
         public string? Device { get; set; }
         public int Samples { get; set; }
@@ -61,6 +70,9 @@ namespace BlendFarm.Node.Models
 
     public class UploadUrlResponse
     {
+        [JsonConstructor]
+        public UploadUrlResponse() { }
+
         [JsonProperty("success")]
         public bool Success { get; set; }
         

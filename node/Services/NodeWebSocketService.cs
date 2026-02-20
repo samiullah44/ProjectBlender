@@ -73,7 +73,7 @@ namespace BlendFarm.Node.Services
             _nodeId = nodeId;
 
             var backendUrl = (configuration["Backend:Url"]
-                              ?? "http://localhost:3000")
+                              ?? "http://192.168.1.30:3000")
                              .TrimEnd('/');
 
             // Convert http(s) → ws(s)
@@ -149,15 +149,15 @@ namespace BlendFarm.Node.Services
             _reconnectDelay = InitialReconnectDelayMs;   // reset on success
 
             // Announce ourselves
-            await SendAsync(new
+            await SendAsync(new Dictionary<string, object>
             {
-                type                = "node_connect",
-                nodeId              = _nodeId,
-                hardwareFingerprint = _hardwareFingerprint,
-                hostname            = _hardware?.Ip.Hostname,
-                localIP             = _hardware?.Ip.LocalIP,
-                publicIP            = _hardware?.Ip.PublicIP,
-                timestamp           = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                ["type"]                = "node_connect",
+                ["nodeId"]              = _nodeId,
+                ["hardwareFingerprint"] = _hardwareFingerprint,
+                ["hostname"]            = _hardware?.Ip.Hostname,
+                ["localIP"]             = _hardware?.Ip.LocalIP,
+                ["publicIP"]            = _hardware?.Ip.PublicIP,
+                ["timestamp"]           = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             }, token);
 
             // Run receive-loop and heartbeat-loop concurrently
@@ -215,8 +215,12 @@ namespace BlendFarm.Node.Services
                 switch (type)
                 {
                     case "ping":
-                        await SendAsync(new { type = "pong", nodeId = _nodeId,
-                                              timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }, token);
+                        await SendAsync(new Dictionary<string, object>
+                        {
+                            ["type"] = "pong",
+                            ["nodeId"] = _nodeId,
+                            ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                        }, token);
                         break;
 
                     case "ack":
@@ -260,21 +264,17 @@ namespace BlendFarm.Node.Services
                 try
                 {
                     var stats = GatherResourceStats();
-                    await SendAsync(new
+                    await SendAsync(new Dictionary<string, object>
                     {
-                        type      = "heartbeat",
-                        nodeId    = _nodeId,
-                        timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        resources = stats,
+                        ["type"]      = "heartbeat",
+                        ["nodeId"]    = _nodeId,
+                        ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                        ["resources"] = stats,
                         // Include performance info if benchmark was run
-                        performance = _hardware?.HardwareFingerprint != null ? new {
-                           // These fields would be populated if you pass a performance object
-                           // For now, these will be picked up by the backend from the Node record
-                           // but sending them here ensures they stay in sync
-                        } : null
+                        ["performance"] = _hardware?.HardwareFingerprint != null ? new Dictionary<string, object>() : null
                     }, token);
 
-                    _logger.LogDebug($"💓 Heartbeat sent for {_nodeId} (CPU: {stats.cpuPercent:F0}%)");
+                    _logger.LogDebug($"💓 Heartbeat sent for {_nodeId} (CPU: {stats["cpuPercent"]:F0}%)");
                 }
                 catch (Exception ex) when (!token.IsCancellationRequested)
                 {
@@ -297,7 +297,7 @@ namespace BlendFarm.Node.Services
                 token);
         }
 
-        private dynamic GatherResourceStats()
+        private Dictionary<string, object> GatherResourceStats()
         {
             double cpuPercent   = 0;
 
@@ -330,13 +330,13 @@ namespace BlendFarm.Node.Services
             }
             catch { }
 
-            return new
+            return new Dictionary<string, object>
             {
-                cpuPercent  = cpuPercent,
-                ramUsedMB   = ramUsedMB,
-                ramTotalMB  = ramTotalMB,
-                diskFreeMB  = diskFreeMB,
-                diskTotalMB = diskTotalMB
+                ["cpuPercent"]  = cpuPercent,
+                ["ramUsedMB"]   = ramUsedMB,
+                ["ramTotalMB"]  = ramTotalMB,
+                ["diskFreeMB"]  = diskFreeMB,
+                ["diskTotalMB"] = diskTotalMB
             };
         }
 
