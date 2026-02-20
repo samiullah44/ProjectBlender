@@ -204,7 +204,7 @@ private async Task<(bool hasCpu, bool hasGpu)> ListDevicesWithTimeoutAsync(strin
         // 1️⃣ Check CPU devices using correct command
         _logger.LogDebug("Checking CPU devices with: -m vray -l");
         // Reduced timeout to 15s for device listing
-        var cpuOutput = await RunProcessWithTimeoutAsync(benchmarkExe, "-m vray -l", 15000);
+        var cpuOutput = await RunProcessWithTimeoutAsync(benchmarkExe, "-m vray -l", 60000);
         
         if (!string.IsNullOrEmpty(cpuOutput))
         {
@@ -222,7 +222,7 @@ private async Task<(bool hasCpu, bool hasGpu)> ListDevicesWithTimeoutAsync(strin
         // 2️⃣ Check GPU devices using correct command
         _logger.LogDebug("Checking GPU devices with: -m vray-gpu -l");
         // Reduced timeout to 15s for device listing (this is where hangs usually happen)
-        var gpuOutput = await RunProcessWithTimeoutAsync(benchmarkExe, "-m vray-gpu -l", 15000);
+        var gpuOutput = await RunProcessWithTimeoutAsync(benchmarkExe, "-m vray-gpu -l", 60000);
         
         if (!string.IsNullOrEmpty(gpuOutput))
         {
@@ -324,6 +324,7 @@ private async Task<double> RunCpuBenchmarkWithTimeoutAsync(string benchmarkExe)
             
             var psi = new ProcessStartInfo(exe, args)
             {
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -333,12 +334,57 @@ private async Task<double> RunCpuBenchmarkWithTimeoutAsync(string benchmarkExe)
 
             using var process = Process.Start(psi);
             
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
+            var outputBuilder = new System.Text.StringBuilder();
+            var errorBuilder = new System.Text.StringBuilder();
+
+            var readOutputTask = Task.Run(async () =>
+            {
+                char[] buffer = new char[1024];
+                int charsRead;
+                try
+                {
+                    while ((charsRead = await process.StandardOutput.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    {
+                        var text = new string(buffer, 0, charsRead);
+                        outputBuilder.Append(text);
+                        
+                        var currentStr = outputBuilder.ToString();
+                        if (currentStr.EndsWith("[y/n]", StringComparison.OrdinalIgnoreCase) ||
+                            currentStr.EndsWith("[y/n]:", StringComparison.OrdinalIgnoreCase) ||
+                            currentStr.EndsWith("[y/n]: ", StringComparison.OrdinalIgnoreCase) ||
+                            text.Contains("[y/n]", StringComparison.OrdinalIgnoreCase))
+                        {
+                            try
+                            {
+                                _logger.LogDebug("Auto-answering V-Ray prompt with 'y'");
+                                await process.StandardInput.WriteLineAsync("y");
+                                await process.StandardInput.FlushAsync();
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+            });
+
+            var readErrorTask = Task.Run(async () =>
+            {
+                char[] buffer = new char[1024];
+                int charsRead;
+                try
+                {
+                    while ((charsRead = await process.StandardError.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    {
+                        errorBuilder.Append(new string(buffer, 0, charsRead));
+                    }
+                }
+                catch { }
+            });
             
             try
             {
                 await process.WaitForExitAsync(cts.Token);
+                await Task.WhenAll(readOutputTask, readErrorTask);
             }
             catch (OperationCanceledException)
             {
@@ -359,8 +405,8 @@ private async Task<double> RunCpuBenchmarkWithTimeoutAsync(string benchmarkExe)
                 return string.Empty;
             }
 
-            var output = await outputTask;
-            var error = await errorTask;
+            var output = outputBuilder.ToString();
+            var error = errorBuilder.ToString();
             
             if (!string.IsNullOrEmpty(error))
             {

@@ -65,7 +65,7 @@ namespace BlendFarm.Node.Services
             _configuration = configuration;
             _identityService = identityService;
             _nodeId = configuration["NodeSettings:NodeId"] ?? Guid.NewGuid().ToString();
-            _backendUrl = configuration["Backend:Url"] ?? "https://fpcp8k7whm.ap-south-1.awsapprunner.com";
+            _backendUrl = configuration["Backend:Url"] ?? "http://localhost:3000";
             _frameUploadUrls = new ConcurrentDictionary<int, (string, string)>();
             _blendFileCache = new ConcurrentDictionary<string, (string, DateTime)>();
              _computeScoreService = new ComputeScoreService(logger);

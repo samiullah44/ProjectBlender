@@ -73,7 +73,7 @@ namespace BlendFarm.Node.Services
             _nodeId = nodeId;
 
             var backendUrl = (configuration["Backend:Url"]
-                              ?? "https://fpcp8k7whm.ap-south-1.awsapprunner.com")
+                              ?? "http://localhost:3000")
                              .TrimEnd('/');
 
             // Convert http(s) → ws(s)
