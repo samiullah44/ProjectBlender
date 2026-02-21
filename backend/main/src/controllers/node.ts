@@ -6,6 +6,7 @@ import { AppError } from '../middleware/error';
 import { S3Service } from '../services/S3Service';
 import { AuthRequest } from '../middleware/auth';
 import os from 'os';
+import { wsService } from '../app';
 
 const s3Service = new S3Service();
 
@@ -83,6 +84,21 @@ export class NodeController {
         );
 
         console.log(`🔄 Marked ${offlineNodes.length} nodes as offline:`, nodeIds);
+
+        // Broadcast offline status for marked nodes
+        for (const node of offlineNodes) {
+          if (wsService) {
+            wsService.broadcastSystemUpdate({
+              type: 'node_status_change',
+              data: {
+                nodeId: node.nodeId,
+                status: 'offline',
+                name: node.name
+              }
+            });
+            wsService.broadcastNodeUpdate(node.nodeId, { status: 'offline' });
+          }
+        }
 
         // Reassign frames from offline nodes
         for (const node of offlineNodes) {
@@ -1267,7 +1283,7 @@ export class NodeController {
   // Get all nodes with WebSocket integration
   static async getAllNodes(req: Request, res: Response): Promise<void> {
     try {
-      await this.checkAndUpdateOfflineNodes();
+      await NodeController.checkAndUpdateOfflineNodes();
 
       const authReq = req as AuthRequest;
       const isAdmin = authReq.user?.role === 'admin' || authReq.user?.roles?.includes('admin');
@@ -1404,18 +1420,24 @@ export class NodeController {
       const isActuallyOnline = lastHeartbeatAge <= HEARTBEAT_TIMEOUT_MS;
 
       res.json({
-        nodeId: node.nodeId,
-        name: node.name,
-        status: isActuallyOnline ? node.status : 'offline',
-        hardware: node.hardware,
-        capabilities: node.capabilities,
-        performance: node.performance,
-        currentJob: currentJobDetails,
-        jobsCompleted: node.jobsCompleted,
-        connectionCount: node.connectionCount,
-        lastHeartbeat: node.lastHeartbeat,
-        createdAt: node.createdAt,
-        updatedAt: node.updatedAt
+        success: true,
+        node: {
+          nodeId: node.nodeId,
+          name: node.name,
+          status: isActuallyOnline ? node.status : 'offline',
+          hardware: node.hardware,
+          capabilities: node.capabilities,
+          performance: node.performance,
+          currentJob: currentJobDetails,
+          jobsCompleted: node.jobsCompleted,
+          connectionCount: node.connectionCount,
+          lastHeartbeat: node.lastHeartbeat,
+          createdAt: node.createdAt,
+          updatedAt: node.updatedAt,
+          isRevoked: node.isRevoked,
+          revokedAt: node.revokedAt,
+          revokedReason: node.revokedReason
+        }
       });
 
     } catch (error) {
@@ -1513,6 +1535,396 @@ export class NodeController {
         error: 'Failed to get node statistics',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
+    }
+  }
+
+  // ── Token-based node registration ─────────────────────────────────────────
+
+  /**
+   * POST /api/nodes/tokens/generate
+   * Authenticated node_provider generates a one-time pairing token.
+   */
+  static async generateToken(req: Request, res: Response): Promise<void> {
+    try {
+      const authReq = req as AuthRequest;
+      const userId = authReq.user?.userId;
+
+      if (!userId) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+
+      const { User } = await import('../models/User');
+      const { RegistrationToken } = await import('../models/RegistrationToken');
+      const { Node } = await import('../models/Node');
+
+      const user = await User.findById(userId);
+      if (!user || !user.roles.includes('node_provider')) {
+        res.status(403).json({ success: false, error: 'node_provider role required' });
+        return;
+      }
+
+      // Enforce maxNodes limit: count non-revoked nodes belonging to this user
+      const nodeCount = await Node.countDocuments({ userId, isRevoked: { $ne: true } });
+      const maxNodes = user.maxNodes ?? 10;
+      if (nodeCount >= maxNodes) {
+        res.status(403).json({
+          success: false,
+          error: 'NODE_LIMIT_REACHED',
+          message: `You have reached your node limit (${maxNodes}). Revoke an existing node before adding a new one.`,
+          currentCount: nodeCount,
+          maxNodes,
+        });
+        return;
+      }
+
+      const { label } = req.body;
+      let tokenString = '';
+      let isUnique = false;
+      let attempts = 0;
+
+      while (!isUnique && attempts < 10) {
+        tokenString = (RegistrationToken as any).generateTokenString
+          ? (RegistrationToken as any).generateTokenString()
+          : require('crypto').randomBytes(24).toString('hex').toUpperCase();
+
+        const existingToken = await RegistrationToken.findOne({ token: tokenString });
+        if (!existingToken) {
+          isUnique = true;
+        }
+        attempts++;
+      }
+
+      if (!isUnique) {
+        res.status(500).json({ success: false, error: 'Failed to generate a unique token after multiple attempts' });
+        return;
+      }
+
+      const expiresAt = new Date(Date.now() + 20 * 60 * 1000); // 20 minutes
+
+      const token = await RegistrationToken.create({
+        token: tokenString,
+        userId,
+        label: label || undefined,
+        expiresAt,
+      });
+
+      console.log(`🔑 Registration token generated for user ${userId}: ${tokenString.substring(0, 8)}...`);
+
+      res.json({
+        success: true,
+        token: tokenString,
+        expiresAt,
+        label: token.label,
+        instructions: 'Paste this token into your node software within 20 minutes. It can only be used once.',
+      });
+    } catch (error) {
+      console.error('❌ Token generation error:', error);
+      res.status(500).json({ success: false, error: 'Failed to generate token' });
+    }
+  }
+
+  /**
+   * POST /api/nodes/register-with-token
+   * Node software calls this with a registration token.
+   * On success returns { nodeId, nodeSecret } — the secret is NEVER stored in plain text again.
+   *
+   * Secret enforcement is controlled by ENFORCE_NODE_SECRET env var (default: strict / true).
+   */
+  static async registerWithToken(req: Request, res: Response): Promise<void> {
+    try {
+      const { registrationToken, name, hardware, os, capabilities, performance,
+        ipAddress, publicIp, hostname, hardwareFingerprint, hardwareVerifiedAt } = req.body;
+
+      if (!registrationToken) {
+        res.status(400).json({ success: false, error: 'registrationToken is required' });
+        return;
+      }
+
+      const { RegistrationToken } = await import('../models/RegistrationToken');
+      const { Node } = await import('../models/Node');
+      const { User } = await import('../models/User');
+      const notificationService = (await import('../services/NotificationService')).notificationService;
+      const bcrypt = await import('bcryptjs');
+      const crypto = await import('crypto');
+
+      // Find the token
+      const tokenDoc = await RegistrationToken.findOne({ token: registrationToken });
+
+      if (!tokenDoc) {
+        res.status(400).json({ success: false, error: 'TOKEN_INVALID', message: 'Invalid registration token.' });
+        return;
+      }
+      if (tokenDoc.used || tokenDoc.useCount >= tokenDoc.maxUses) {
+        res.status(400).json({ success: false, error: 'TOKEN_ALREADY_USED', message: 'This token has already been used.' });
+        return;
+      }
+      if (new Date() > tokenDoc.expiresAt) {
+        res.status(400).json({ success: false, error: 'TOKEN_EXPIRED', message: 'This token has expired. Please generate a new one from the dashboard.' });
+        return;
+      }
+
+      const userId = tokenDoc.userId;
+
+      // Re-check user still under maxNodes
+      const user = await User.findById(userId);
+      if (!user) {
+        res.status(400).json({ success: false, error: 'USER_NOT_FOUND' });
+        return;
+      }
+      const nodeCount = await Node.countDocuments({ userId, isRevoked: { $ne: true } });
+      const maxNodes = user.maxNodes ?? 10;
+      if (nodeCount >= maxNodes) {
+        res.status(403).json({
+          success: false,
+          error: 'NODE_LIMIT_REACHED',
+          message: `Account node limit (${maxNodes}) reached.`,
+        });
+        return;
+      }
+
+      // Block duplicate hardware fingerprints across the whole system
+      if (hardwareFingerprint) {
+        const hwMatch = await Node.findOne({ hardwareFingerprint, isRevoked: { $ne: true } });
+        if (hwMatch) {
+          res.status(409).json({
+            success: false,
+            error: 'HARDWARE_ALREADY_REGISTERED',
+            message: 'This hardware is already registered. Revoke the existing node first.',
+            existingNodeId: hwMatch.nodeId,
+          });
+          return;
+        }
+      }
+
+      // Generate nodeId + nodeSecret
+      const nodeId = `node-${crypto.randomBytes(5).toString('hex')}-${Date.now().toString(36)}`;
+      const nodeSecret = crypto.randomBytes(48).toString('hex'); // 96-char hex secret
+      const nodeSecretHash = await bcrypt.hash(nodeSecret, 10);
+
+      const nodeName = name || tokenDoc.label || `Node-${nodeId.substring(0, 12)}`;
+      const now = new Date();
+
+      // Create the node, permanently linked to the user
+      const node = new Node({
+        nodeId,
+        userId,
+        name: nodeName,
+        status: 'online',
+        os: os || 'Unknown',
+        hardware: {
+          cpuCores: 1,
+          cpuScore: 0,
+          gpuName: 'Unknown',
+          gpuVRAM: 0,
+          gpuScore: 0,
+          ramGB: 0,
+          blenderVersion: 'unknown',
+          ...(hardware || {}),
+        },
+        capabilities: {
+          supportedEngines: ['CYCLES', 'EEVEE'],
+          supportedGPUs: ['CUDA', 'OPTIX'],
+          maxSamples: 1024,
+          maxResolutionX: 3840,
+          maxResolutionY: 2160,
+          supportsTiles: true,
+          ...(capabilities || {}),
+        },
+        performance: {
+          tier: 'Unknown',
+          effectiveScore: 0,
+          gpuScore: 0,
+          cpuScore: 0,
+          framesRendered: 0,
+          totalRenderTime: 0,
+          avgFrameTime: 0,
+          reliabilityScore: 100,
+          lastUpdated: now,
+          ...(performance || {}),
+        },
+        ipAddress: ipAddress || '0.0.0.0',
+        publicIp: publicIp || undefined,
+        hostname: hostname || undefined,
+        hardwareFingerprint: hardwareFingerprint || undefined,
+        hardwareVerifiedAt: hardwareVerifiedAt ? new Date(hardwareVerifiedAt) : now,
+        nodeSecretHash,
+        registeredViaToken: registrationToken,
+        lastHeartbeat: now,
+        lastStatusChange: now,
+        connectionCount: 1,
+        jobsCompleted: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await node.save();
+
+      // Mark token as used (atomic)
+      await RegistrationToken.updateOne(
+        { _id: tokenDoc._id },
+        { $set: { used: true, usedAt: now, usedByNodeId: nodeId, useCount: 1 } }
+      );
+
+      console.log(`✅ Node registered via token: ${nodeName} (${nodeId}) → user ${userId}`);
+
+      // Send in-app notification + real-time WS push to the token owner
+      try {
+        await notificationService.createNotification(
+          userId,
+          'node_registered',
+          '🖥️ New Node Registered',
+          `"${nodeName}" has been successfully connected to your account.`,
+          { nodeId, nodeName }
+        );
+
+        const wsService = req.app.get('wsService');
+        if (wsService && wsService.emitToUser) {
+          wsService.emitToUser(userId.toString(), 'notification', {
+            type: 'node_registered',
+            title: '🖥️ New Node Registered',
+            message: `"${nodeName}" is now connected to your account.`,
+            nodeId,
+            nodeName,
+          });
+        }
+
+        // Also broadcast system update for the admin dashboard
+        if (wsService) {
+          wsService.broadcastSystemUpdate({
+            type: 'node_registered',
+            data: { nodeId, nodeName, userId, timestamp: now.toISOString() },
+          });
+        }
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send node_registered notification:', notifyErr);
+        // Non-fatal — don't fail the registration
+      }
+
+      res.status(201).json({
+        success: true,
+        message: 'Node registered and linked to your account.',
+        nodeId,
+        nodeSecret,  // Only time the plain-text secret is ever returned
+        nodeName,
+        heartbeatInterval: 30000,
+        warning: 'Store nodeSecret securely — it will never be shown again.',
+      });
+    } catch (error) {
+      console.error('❌ registerWithToken error:', error);
+      res.status(500).json({ success: false, error: 'Failed to register node', details: String(error) });
+    }
+  }
+
+  /**
+   * POST /api/nodes/revoke
+   * Authenticated node_provider revokes one of their own nodes.
+   */
+  static async revokeNode(req: Request, res: Response): Promise<void> {
+    try {
+      const authReq = req as AuthRequest;
+      const userId = authReq.user?.userId;
+      const { nodeId, reason } = req.body;
+
+      if (!nodeId) {
+        res.status(400).json({ success: false, error: 'nodeId is required' });
+        return;
+      }
+
+      const { Node } = await import('../models/Node');
+      const notificationService = (await import('../services/NotificationService')).notificationService;
+
+      const node = await Node.findOne({ nodeId });
+      if (!node) {
+        res.status(404).json({ success: false, error: 'Node not found' });
+        return;
+      }
+
+      // Only the owner (or admin) can revoke
+      const userIdStr = userId?.toString();
+      const nodeUserIdStr = node.userId?.toString();
+      const isAdmin = authReq.user?.roles?.includes('admin') || authReq.user?.role === 'admin';
+
+      if (!isAdmin && userIdStr !== nodeUserIdStr) {
+        res.status(403).json({ success: false, error: 'You do not own this node' });
+        return;
+      }
+
+      if (node.isRevoked) {
+        res.status(400).json({ success: false, error: 'Node is already revoked' });
+        return;
+      }
+
+      const now = new Date();
+      await Node.updateOne(
+        { nodeId },
+        {
+          $set: {
+            isRevoked: true,
+            revokedAt: now,
+            revokedReason: reason || 'Revoked by owner',
+            status: 'offline',
+            offlineReason: 'Node revoked by owner',
+            wsConnected: false,
+            updatedAt: now,
+            lastStatusChange: now,
+          },
+        }
+      );
+
+      console.log(`🚫 Node revoked: ${nodeId} by user ${userId}. Reason: ${reason || 'N/A'}`);
+
+      // Notify the owner
+      try {
+        await notificationService.createNotification(
+          node.userId,
+          'node_revoked',
+          '🚫 Node Revoked',
+          `"${node.name || nodeId}" has been revoked. ${reason ? `Reason: ${reason}` : ''}`,
+          { nodeId, reason }
+        );
+      } catch { /* non-fatal */ }
+
+      // Broadcast to dashboard
+      const wsService = req.app.get('wsService');
+      if (wsService) {
+        wsService.broadcastSystemUpdate({
+          type: 'node_revoked',
+          data: { nodeId, nodeName: node.name, reason, timestamp: now.toISOString() },
+        });
+        wsService.broadcastNodeUpdate(nodeId, {
+          status: 'offline',
+          isRevoked: true,
+          revokedAt: now,
+        });
+      }
+
+      res.json({ success: true, message: `Node "${node.name || nodeId}" has been revoked.` });
+    } catch (error) {
+      console.error('❌ revokeNode error:', error);
+      res.status(500).json({ success: false, error: 'Failed to revoke node' });
+    }
+  }
+
+  /**
+   * POST /api/nodes/tokens/list
+   * Returns active (unused, unexpired) tokens for the authenticated node_provider.
+   */
+  static async listTokens(req: Request, res: Response): Promise<void> {
+    try {
+      const authReq = req as AuthRequest;
+      const userId = authReq.user?.userId;
+      const { RegistrationToken } = await import('../models/RegistrationToken');
+
+      const tokens = await RegistrationToken.find({
+        userId,
+        used: false,
+        expiresAt: { $gt: new Date() },
+      }).select('-__v').sort({ createdAt: -1 });
+
+      res.json({ success: true, tokens });
+    } catch (error) {
+      res.status(500).json({ success: false, error: 'Failed to list tokens' });
     }
   }
 }

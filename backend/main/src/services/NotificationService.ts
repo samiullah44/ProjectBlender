@@ -5,7 +5,7 @@ export class NotificationService {
     // Create a new notification
     async createNotification(
         userId: string | Types.ObjectId,
-        type: 'application_approved' | 'application_rejected' | 'system' | 'job_update',
+        type: 'application_approved' | 'application_rejected' | 'system' | 'job_update' | 'node_registered' | 'node_revoked',
         title: string,
         message: string,
         metadata?: any

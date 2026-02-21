@@ -22,13 +22,14 @@ namespace BlendFarm.Node.Benchmark
                 "benchmark_cache.json");
             
             Directory.CreateDirectory(Path.GetDirectoryName(_cachePath));
+            _logger.LogInformation($"Benchmark cache path: {_cachePath}");
         }
 
         public async Task<BenchmarkResult> GetCachedBenchmarkAsync()
         {
             if (!File.Exists(_cachePath))
             {
-                _logger.LogDebug("No cached benchmark found");
+                _logger.LogDebug($"No cached benchmark found at {_cachePath}");
                 return null;
             }
 
@@ -39,11 +40,11 @@ namespace BlendFarm.Node.Benchmark
 
                 if (result != null && result.IsValid())
                 {
-                    _logger.LogInformation($"📦 Using cached benchmark from {result.RunDate:yyyy-MM-dd}");
+                    _logger.LogInformation($"📦 Using cached benchmark from {result.RunDate:yyyy-MM-dd} (path: {_cachePath})");
                     return result;
                 }
 
-                _logger.LogInformation("📦 Cached benchmark expired");
+                _logger.LogInformation($"📦 Cached benchmark expired at {_cachePath}");
                 return null;
             }
             catch (Exception ex)
@@ -59,7 +60,7 @@ namespace BlendFarm.Node.Benchmark
             {
                 var json = JsonConvert.SerializeObject(result, Formatting.Indented);
                 await File.WriteAllTextAsync(_cachePath, json);
-                _logger.LogDebug("✅ Benchmark cached successfully");
+                _logger.LogDebug($"✅ Benchmark cached successfully at {_cachePath}");
             }
             catch (Exception ex)
             {

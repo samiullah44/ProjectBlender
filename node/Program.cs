@@ -1011,7 +1011,8 @@ if ($blenderExe) {
                 }
             }
 
-            var identityService = new NodeIdentityService(finalFriendlyName == "node_auto" ? null : finalFriendlyName);
+            var identityLogger = loggerFactory.CreateLogger<NodeIdentityService>();
+            var identityService = new NodeIdentityService(finalFriendlyName == "node_auto" ? null : finalFriendlyName, identityLogger);
 
             // Build the host - pass blender path as parameter
            var host = Host.CreateDefaultBuilder()

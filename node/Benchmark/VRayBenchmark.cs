@@ -171,7 +171,7 @@ namespace BlendFarm.Node.Benchmark
             try
             {
                 // Try alternative command format
-                var output = await RunProcessWithTimeoutAsync(benchmarkExe, "benchmark --mode vray", _commandTimeoutMs * 2);
+                var output = await RunProcessWithTimeoutAsync(benchmarkExe, "benchmark --mode vray", -1);
                 return ParseScoreFromOutputAlternative(output, "cpu");
             }
             catch
@@ -185,7 +185,7 @@ namespace BlendFarm.Node.Benchmark
             try
             {
                 // Try alternative command format
-                var output = await RunProcessWithTimeoutAsync(benchmarkExe, "benchmark --mode vray-gpu", _commandTimeoutMs * 2);
+                var output = await RunProcessWithTimeoutAsync(benchmarkExe, "benchmark --mode vray-gpu", -1);
                 return ParseScoreFromOutputAlternative(output, "gpu");
             }
             catch
@@ -265,7 +265,7 @@ private async Task<double> RunGpuBenchmarkWithTimeoutAsync(string benchmarkExe)
         foreach (var cmd in gpuCommands)
         {
             _logger.LogDebug($"Trying GPU command: {cmd}");
-            var output = await RunProcessWithTimeoutAsync(benchmarkExe, cmd, _commandTimeoutMs * 2);
+            var output = await RunProcessWithTimeoutAsync(benchmarkExe, cmd, -1);
             var score = ParseScoreFromOutput(output, "vpaths");
             
             if (score > 0)
@@ -298,7 +298,7 @@ private async Task<double> RunCpuBenchmarkWithTimeoutAsync(string benchmarkExe)
         foreach (var cmd in cpuCommands)
         {
             _logger.LogDebug($"Trying CPU command: {cmd}");
-            var output = await RunProcessWithTimeoutAsync(benchmarkExe, cmd, _commandTimeoutMs * 2);
+            var output = await RunProcessWithTimeoutAsync(benchmarkExe, cmd, -1);
             var score = ParseScoreFromOutput(output, "vsamples");
             
             if (score > 0)
@@ -319,8 +319,10 @@ private async Task<double> RunCpuBenchmarkWithTimeoutAsync(string benchmarkExe)
 
         private async Task<string> RunProcessWithTimeoutAsync(string exe, string args, int timeoutMs)
         {
+            // timeoutMs <= 0 means no timeout (run until the process exits naturally)
             using var cts = new CancellationTokenSource();
-            cts.CancelAfter(timeoutMs);
+            if (timeoutMs > 0)
+                cts.CancelAfter(timeoutMs);
             
             var psi = new ProcessStartInfo(exe, args)
             {

@@ -80,6 +80,12 @@ export interface INode {
   hostname?: string;
   wsConnected?: boolean;           // true while node holds an active WS connection
   wsConnectedAt?: Date;
+  // ── Security / ownership fields ──────────────────────────────────────────
+  nodeSecretHash?: string;         // bcrypt hash of the nodeSecret issued at registration
+  registeredViaToken?: string;     // the registration token string that created this node
+  isRevoked?: boolean;             // true when owner has revoked this node
+  revokedAt?: Date;
+  revokedReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -172,6 +178,12 @@ const nodeSchema = new mongoose.Schema<INode>({
   hostname: String,
   wsConnected: { type: Boolean, default: false },
   wsConnectedAt: Date,
+  // ── Security / ownership fields ──────────────────────────────────────────
+  nodeSecretHash: { type: String, select: false },   // never returned by default
+  registeredViaToken: { type: String, select: false },
+  isRevoked: { type: Boolean, default: false, index: true },
+  revokedAt: Date,
+  revokedReason: String,
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

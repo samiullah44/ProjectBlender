@@ -27,6 +27,7 @@ export interface IUser extends Document {
     earnings: number;
   };
   nodeProviderStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  maxNodes: number; // max render nodes this user can register (default 10)
   nodeProviderApplicationDate?: Date;
   nodeProviderApplication?: {
     operatingSystem: string;
@@ -140,6 +141,11 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: ['none', 'pending', 'approved', 'rejected'],
       default: 'none'
+    },
+    maxNodes: {
+      type: Number,
+      default: 10,
+      min: 0,
     },
     nodeProviderApplicationDate: Date,
     nodeProviderApplication: {

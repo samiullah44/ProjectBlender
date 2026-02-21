@@ -65,7 +65,7 @@ namespace BlendFarm.Node.Services
             _configuration = configuration;
             _identityService = identityService;
             _nodeId = configuration["NodeSettings:NodeId"] ?? Guid.NewGuid().ToString();
-            _backendUrl = configuration["Backend:Url"] ?? "http://192.168.1.30:3000";
+            _backendUrl = configuration["Backend:Url"] ?? "http://192.168.100.228:3000";
             _frameUploadUrls = new ConcurrentDictionary<int, (string, string)>();
             _blendFileCache = new ConcurrentDictionary<string, (string, DateTime)>();
              _computeScoreService = new ComputeScoreService(logger);
@@ -90,8 +90,33 @@ namespace BlendFarm.Node.Services
             // Set default headers
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "BlendFarm-Node/1.0");
             _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
+
+            // ── Try to load a saved node identity (nodeId + nodeSecret) ─────────
+            // If identity was previously saved (node_identity.json), load it now
+            // so we can attach the secret header before any outbound call is made.
+            if (_identityService.TryLoadIdentity())
+            {
+                _nodeId = _identityService.NodeId;
+                ApplyNodeSecretHeader();
+            }
             
             _logger.LogInformation($"🎯 Backend URL set to: {_backendUrl}");
+        }
+
+        /// <summary>
+        /// Attaches X-Node-Id and X-Node-Secret to every HTTP request this node makes.
+        /// Called once after identity is confirmed.
+        /// </summary>
+        private void ApplyNodeSecretHeader()
+        {
+            // Remove stale values first (safe for re-entry)
+            _httpClient.DefaultRequestHeaders.Remove("X-Node-Id");
+            _httpClient.DefaultRequestHeaders.Remove("X-Node-Secret");
+
+            _httpClient.DefaultRequestHeaders.Add("X-Node-Id",     _identityService.NodeId);
+            _httpClient.DefaultRequestHeaders.Add("X-Node-Secret", _identityService.NodeSecret);
+
+            _logger.LogDebug($"🔐 Node auth headers attached for: {_identityService.NodeId}");
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -177,9 +202,28 @@ var hardwareDetector = new HardwareDetector(
             // Run benchmark if needed
             await RunBenchmarkIfNeededAsync();
 
+            // ── Resolve node identity ────────────────────────────────────────────────
+            // Priority:
+            //   1. node_identity.json (already loaded in constructor if it existed)
+            //   2. appsettings.json: NodeSettings:NodeId + NodeSettings:NodeSecret
+            //   3. appsettings.json: NodeSettings:RegistrationToken  (one-time)
+            //   4. Interactive console prompt for registration token
+            if (!_identityService.IsRegistered)
+            {
+                var registered = await RunTokenRegistrationFlowAsync(_detectedHardware);
+                if (!registered)
+                {
+                    _logger.LogError("❌ Could not establish node identity. Service cannot start.");
+                    return;
+                }
+                // Update _nodeId to the one granted by the server
+                _nodeId = _identityService.NodeId;
+                ApplyNodeSecretHeader();
+            }
+
             // Register with backend
-            var registered = await RegisterWithBackendAsync(_detectedHardware);
-            if (!registered)
+            var registered2 = await RegisterWithBackendAsync(_detectedHardware);
+            if (!registered2)
             {
                 _logger.LogError("Failed to register with backend. Retrying in 30 seconds...");
                 await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
@@ -272,7 +316,109 @@ var hardwareDetector = new HardwareDetector(
                 _logger.LogError($"Cache cleanup failed: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Resolves node identity via registration token.
+        /// Priority:
+        ///   1. appsettings.json NodeSettings:NodeId + NodeSettings:NodeSecret  (manual override)
+        ///   2. appsettings.json NodeSettings:RegistrationToken                 (one-time token in config)
+        ///   3. Interactive console prompt                                        (first-run experience)
+        /// </summary>
+        private async Task<bool> RunTokenRegistrationFlowAsync(HardwareInfo hardware)
+        {
+            // 1. Check if nodeId + nodeSecret are baked directly into config (manual/dev override)
+            var cfgNodeId     = _configuration["NodeSettings:NodeId"];
+            var cfgNodeSecret = _configuration["NodeSettings:NodeSecret"];
+
+            if (!string.IsNullOrEmpty(cfgNodeId)   && cfgNodeId   != "node_auto" &&
+                !string.IsNullOrEmpty(cfgNodeSecret) && cfgNodeSecret != "PASTE_SECRET_HERE")
+            {
+                _identityService.SetIdentity(cfgNodeId, cfgNodeSecret);
+                _logger.LogInformation($"✅ Node identity loaded from config: {cfgNodeId}");
+                return true;
+            }
+
+            // 2. Try a pre-configured registration token (env / appsettings)
+            var cfgToken = _configuration["NodeSettings:RegistrationToken"];
+            if (!string.IsNullOrEmpty(cfgToken) && cfgToken != "PASTE_TOKEN_HERE")
+            {
+                _logger.LogInformation("🔑 Found RegistrationToken in config — registering with backend...");
+                var ok = await _identityService.RegisterWithTokenAsync(
+                    cfgToken, _backendUrl, _httpClient,
+                    BuildHardwarePayload(hardware));
+
+                if (ok)
+                {
+                    // Clear the token from config so it can't be reused accidentally
+                    _logger.LogInformation("✅ Registration successful. You can now remove RegistrationToken from appsettings.json.");
+                    return true;
+                }
+
+                _logger.LogError("❌ Registration token in config was rejected. Please generate a new one.");
+            }
+
+            // 3. Interactive prompt (first-run experience — works in console mode)
+            _logger.LogInformation("══════════════════════════════════════════════════════════");
+            _logger.LogInformation("🆕 FIRST RUN — Node Identity Setup");
+            _logger.LogInformation("   This node has not been registered yet.");
+            _logger.LogInformation("   Please go to your BlendFarm dashboard:");
+            _logger.LogInformation("   Account → Node Provider → Add New Node → Copy Token");
+            _logger.LogInformation("══════════════════════════════════════════════════════════");
+            Console.Write("\nPaste your Registration Token here and press Enter: ");
+            var interactiveToken = Console.ReadLine()?.Trim();
+
+            if (string.IsNullOrEmpty(interactiveToken))
+            {
+                _logger.LogError("No token provided. Cannot register node.");
+                return false;
+            }
+
+            // Prompt for friendly name if not already provided
+            if (string.IsNullOrEmpty(_identityService.UserProvidedName))
+            {
+                Console.Write("\nGive this node a friendly name (e.g. 'Studio PC'): ");
+                var friendlyName = Console.ReadLine()?.Trim();
+                if (!string.IsNullOrEmpty(friendlyName))
+                    _identityService.SetFriendlyName(friendlyName);
+            }
+
+            return await _identityService.RegisterWithTokenAsync(
+                interactiveToken, _backendUrl, _httpClient,
+                BuildHardwarePayload(hardware));
+        }
+
+        /// <summary>Builds the hardware payload dict to send during registration.</summary>
+        private object BuildHardwarePayload(HardwareInfo hardware)
+        {
+            if (hardware == null) return null;
+            return new
+            {
+                os              = hardware.Os?.Name,
+                ipAddress       = hardware.Ip?.LocalIP,
+                publicIp        = hardware.Ip?.PublicIP,
+                hostname        = hardware.Ip?.Hostname,
+                hardwareFingerprint = hardware.HardwareFingerprint,
+                hardwareVerifiedAt  = hardware.DetectedAt,
+                hardware = new
+                {
+                    cpuModel        = hardware.Cpu?.Model,
+                    cpuCores        = hardware.Cpu?.PhysicalCores,
+                    cpuThreads      = hardware.Cpu?.LogicalCores,
+                    cpuSpeedGHz     = hardware.Cpu?.BaseClockGHz,
+                    cpuScore        = hardware.Cpu?.CpuScore,
+                    gpuName         = hardware.Gpus?.Count > 0 ? hardware.Gpus[0].Model : "Unknown",
+                    gpuVRAM         = hardware.Gpus?.Count > 0 ? hardware.Gpus[0].VramMB : 0,
+                    ramGB           = hardware.Ram?.TotalGB,
+                    storageFreeGB   = hardware.Storage?.FreeGB,
+                    uploadSpeedMbps = hardware.Network?.UploadSpeedMbps,
+                    downloadSpeedMbps = hardware.Network?.DownloadSpeedMbps,
+                    blenderVersion  = _computeScore?.BlenderVersion ?? "unknown",
+                }
+            };
+        }
+
         private async Task RunBenchmarkIfNeededAsync()
+
 {
     _logger.LogInformation("🎯 Checking benchmark status...");
     

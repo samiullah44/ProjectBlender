@@ -2,7 +2,7 @@ import { Schema, model, Document, Types } from 'mongoose'
 
 export interface INotification extends Document {
     userId: Types.ObjectId
-    type: 'application_approved' | 'application_rejected' | 'system' | 'job_update'
+    type: 'application_approved' | 'application_rejected' | 'system' | 'job_update' | 'node_registered' | 'node_revoked'
     title: string
     message: string
     read: boolean
@@ -25,7 +25,7 @@ const notificationSchema = new Schema<INotification>(
         },
         type: {
             type: String,
-            enum: ['application_approved', 'application_rejected', 'system', 'job_update'],
+            enum: ['application_approved', 'application_rejected', 'system', 'job_update', 'node_registered', 'node_revoked'],
             required: true
         },
         title: {

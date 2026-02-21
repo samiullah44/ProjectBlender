@@ -20,7 +20,8 @@ import {
   Search,
   CreditCard,
   Cpu,
-  ArrowLeftRight
+  ArrowLeftRight,
+  HardDrive
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -165,6 +166,14 @@ const Navbar: React.FC = () => {
         icon: <Shield className="w-4 h-4" />,
         color: 'text-red-400',
         bgColor: 'bg-red-500/10',
+        roles: ['admin']
+      })
+      baseLinks.push({
+        label: 'Network Nodes',
+        href: '/admin/nodes',
+        icon: <HardDrive className="w-4 h-4" />,
+        color: 'text-cyan-400',
+        bgColor: 'bg-cyan-500/10',
         roles: ['admin']
       })
     }

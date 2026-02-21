@@ -23,14 +23,14 @@ import ApplyNodeProvider from '@/pages/client/ApplyNodeProvider'
 
 // Node Pages
 import NodeDashboard from '@/pages/node/Dashboard'
-// import NodeEarnings from '@/pages/node/Earnings'
-// import NodeMachines from '@/pages/node/Machines'
+import NodeDetails from '@/pages/node/NodeDetails'
 
 // Admin Pages
 import AdminDashboard from '@/pages/admin/Dashboard'
 import AdminJobs from '@/pages/admin/Jobs'
 import AdminJobDetails from '@/pages/admin/JobDetails'
 import AdminApplications from '@/pages/admin/Applications'
+import AdminNodes from '@/pages/admin/Nodes'
 
 // Protected Route Component
 import { ProtectedRoute } from '@/components/layout/ProtectedLayout'
@@ -147,8 +147,7 @@ function App() {
                   <ProtectedRoute allowedRoles={['node_provider', 'admin']}>
                     <Routes>
                       <Route path="/dashboard" element={<NodeDashboard />} />
-                      {/* <Route path="/earnings" element={<NodeEarnings />} /> */}
-                      {/* <Route path="/machines" element={<NodeMachines />} /> */}
+                      <Route path="/nodes/:nodeId" element={<NodeDetails />} />
                     </Routes>
                   </ProtectedRoute>
                 }
@@ -164,6 +163,8 @@ function App() {
                       <Route path="/jobs" element={<AdminJobs />} />
                       <Route path="/jobs/:jobId" element={<AdminJobDetails />} />
                       <Route path="/applications" element={<AdminApplications />} />
+                      <Route path="/nodes" element={<AdminNodes />} />
+                      <Route path="/nodes/:nodeId" element={<NodeDetails />} />
                     </Routes>
                   </ProtectedRoute>
                 }
