@@ -1,5 +1,5 @@
 // backend/src/middleware/rateLimiter.ts
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 // General rate limiter for all auth routes
 export const authLimiter = rateLimit({
@@ -62,7 +62,7 @@ export const tokenGenerateLimiter = rateLimit({
     max: 20,
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req: any) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || ipKeyGenerator(req.ip || ''),
     message: {
         success: false,
         error: 'TOO_MANY_REQUESTS',

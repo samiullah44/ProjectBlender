@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using BlendFarm.Node.Services;
+using BlendFarm.Node.Models;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -954,6 +955,19 @@ if ($blenderExe) {
             });
             
             var logger = loggerFactory.CreateLogger<Program>();
+
+            var configLogger = loggerFactory.CreateLogger<ConfigurationManagerService>();
+            var configService = new ConfigurationManagerService(configLogger);
+
+            if (Environment.UserInteractive)
+            {
+                var interactiveStartup = new InteractiveStartupService(configService);
+                bool proceed = await interactiveStartup.RunStartupInteractiveFlowAsync();
+                if (!proceed)
+                {
+                    return;
+                }
+            }
             
             // Find or download SPECIFIC VERSION of Blender
             _blenderPath = await BlenderFinder.FindBlenderAsync(logger);
@@ -1018,6 +1032,9 @@ if ($blenderExe) {
            var host = Host.CreateDefaultBuilder()
     .ConfigureServices((context, services) =>
     {
+        // Register config service
+        services.AddSingleton(configService);
+        
         // Register identity service
         services.AddSingleton(identityService);
 
