@@ -155,7 +155,22 @@ namespace BlendFarm.Node.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger?.LogError($"❌ Token registration failed ({(int)response.StatusCode}): {body}");
+                    dynamic errorObj = JsonConvert.DeserializeObject(body);
+                    string errorMsg = errorObj?.message ?? body;
+                    
+                    _logger?.LogError($"❌ Registration Refused:");
+                    _logger?.LogCritical($"{errorMsg}");
+                    
+                    // Stop the application from scrolling and immediately exiting
+                    Console.WriteLine("\n════════════════════════════════════════════");
+                    Console.WriteLine("    HARDWARE REQUIREMENTS NOT MET");
+                    Console.WriteLine("════════════════════════════════════════════");
+                    Console.WriteLine($"{errorMsg}");
+                    Console.WriteLine("\nPress any key to exit...");
+                    Console.ReadKey();
+                    
+                    // Kill the process immediately so it doesn't continue the background service loop
+                    Environment.Exit(1);
                     return false;
                 }
 

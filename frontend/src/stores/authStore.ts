@@ -334,6 +334,10 @@ export const useAuthStore = create<AuthStore>()(
                     const response = await axiosInstance.get('/auth/profile')
 
                     if (response.data.success) {
+                        if (response.data.token) {
+                            localStorage.setItem('token', response.data.token)
+                            set({ token: response.data.token })
+                        }
                         set({
                             user: response.data.user,
                             isLoading: false

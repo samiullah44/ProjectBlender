@@ -187,9 +187,11 @@ export class AuthController {
   static async getProfile(req: AuthRequest, res: Response) {
     try {
       const user = await authService.getProfile(req.user.userId);
+      const token = authService.generateToken(user);
 
       res.json({
         success: true,
+        token: token,
         user: {
           id: user._id,
           email: user.email,

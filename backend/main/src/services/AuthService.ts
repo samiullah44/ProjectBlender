@@ -22,7 +22,7 @@ export interface AuthResponse {
   autoApproved?: boolean; // Added for node provider application
 }
 
-const MIN_REQUIREMENTS = {
+export const MIN_REQUIREMENTS = {
   ramSize: 8,
   gpuVram: 4,
   storageSize: 100,
@@ -31,7 +31,7 @@ const MIN_REQUIREMENTS = {
   cpuCores: 4
 };
 
-const GPU_BLACKLIST = [
+export const GPU_BLACKLIST = [
   'gtx 750', 'gtx 650', 'gt 1030', 'gt 710', 'gt 730', 'quadro k620', 'nvs', 'intel hd', 'intel iris', 'amd radeon r5', 'amd radeon r7'
 ];
 
@@ -479,7 +479,7 @@ export class AuthService {
   }
 
   // Generate JWT token
-  private generateToken(user: any): string {
+  public generateToken(user: any): string {
     return jwt.sign(
       {
         userId: user._id,
@@ -606,9 +606,9 @@ export class AuthService {
       );
 
       // 🎯 Step 3: Notifications (In-app and WebSocket ONLY)
-      const notificationTitle = autoResult.approved ? 'Application Approved! 🎉' : 'Application Update';
+      const notificationTitle = autoResult.approved ? 'Preliminary Approval! 🎉' : 'Application Update';
       const notificationMessage = autoResult.approved
-        ? 'Your node provider application has been automatically approved! You can now access the Node Provider dashboard.'
+        ? 'Your application holds preliminary approval! To get your final approval and start earning, you must now download our node software and connect your hardware for final verification.'
         : `Your application does not meet the minimum requirements at this time. Reason: ${autoResult.reason}`;
 
       await notificationService.createNotification(
@@ -633,7 +633,7 @@ export class AuthService {
       return {
         success: true,
         message: autoResult.approved
-          ? 'Congratulations! Your system meets the requirements and has been automatically approved.'
+          ? 'Preliminary approval granted! Your system claims meet our requirements. Please connect your node for final verification.'
           : `Application processed. Unfortunately, your system does not meet requirements: ${autoResult.reason}`,
         user: autoResult.approved ? { role: user.role, roles: user.roles, primaryRole: user.primaryRole } : undefined,
         autoApproved: autoResult.approved
@@ -740,16 +740,16 @@ export class AuthService {
       await notificationService.createNotification(
         userId,
         'application_approved',
-        'Application Approved! 🎉',
-        'Your node provider application has been approved. You can now start earning by contributing your hardware!',
+        'Preliminary Approval! 🎉',
+        'Your node provider application has been preliminarily approved! Please download the node software and connect to the network for final verification.',
         { applicationId: userId }
       );
 
       wsService.emitToUser(userId, 'notification:new', {
         notification: {
           type: 'application_approved',
-          title: 'Application Approved! 🎉',
-          message: 'Your node provider application has been approved. You can now start earning by contributing your hardware!'
+          title: 'Preliminary Approval! 🎉',
+          message: 'Your node provider application has been preliminarily approved! Please download the node software and connect to the network for final verification.'
         }
       });
 

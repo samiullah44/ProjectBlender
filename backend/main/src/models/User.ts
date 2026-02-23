@@ -42,6 +42,7 @@ export interface IUser extends Document {
   };
   primaryRole?: 'client' | 'node_provider' | 'admin';
   rejectionReason?: string;
+  suspicionTag?: 'none' | 'little suspicious' | 'more suspicious' | 'complete suspicious';
 
   // Preferences
   preferences?: {
@@ -164,6 +165,11 @@ const userSchema = new Schema<IUser>(
       enum: ['client', 'node_provider', 'admin']
     },
     rejectionReason: String,
+    suspicionTag: {
+      type: String,
+      enum: ['none', 'little suspicious', 'more suspicious', 'complete suspicious'],
+      default: 'none'
+    },
     preferences: {
       defaultProjectId: {
         type: String,

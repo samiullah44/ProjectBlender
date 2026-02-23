@@ -1647,6 +1647,8 @@ export class NodeController {
       const notificationService = (await import('../services/NotificationService')).notificationService;
       const bcrypt = await import('bcryptjs');
       const crypto = await import('crypto');
+      const { HardwareValidationService } = await import('../services/HardwareValidationService');
+      const { Application } = await import('../models/Application');
 
       // Find the token
       const tokenDoc = await RegistrationToken.findOne({ token: registrationToken });
@@ -1696,6 +1698,69 @@ export class NodeController {
           return;
         }
       }
+
+      // ── Hardware Validation & Tagging ─────────────────────────────────────────
+      // 1. Minimum Requirements Check
+      const incomingHardware = {
+        ramGB: hardware?.ramGB,
+        gpuVRAM: hardware?.gpuVRAM,
+        cpuCores: hardware?.cpuCores,
+        gpuName: hardware?.gpuName
+      };
+
+      const minCheck = HardwareValidationService.checkMinimumRequirements(incomingHardware);
+
+      if (!minCheck.meetsRequirements) {
+        // Notify the user why their node was rejected via WebSocket & DB
+        try {
+          const notifyTitle = 'Node Registration Rejected';
+          const notifyMsg = `Your node "${name || 'Unknown'}" does not meet our minimum hardware requirements. ${minCheck.reason}`;
+
+          await notificationService.createNotification(
+            userId,
+            'system',
+            notifyTitle,
+            notifyMsg
+          );
+
+          const wsService = req.app.get('wsService');
+          if (wsService && wsService.emitToUser) {
+            wsService.emitToUser(userId.toString(), 'notification', {
+              type: 'system',
+              title: notifyTitle,
+              message: notifyMsg
+            });
+          }
+        } catch (e) { /* ignore notification errors */ }
+
+        res.status(403).json({
+          success: false,
+          error: 'HARDWARE_REQUIREMENTS_NOT_MET',
+          message: `Node does not meet minimum hardware requirements. ${minCheck.reason}`
+        });
+        return; // Abort node registration!
+      }
+
+      // 2. Suspicion Tagging (against Application Data)
+      try {
+        const userApplication = await Application.findOne({ userId }).sort({ createdAt: -1 });
+        const suspicionLevel = HardwareValidationService.evaluateSuspicionLevel(userApplication, incomingHardware);
+
+        // Only update if it increases the suspicion level (to prevent downgrading a 'complete suspicious' user back to 'none')
+        const levels = ['none', 'little suspicious', 'more suspicious', 'complete suspicious'];
+        const currentLevelIdx = levels.indexOf(user.suspicionTag || 'none');
+        const newLevelIdx = levels.indexOf(suspicionLevel);
+
+        if (newLevelIdx > currentLevelIdx) {
+          user.suspicionTag = suspicionLevel;
+          await user.save();
+          console.warn(`⚠️ User ${userId} tagged as "${suspicionLevel}" due to hardware spec discrepancies on node registration.`);
+        }
+      } catch (err) {
+        console.error('⚠️ Failed to evaluate suspicion level during registration:', err);
+        // Non-fatal, continue with registration
+      }
+      // ────────────────────────────────────────────────────────────────────────
 
       // Generate nodeId + nodeSecret
       const nodeId = `node-${crypto.randomBytes(5).toString('hex')}-${Date.now().toString(36)}`;
@@ -1773,8 +1838,8 @@ export class NodeController {
         await notificationService.createNotification(
           userId,
           'node_registered',
-          '🖥️ New Node Registered',
-          `"${nodeName}" has been successfully connected to your account.`,
+          '� Final Approval Complete: Node Registered',
+          `Congratulations! Your hardware meets the requirements. "${nodeName}" has been successfully connected and verified.`,
           { nodeId, nodeName }
         );
 
@@ -1782,8 +1847,8 @@ export class NodeController {
         if (wsService && wsService.emitToUser) {
           wsService.emitToUser(userId.toString(), 'notification', {
             type: 'node_registered',
-            title: '🖥️ New Node Registered',
-            message: `"${nodeName}" is now connected to your account.`,
+            title: '� Final Approval Complete: Node Registered',
+            message: `Congratulations! Your hardware meets the requirements. "${nodeName}" has been successfully connected and verified.`,
             nodeId,
             nodeName,
           });
