@@ -22,6 +22,9 @@ export class WebSocketService {
   constructor(server: Server) {
     this.wss = new WebSocketServer({ server });
     this.initialize();
+
+    // Periodically notify idle nodes to poll for jobs (every 30s to match legacy REST polling)
+    setInterval(() => this.notifyNodesToCheckJobs(), 30000);
   }
 
   private initialize() {
@@ -213,13 +216,16 @@ export class WebSocketService {
     this.nodeClients.set(nodeId, client);
 
     try {
+      const node = await Node.findOne({ nodeId });
+      const newStatus = (node && node.currentJob) ? 'busy' : 'online';
+
       await Node.updateOne(
         { nodeId },
         {
           $set: {
             wsConnected: true,
             wsConnectedAt: new Date(),
-            status: 'online',
+            status: newStatus,
             lastHeartbeat: new Date(),
             updatedAt: new Date(),
             ...(hardwareFingerprint && { hardwareFingerprint }),
@@ -236,6 +242,19 @@ export class WebSocketService {
     console.log(`✅ Node connected via WebSocket: ${nodeId}`);
     this.send(client, { type: 'ack', nodeId, message: 'connected', timestamp: Date.now() });
 
+    // Immediately ask the freshly-connected node to poll for pending jobs.
+    // This handles jobs that existed in the DB before the node came online.
+    setTimeout(() => {
+      if (client.ws.readyState === WebSocket.OPEN) {
+        try {
+          client.ws.send(JSON.stringify({ type: 'request_job_poll', timestamp: Date.now() }));
+          console.log(`📢 Sent request_job_poll to newly connected node ${nodeId}`);
+        } catch (err) {
+          console.error(`Failed to send initial job poll to node ${nodeId}:`, err);
+        }
+      }
+    }, 1500); // small delay so the node finishes its connect handshake first
+
     // Notify dashboard
     this.broadcastSystemUpdate({ type: 'node_ws_connected', data: { nodeId, timestamp: Date.now() } });
   }
@@ -248,13 +267,16 @@ export class WebSocketService {
     try {
       const resources = message.resources || {};
 
+      const node = await Node.findOne({ nodeId });
+      const newStatus = (node && node.currentJob) ? 'busy' : 'online';
+
       await Node.updateOne(
         { nodeId },
         {
           $set: {
             lastHeartbeat: now,
             updatedAt: now,
-            status: 'online',
+            status: newStatus,
             'lastResources': { ...resources, timestamp: now }
           },
           $push: {
@@ -316,6 +338,40 @@ export class WebSocketService {
   public isNodeConnected(nodeId: string): boolean {
     const client = this.nodeClients.get(nodeId);
     return !!client && client.ws.readyState === WebSocket.OPEN;
+  }
+
+  /**
+   * Tells every connected node to poll the /assign endpoint immediately.
+   * Called after a new job is created so idle nodes pick it up without
+   * waiting for their next REST fallback poll interval.
+   */
+  public async notifyNodesToCheckJobs(): Promise<void> {
+    let notified = 0;
+    try {
+      // Find all online nodes (not busy) from the database
+      const freeNodes = await Node.find({
+        nodeId: { $in: Array.from(this.nodeClients.keys()) },
+        status: 'online'
+      }).select('nodeId');
+
+      const freeNodeIds = new Set(freeNodes.map(n => n.nodeId));
+
+      for (const [nodeId, client] of this.nodeClients) {
+        if (freeNodeIds.has(nodeId) && client.ws.readyState === WebSocket.OPEN) {
+          try {
+            client.ws.send(JSON.stringify({ type: 'request_job_poll', timestamp: Date.now() }));
+            notified++;
+          } catch (err) {
+            console.error(`Failed to notify node ${nodeId} to check jobs:`, err);
+          }
+        }
+      }
+      if (notified > 0) {
+        console.log(`📢 Notified ${notified} free connected node(s) to poll for jobs`);
+      }
+    } catch (err) {
+      console.error('Error during notifyNodesToCheckJobs status query:', err);
+    }
   }
 
   // ── Auth handler ──────────────────────────────────────────────────────────
@@ -478,7 +534,7 @@ export class WebSocketService {
         if (job.assignedNodes instanceof Map) {
           assignedNodes = Object.fromEntries(job.assignedNodes);
         } else if (typeof job.assignedNodes === 'object') {
-          assignedNodes = job.assignedNodes;
+          assignedNodes = job.assignedNodes as any;
         }
       }
 

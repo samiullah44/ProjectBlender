@@ -1,11 +1,11 @@
 // pages/client/CreateJob.tsx - UPDATED for multipart upload
 import React, { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Upload, 
-  X, 
-  Settings, 
-  Cpu, 
+import {
+  Upload,
+  X,
+  Settings,
+  Cpu,
   Clock,
   DollarSign,
   CheckCircle,
@@ -44,6 +44,7 @@ interface JobSettings {
   denoiser?: 'NONE' | 'OPTIX' | 'OPENIMAGEDENOISE' | 'NLM'
   selectedFrame?: number
   creditsPerFrame: number
+  blenderVersion?: string
 }
 
 interface JobFormData {
@@ -61,7 +62,7 @@ interface JobFormData {
 // NEW: Form validation helper (moved from utils/jobFormData.ts)
 const validateJobForm = (data: Partial<JobFormData>, uploadedFile: File | null): string[] => {
   const errors: string[] = []
-  
+
   if (!uploadedFile) errors.push('Blender file is required')
   if (!data.name?.trim()) errors.push('Job name is required')
   if (data.type === 'animation') {
@@ -74,23 +75,23 @@ const validateJobForm = (data: Partial<JobFormData>, uploadedFile: File | null):
   if (data.settings?.resolutionX && data.settings.resolutionX < 1) errors.push('Width must be greater than 0')
   if (data.settings?.resolutionY && data.settings.resolutionY < 1) errors.push('Height must be greater than 0')
   if (!data.settings?.samples || data.settings.samples < 1) errors.push('Samples must be greater than 0')
-  
+
   return errors
 }
 
 const CreateJob: React.FC = () => {
   const navigate = useNavigate()
   // UPDATED: Get multipart upload method and upload state
-  const { 
-    createJobMultipart, 
-    isUploading, 
-    uploadProgress, 
-    uploadStage 
+  const {
+    createJobMultipart,
+    isUploading,
+    uploadProgress,
+    uploadStage
   } = jobStore()
-  
+
   const [currentStep, setCurrentStep] = useState<Step>('upload')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  
+
   // UPDATED: Initialize form data with settings object
   const [formData, setFormData] = useState<JobFormData>({
     name: '',
@@ -109,7 +110,8 @@ const CreateJob: React.FC = () => {
       tileSize: 256,
       outputFormat: 'PNG',
       denoiser: 'OPTIX',
-      creditsPerFrame: 1
+      creditsPerFrame: 1,
+      blenderVersion: '4.5.0'
     }
   })
 
@@ -200,9 +202,9 @@ const CreateJob: React.FC = () => {
       setCurrentStep(steps[currentIndex - 1])
     }
   }
-// In your CreateJob.tsx - Update the handleSubmit function
+  // In your CreateJob.tsx - Update the handleSubmit function
 
-const handleSubmit = async () => {
+  const handleSubmit = async () => {
     if (!uploadedFile) {
       toast.error('No file uploaded')
       return
@@ -214,7 +216,7 @@ const handleSubmit = async () => {
 
     try {
       console.log('🔄 Calling createJobMultipart...')
-      
+
       // Use multipart upload method
       const result = await createJobMultipart(uploadedFile, {
         name: formData.name,
@@ -226,34 +228,34 @@ const handleSubmit = async () => {
         selectedFrame: formData.selectedFrame,
         settings: formData.settings
       })
-      
+
       console.log('📤 Upload result:', result)
-      
-       if (result.success) {
-      console.log('✅ Job created successfully')
-      setCurrentStep('processing')
-      
-      // Get jobId from result (check multiple possible locations)
-      const jobId = result.data?.jobId || result.data?.data?.jobId
-      
-      if (jobId) {
-        console.log('🎯 Navigating to job details:', jobId)
-        
-        // Show success message for 2 seconds then navigate
-        setTimeout(() => {
-          navigate(`/client/jobs/${jobId}`)
-        }, 2000)
+
+      if (result.success) {
+        console.log('✅ Job created successfully')
+        setCurrentStep('processing')
+
+        // Get jobId from result (check multiple possible locations)
+        const jobId = result.data?.jobId || result.data?.data?.jobId
+
+        if (jobId) {
+          console.log('🎯 Navigating to job details:', jobId)
+
+          // Show success message for 2 seconds then navigate
+          setTimeout(() => {
+            navigate(`/client/jobs/${jobId}`)
+          }, 2000)
+        } else {
+          console.error('❌ No jobId found in response:', result)
+          // Fallback: navigate to dashboard and show message
+          setTimeout(() => {
+            navigate('/client/dashboard')
+            toast.success('Job created! Check dashboard for details.')
+          }, 2000)
+        }
       } else {
-        console.error('❌ No jobId found in response:', result)
-        // Fallback: navigate to dashboard and show message
-        setTimeout(() => {
-          navigate('/client/dashboard')
-          toast.success('Job created! Check dashboard for details.')
-        }, 2000)
-      }
-    } else {
         console.error('❌ Job creation failed:', result.error)
-        
+
         // Try fallback to simple upload
         console.log('🔄 Trying fallback simple upload...')
         try {
@@ -267,11 +269,11 @@ const handleSubmit = async () => {
             selectedFrame: formData.selectedFrame,
             settings: formData.settings
           })
-          
+
           if (simpleResult.success) {
             toast.success('Job created with simple upload!')
             setCurrentStep('processing')
-            
+
             if (simpleResult.jobId) {
               setTimeout(() => {
                 navigate(`/client/jobs/${simpleResult.jobId}`)
@@ -295,26 +297,26 @@ const handleSubmit = async () => {
   }
 
   const calculateEstimatedCost = () => {
-    const frames = formData.type === 'animation' 
+    const frames = formData.type === 'animation'
       ? (formData.endFrame - formData.startFrame + 1)
       : 1
-    
+
     const complexityFactor = formData.settings.samples / 128
     const resolutionFactor = (formData.settings.resolutionX * formData.settings.resolutionY) / (1920 * 1080)
-    
+
     let baseCost = frames * formData.settings.creditsPerFrame
     baseCost *= complexityFactor
     baseCost *= resolutionFactor
-    
+
     // Engine factor
     if (formData.settings.engine === 'CYCLES') baseCost *= 1.2
     if (formData.settings.device === 'GPU') baseCost *= 0.8
-    
+
     return Math.ceil(baseCost)
   }
 
   const estimatedCost = calculateEstimatedCost()
-  const totalFrames = formData.type === 'animation' 
+  const totalFrames = formData.type === 'animation'
     ? formData.endFrame - formData.startFrame + 1
     : 1
 
@@ -356,7 +358,7 @@ const handleSubmit = async () => {
                   `}
                 >
                   <input {...getInputProps()} />
-                  
+
                   {uploadedFile ? (
                     <div className="space-y-4">
                       <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 flex items-center justify-center">
@@ -607,6 +609,213 @@ const handleSubmit = async () => {
                         </Button>
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Blender Version
+                      </label>
+                      <select
+                        value={formData.settings.blenderVersion || '4.5.0'}
+                        onChange={(e) => handleSettingsChange('blenderVersion', e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg bg-gray-900/50 text-white border border-white/10 focus:border-blue-500 focus:outline-none transition-colors appearance-none"
+                      >
+                        {/* Blender 5.0 */}
+                        <optgroup label="Blender 5.0">
+                          <option value="5.0.0">5.0.0</option>
+                          <option value="5.0.1">5.0.1</option>
+                        </optgroup>
+
+                        {/* Blender 4.5 LTS */}
+                        <optgroup label="Blender 4.5 LTS">
+                          <option value="4.5.0">4.5.0 (Default)</option>
+                          <option value="4.5.1">4.5.1</option>
+                          <option value="4.5.2">4.5.2</option>
+                          <option value="4.5.3">4.5.3</option>
+                        </optgroup>
+
+                        {/* Blender 4.4 */}
+                        <optgroup label="Blender 4.4">
+                          <option value="4.4.0">4.4.0</option>
+                          <option value="4.4.1">4.4.1</option>
+                          <option value="4.4.2">4.4.2</option>
+                          <option value="4.4.3">4.4.3</option>
+                        </optgroup>
+
+                        {/* Blender 4.3 */}
+                        <optgroup label="Blender 4.3">
+                          <option value="4.3.0">4.3.0</option>
+                          <option value="4.3.1">4.3.1</option>
+                          <option value="4.3.2">4.3.2</option>
+                        </optgroup>
+
+                        {/* Blender 4.2 LTS */}
+                        <optgroup label="Blender 4.2 LTS">
+                          <option value="4.2.0">4.2.0</option>
+                          <option value="4.2.1">4.2.1</option>
+                          <option value="4.2.2">4.2.2</option>
+                          <option value="4.2.3">4.2.3</option>
+                          <option value="4.2.4">4.2.4</option>
+                          <option value="4.2.5">4.2.5</option>
+                          <option value="4.2.6">4.2.6</option>
+                          <option value="4.2.7">4.2.7</option>
+                          <option value="4.2.8">4.2.8</option>
+                          <option value="4.2.9">4.2.9</option>
+                          <option value="4.2.10">4.2.10</option>
+                          <option value="4.2.11">4.2.11</option>
+                          <option value="4.2.12">4.2.12</option>
+                          <option value="4.2.13">4.2.13</option>
+                          <option value="4.2.14">4.2.14</option>
+                          <option value="4.2.15">4.2.15</option>
+                          <option value="4.2.16">4.2.16</option>
+                          <option value="4.2.17">4.2.17</option>
+                          <option value="4.2.18">4.2.18</option>
+                          <option value="4.2.19">4.2.19</option>
+                          <option value="4.2.20">4.2.20</option>
+                          <option value="4.2.21">4.2.21</option>
+                          <option value="4.2.22">4.2.22</option>
+                          <option value="4.2.23">4.2.23</option>
+                          <option value="4.2.24">4.2.24</option>
+                          <option value="4.2.25">4.2.25</option>
+                        </optgroup>
+
+                        {/* Blender 4.1 */}
+                        <optgroup label="Blender 4.1">
+                          <option value="4.1.0">4.1.0</option>
+                          <option value="4.1.1">4.1.1</option>
+                        </optgroup>
+
+                        {/* Blender 4.0 */}
+                        <optgroup label="Blender 4.0">
+                          <option value="4.0.0">4.0.0</option>
+                          <option value="4.0.1">4.0.1</option>
+                          <option value="4.0.2">4.0.2</option>
+                        </optgroup>
+
+                        {/* Blender 3.6 LTS */}
+                        <optgroup label="Blender 3.6 LTS">
+                          <option value="3.6.0">3.6.0</option>
+                          <option value="3.6.1">3.6.1</option>
+                          <option value="3.6.2">3.6.2</option>
+                          <option value="3.6.3">3.6.3</option>
+                          <option value="3.6.4">3.6.4</option>
+                          <option value="3.6.5">3.6.5</option>
+                          <option value="3.6.6">3.6.6</option>
+                          <option value="3.6.7">3.6.7</option>
+                          <option value="3.6.8">3.6.8</option>
+                          <option value="3.6.9">3.6.9</option>
+                          <option value="3.6.10">3.6.10</option>
+                          <option value="3.6.11">3.6.11</option>
+                          <option value="3.6.12">3.6.12</option>
+                          <option value="3.6.13">3.6.13</option>
+                          <option value="3.6.14">3.6.14</option>
+                          <option value="3.6.15">3.6.15</option>
+                          <option value="3.6.16">3.6.16</option>
+                          <option value="3.6.17">3.6.17</option>
+                          <option value="3.6.18">3.6.18</option>
+                        </optgroup>
+
+                        {/* Blender 3.5 */}
+                        <optgroup label="Blender 3.5">
+                          <option value="3.5.0">3.5.0</option>
+                          <option value="3.5.1">3.5.1</option>
+                        </optgroup>
+
+                        {/* Blender 3.4 */}
+                        <optgroup label="Blender 3.4">
+                          <option value="3.4.0">3.4.0</option>
+                          <option value="3.4.1">3.4.1</option>
+                        </optgroup>
+
+                        {/* Blender 3.3 LTS */}
+                        <optgroup label="Blender 3.3 LTS">
+                          <option value="3.3.0">3.3.0</option>
+                          <option value="3.3.1">3.3.1</option>
+                          <option value="3.3.2">3.3.2</option>
+                          <option value="3.3.3">3.3.3</option>
+                          <option value="3.3.4">3.3.4</option>
+                          <option value="3.3.5">3.3.5</option>
+                          <option value="3.3.6">3.3.6</option>
+                          <option value="3.3.7">3.3.7</option>
+                          <option value="3.3.8">3.3.8</option>
+                          <option value="3.3.9">3.3.9</option>
+                          <option value="3.3.10">3.3.10</option>
+                          <option value="3.3.11">3.3.11</option>
+                          <option value="3.3.12">3.3.12</option>
+                          <option value="3.3.13">3.3.13</option>
+                          <option value="3.3.14">3.3.14</option>
+                          <option value="3.3.15">3.3.15</option>
+                          <option value="3.3.16">3.3.16</option>
+                          <option value="3.3.17">3.3.17</option>
+                          <option value="3.3.18">3.3.18</option>
+                          <option value="3.3.19">3.3.19</option>
+                          <option value="3.3.20">3.3.20</option>
+                          <option value="3.3.21">3.3.21</option>
+                        </optgroup>
+
+                        {/* Blender 3.2 */}
+                        <optgroup label="Blender 3.2">
+                          <option value="3.2.0">3.2.0</option>
+                          <option value="3.2.1">3.2.1</option>
+                          <option value="3.2.2">3.2.2</option>
+                        </optgroup>
+
+                        {/* Blender 3.1 */}
+                        <optgroup label="Blender 3.1">
+                          <option value="3.1.0">3.1.0</option>
+                          <option value="3.1.1">3.1.1</option>
+                          <option value="3.1.2">3.1.2</option>
+                        </optgroup>
+
+                        {/* Blender 3.0 */}
+                        <optgroup label="Blender 3.0">
+                          <option value="3.0.0">3.0.0</option>
+                          <option value="3.0.1">3.0.1</option>
+                        </optgroup>
+
+                        {/* Blender 2.93 LTS */}
+                        <optgroup label="Blender 2.93 LTS">
+                          <option value="2.93.0">2.93.0</option>
+                          <option value="2.93.1">2.93.1</option>
+                          <option value="2.93.2">2.93.2</option>
+                          <option value="2.93.3">2.93.3</option>
+                          <option value="2.93.4">2.93.4</option>
+                          <option value="2.93.5">2.93.5</option>
+                          <option value="2.93.6">2.93.6</option>
+                          <option value="2.93.7">2.93.7</option>
+                          <option value="2.93.8">2.93.8</option>
+                          <option value="2.93.9">2.93.9</option>
+                          <option value="2.93.10">2.93.10</option>
+                          <option value="2.93.11">2.93.11</option>
+                          <option value="2.93.12">2.93.12</option>
+                          <option value="2.93.13">2.93.13</option>
+                          <option value="2.93.14">2.93.14</option>
+                          <option value="2.93.15">2.93.15</option>
+                          <option value="2.93.16">2.93.16</option>
+                          <option value="2.93.17">2.93.17</option>
+                          <option value="2.93.18">2.93.18</option>
+                        </optgroup>
+
+                        {/* Blender 2.92 */}
+                        <optgroup label="Blender 2.92">
+                          <option value="2.92.0">2.92.0</option>
+                        </optgroup>
+
+                        {/* Blender 2.91 */}
+                        <optgroup label="Blender 2.91">
+                          <option value="2.91.0">2.91.0</option>
+                          <option value="2.91.1">2.91.1</option>
+                          <option value="2.91.2">2.91.2</option>
+                        </optgroup>
+
+                        {/* Blender 2.90 */}
+                        <optgroup label="Blender 2.90">
+                          <option value="2.90.0">2.90.0</option>
+                          <option value="2.90.1">2.90.1</option>
+                        </optgroup>
+                      </select>
+                      <div className="text-xs text-gray-400 mt-1">
+                        Select the exact patch version used to create your project.
+                      </div>
+                    </div>
 
                     <div>
                       <label className="block text-sm font-medium mb-2">
@@ -749,7 +958,7 @@ const handleSubmit = async () => {
                         <div className="flex justify-between">
                           <span className="text-gray-400">Frames:</span>
                           <span className="font-medium">
-                            {formData.type === 'animation' 
+                            {formData.type === 'animation'
                               ? `${totalFrames} (${formData.startFrame}-${formData.endFrame})`
                               : `Frame ${formData.selectedFrame}`
                             }
@@ -770,6 +979,10 @@ const handleSubmit = async () => {
                         <div className="flex justify-between">
                           <span className="text-gray-400">Engine:</span>
                           <span className="font-medium">{formData.settings.engine}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Blender Version:</span>
+                          <span className="font-medium">{formData.settings.blenderVersion || '4.5.0'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Device:</span>
@@ -809,7 +1022,7 @@ const handleSubmit = async () => {
                             Estimated cost for this job
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <div className="flex justify-between">
                             <span className="text-gray-400">Frames:</span>
@@ -852,7 +1065,7 @@ const handleSubmit = async () => {
                         <div className="flex justify-between">
                           <span className="text-gray-400">Estimated time:</span>
                           <span className="font-medium">
-                            {formData.type === 'animation' 
+                            {formData.type === 'animation'
                               ? `${Math.ceil(totalFrames * 0.5)} minutes`
                               : '2-5 minutes'
                             }
@@ -909,11 +1122,11 @@ const handleSubmit = async () => {
                 <CheckCircle className="w-16 h-16 text-emerald-400" />
               )}
             </div>
-            
+
             <h2 className="text-2xl font-bold mb-4">
               {isUploading ? 'Uploading Your File...' : 'Job Created Successfully!'}
             </h2>
-            
+
             {isUploading ? (
               <>
                 <p className="text-gray-400 mb-8 max-w-md mx-auto">
@@ -921,9 +1134,9 @@ const handleSubmit = async () => {
                   {uploadStage === 'uploading' && `Uploading ${uploadProgress}% complete`}
                   {uploadStage === 'creating' && 'Creating job in database...'}
                 </p>
-                
+
                 <Progress value={uploadProgress} className="max-w-md mx-auto mb-6" />
-                
+
                 <div className="space-y-2 text-sm text-gray-400">
                   <p>{uploadProgress >= 10 ? '✓' : '⏳'} Preparing upload</p>
                   <p>{uploadProgress >= 50 ? '✓' : '⏳'} Uploading file parts</p>
@@ -989,10 +1202,10 @@ const handleSubmit = async () => {
           <div className="flex items-center justify-between relative">
             {/* Progress Line */}
             <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/10 -translate-y-1/2 z-0" />
-            <div 
+            <div
               className="absolute top-1/2 left-0 h-0.5 bg-blue-500 -translate-y-1/2 z-0 transition-all duration-500"
-              style={{ 
-                width: `${(steps.findIndex(s => s.id === currentStep) / (steps.length - 1)) * 100}%` 
+              style={{
+                width: `${(steps.findIndex(s => s.id === currentStep) / (steps.length - 1)) * 100}%`
               }}
             />
 
@@ -1009,11 +1222,11 @@ const handleSubmit = async () => {
                     className={`
                       w-12 h-12 rounded-full flex items-center justify-center
                       transition-all duration-300
-                      ${isActive 
-                        ? 'bg-blue-500 border-2 border-blue-500 shadow-lg shadow-blue-500/30' 
+                      ${isActive
+                        ? 'bg-blue-500 border-2 border-blue-500 shadow-lg shadow-blue-500/30'
                         : isCompleted
-                        ? 'bg-emerald-500 border-2 border-emerald-500'
-                        : 'bg-gray-800 border-2 border-white/20'
+                          ? 'bg-emerald-500 border-2 border-emerald-500'
+                          : 'bg-gray-800 border-2 border-white/20'
                       }
                     `}
                   >

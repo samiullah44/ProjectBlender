@@ -66,6 +66,7 @@ namespace BlendFarm.Node.Models
         public int TileSize { get; set; }
         public string? OutputFormat { get; set; } = "PNG";
         public int CreditsPerFrame { get; set; } = 1;
+        public string? BlenderVersion { get; set; } = "4.5.0";
     }
 
     public class UploadUrlResponse

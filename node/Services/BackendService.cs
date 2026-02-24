@@ -153,6 +153,12 @@ var hardwareDetector = new HardwareDetector(
             var stableId = GenerateStableNodeId(_detectedHardware);
             _nodeId = stableId;
             _detectedHardware.NodeId = stableId;
+            
+            // Re-apply headers with the new stable ID
+            // IMPORTANT: Also update our identity service so subsequent calls 
+            // to ApplyNodeSecretHeader() use the correct ID.
+            _identityService.SetIdentity(stableId, _identityService.NodeSecret);
+            ApplyNodeSecretHeader();
         }
 
         // Determine Friendly Name
@@ -245,6 +251,19 @@ var hardwareDetector = new HardwareDetector(
                 _ = ProcessJobAsync(assignment, stoppingToken);
             };
 
+            // When the backend signals a new job is available, immediately poll via REST
+            wsService.OnJobPollRequested += async () =>
+            {
+                if (!string.IsNullOrEmpty(GetCurrentJobId()))
+                {
+                    _logger.LogDebug("📢 Backend requested job poll, but we are already busy — ignoring.");
+                    return;
+                }
+                
+                _logger.LogInformation("📢 Received job poll request from backend — checking for available jobs...");
+                await PollForJobsAsync(stoppingToken);
+            };
+
             // WS runs until cancellation or unrecoverable error.
             // REST fallback polling (legacy) runs in parallel and only does work
             // when the WS is not connected.
@@ -265,7 +284,7 @@ var hardwareDetector = new HardwareDetector(
                             _logger.LogWarning("⚡ WS disconnected, falling back to REST job poll...");
                             await PollForJobsAsync(stoppingToken);
                         }
-                        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
                     }
                     catch (OperationCanceledException) { break; }
                     catch (Exception ex)
@@ -1037,8 +1056,20 @@ private string CalculateNodeTier(HardwareInfo hw)
                 var resolutionX = settings.ResolutionX > 0 ? settings.ResolutionX : 1920;
                 var resolutionY = settings.ResolutionY > 0 ? settings.ResolutionY : 1080;
                 var outputFormat = settings.OutputFormat ?? "PNG";
+                var blenderVersion = settings.BlenderVersion ?? "4.5.0";
 
-                _logger.LogInformation($"⚙️  Render settings: {engine}, {device}, {samples} samples, {resolutionX}x{resolutionY}, Output: {outputFormat}");
+                _logger.LogInformation($"⚙️  Render settings: {engine}, {device}, {samples} samples, {resolutionX}x{resolutionY}, Output: {outputFormat}, Blender: {blenderVersion}");
+
+                // Ensure the correct Blender version is available and set
+                _logger.LogInformation($"🔍 Acquiring Blender {blenderVersion} for job...");
+                var blenderPath = await BlenderFinder.FindBlenderAsync(_logger, blenderVersion);
+                if (string.IsNullOrEmpty(blenderPath))
+                {
+                    _logger.LogError($"❌ Failed to get Blender {blenderVersion} for job {assignment.JobId}");
+                    await ReportFailureAsync(assignment.JobId, 0, $"Failed to acquire Blender {blenderVersion}", null, cancellationToken);
+                    return;
+                }
+                _pythonRunner.SetBlenderPath(blenderPath);
 
                 if (assignment.Frames == null || assignment.Frames.Count == 0)
                 {

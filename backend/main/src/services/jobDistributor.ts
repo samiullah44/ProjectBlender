@@ -267,12 +267,14 @@ export class JobDistributor {
     }
 
     // Calculate progress
-    const totalFrames = job.frames.total;
-    const renderedFrames = job.frames.rendered.length;
-    job.progress = Math.round((renderedFrames / totalFrames) * 100);
+    const totalFramesToRender = job.frames.selected && job.frames.selected.length > 0
+      ? job.frames.selected.length
+      : job.frames.total;
+    const renderedFramesCount = job.frames.rendered.length;
+    job.progress = Math.round((renderedFramesCount / totalFramesToRender) * 100);
 
     // Check if job is complete
-    if (renderedFrames === totalFrames) {
+    if (renderedFramesCount === totalFramesToRender) {
       job.status = 'completed';
       job.completedAt = new Date();
     }

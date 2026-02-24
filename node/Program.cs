@@ -17,44 +17,43 @@ namespace BlendFarm.Node
 {
     public static class BlenderFinder
     {
-        private static string _targetVersion = "4.1.0";
         
-        public static async Task<string> FindBlenderAsync(ILogger logger)
+        public static async Task<string> FindBlenderAsync(ILogger logger, string targetVersion)
         {
-            logger.LogInformation($"🔍 Searching for Blender {_targetVersion} installation...");
+            logger.LogInformation($"🔍 Searching for Blender {targetVersion} installation...");
             
             // 1. First check manually if the SPECIFIC VERSION of Blender is in PATH
             logger.LogInformation("Checking if requested Blender version is in PATH...");
-            var blenderInPath = await CheckSpecificBlenderVersionInPathAsync();
+            var blenderInPath = await CheckSpecificBlenderVersionInPathAsync(targetVersion);
             if (!string.IsNullOrEmpty(blenderInPath))
             {
-                logger.LogInformation($"✅ Blender {_targetVersion} found in PATH: {blenderInPath}");
+                logger.LogInformation($"✅ Blender {targetVersion} found in PATH: {blenderInPath}");
                 return blenderInPath;
             }
             
             // 2. Check common installation directories for SPECIFIC VERSION
             logger.LogInformation("Checking common installation directories for specific version...");
-            var installedBlender = FindSpecificVersionInstalledBlender();
+            var installedBlender = FindSpecificVersionInstalledBlender(targetVersion);
             if (!string.IsNullOrEmpty(installedBlender))
             {
-                logger.LogInformation($"✅ Found installed Blender {_targetVersion}: {installedBlender}");
+                logger.LogInformation($"✅ Found installed Blender {targetVersion}: {installedBlender}");
                 return installedBlender;
             }
             
             // 3. Check our custom installation directory for SPECIFIC VERSION
-            var customPathBlender = await CheckCustomInstallationForVersionAsync();
+            var customPathBlender = await CheckCustomInstallationForVersionAsync(targetVersion);
             if (!string.IsNullOrEmpty(customPathBlender))
             {
-                logger.LogInformation($"✅ Found Blender {_targetVersion} in custom location: {customPathBlender}");
+                logger.LogInformation($"✅ Found Blender {targetVersion} in custom location: {customPathBlender}");
                 return customPathBlender;
             }
             
             // 4. Download SPECIFIC VERSION to current directory
-            logger.LogWarning($"⚠️  Blender {_targetVersion} not found. Downloading to current directory...");
-            return await DownloadBlenderToCurrentDirectoryAsync(logger);
+            logger.LogWarning($"⚠️  Blender {targetVersion} not found. Downloading to current directory...");
+            return await DownloadBlenderToCurrentDirectoryAsync(logger, targetVersion);
         }
         
-        private static async Task<string> CheckSpecificBlenderVersionInPathAsync()
+        private static async Task<string> CheckSpecificBlenderVersionInPathAsync(string targetVersion)
         {
             try
             {
@@ -80,7 +79,7 @@ namespace BlendFarm.Node
                 {
                     // Parse Blender version from output
                     var version = ParseBlenderVersion(output);
-                    if (version == _targetVersion)
+                    if (version == targetVersion)
                     {
                         // Get the actual path from where command
                         var whereProcess = new Process
@@ -104,7 +103,7 @@ namespace BlendFarm.Node
                     }
                     else
                     {
-                        Console.WriteLine($"Found Blender {version} in PATH, but looking for {_targetVersion}");
+                        Console.WriteLine($"Found Blender {version} in PATH, but looking for {targetVersion}");
                     }
                 }
             }
@@ -113,7 +112,7 @@ namespace BlendFarm.Node
             return null;
         }
         
-        private static string FindSpecificVersionInstalledBlender()
+        private static string FindSpecificVersionInstalledBlender(string targetVersion)
         {
             // Common installation paths for Blender
             var possiblePaths = new[]
@@ -144,11 +143,11 @@ namespace BlendFarm.Node
                     try
                     {
                         // First, check for exact version directory
-                        var versionDir = Path.Combine(basePath, $"blender-{_targetVersion}-windows-x64");
+                        var versionDir = Path.Combine(basePath, $"blender-{targetVersion}-windows-x64");
                         if (Directory.Exists(versionDir))
                         {
                             var blenderExe = Path.Combine(versionDir, "blender.exe");
-                            if (File.Exists(blenderExe) && TestBlenderExecutable(blenderExe, _targetVersion))
+                            if (File.Exists(blenderExe) && TestBlenderExecutable(blenderExe, targetVersion))
                                 return blenderExe;
                         }
                         
@@ -156,7 +155,7 @@ namespace BlendFarm.Node
                         var blenderExes = Directory.GetFiles(basePath, "blender.exe", SearchOption.AllDirectories);
                         foreach (var exe in blenderExes)
                         {
-                            if (TestBlenderExecutable(exe, _targetVersion))
+                            if (TestBlenderExecutable(exe, targetVersion))
                                 return exe;
                         }
                     }
@@ -170,7 +169,7 @@ namespace BlendFarm.Node
             return null;
         }
         
-        private static async Task<string> CheckCustomInstallationForVersionAsync()
+        private static async Task<string> CheckCustomInstallationForVersionAsync(string targetVersion)
         {
             var currentDir = Directory.GetCurrentDirectory();
             var customDir = Path.Combine(currentDir, "Blender");
@@ -178,11 +177,11 @@ namespace BlendFarm.Node
             if (Directory.Exists(customDir))
             {
                 // Check for exact version directory
-                var versionDir = Path.Combine(customDir, $"blender-{_targetVersion}-windows-x64");
+                var versionDir = Path.Combine(customDir, $"blender-{targetVersion}-windows-x64");
                 if (Directory.Exists(versionDir))
                 {
                     var blenderExe = Path.Combine(versionDir, "blender.exe");
-                    if (File.Exists(blenderExe) && await TestBlenderExecutableAsync(blenderExe, _targetVersion))
+                    if (File.Exists(blenderExe) && await TestBlenderExecutableAsync(blenderExe, targetVersion))
                         return blenderExe;
                 }
                 
@@ -192,7 +191,7 @@ namespace BlendFarm.Node
                     var blenderExes = Directory.GetFiles(customDir, "blender.exe", SearchOption.AllDirectories);
                     foreach (var exe in blenderExes)
                     {
-                        if (await TestBlenderExecutableAsync(exe, _targetVersion))
+                        if (await TestBlenderExecutableAsync(exe, targetVersion))
                             return exe;
                     }
                 }
@@ -202,19 +201,19 @@ namespace BlendFarm.Node
             return null;
         }
         
-        private static async Task<string> DownloadBlenderToCurrentDirectoryAsync(ILogger logger)
+        private static async Task<string> DownloadBlenderToCurrentDirectoryAsync(ILogger logger, string targetVersion)
         {
             var currentDir = Directory.GetCurrentDirectory();
             var downloadDir = Path.Combine(currentDir, "Blender");
-            var versionDir = Path.Combine(downloadDir, $"blender-{_targetVersion}-windows-x64");
+            var versionDir = Path.Combine(downloadDir, $"blender-{targetVersion}-windows-x64");
             
             // Check if already downloaded with correct version
             if (Directory.Exists(versionDir))
             {
                 var existingBlender = Path.Combine(versionDir, "blender.exe");
-                if (File.Exists(existingBlender) && await TestBlenderExecutableAsync(existingBlender, _targetVersion))
+                if (File.Exists(existingBlender) && await TestBlenderExecutableAsync(existingBlender, targetVersion))
                 {
-                    logger.LogInformation($"✅ Using existing Blender {_targetVersion} installation: {existingBlender}");
+                    logger.LogInformation($"✅ Using existing Blender {targetVersion} installation: {existingBlender}");
                     return existingBlender;
                 }
             }
@@ -223,13 +222,13 @@ namespace BlendFarm.Node
             var urlsToTry = new[]
             {
                 // Primary URL - Direct download from blender.org
-                $"https://download.blender.org/release/Blender{_targetVersion.Substring(0, 3)}/blender-{_targetVersion}-windows-x64.zip",
+                $"https://download.blender.org/release/Blender{targetVersion.Substring(0, 3)}/blender-{targetVersion}-windows-x64.zip",
                 
                 // Alternative URL structure
-                $"https://download.blender.org/release/Blender{_targetVersion.Substring(0, 3)}/blender-{_targetVersion}-windows64.zip",
+                $"https://download.blender.org/release/Blender{targetVersion.Substring(0, 3)}/blender-{targetVersion}-windows64.zip",
                 
                 // Mirror URL
-                $"https://mirror.clarkson.edu/blender/release/Blender{_targetVersion.Substring(0, 3)}/blender-{_targetVersion}-windows-x64.zip",
+                $"https://mirror.clarkson.edu/blender/release/Blender{targetVersion.Substring(0, 3)}/blender-{targetVersion}-windows-x64.zip",
                 
                 // If 5.0.1 fails, try 4.1.1 as fallback
                 "https://download.blender.org/release/Blender4.1/blender-4.1.1-windows-x64.zip"
@@ -257,7 +256,7 @@ namespace BlendFarm.Node
                                 var buffer = new byte[8192];
                                 var isMoreToRead = true;
                                 
-                                logger.LogInformation($"✅ Downloading Blender {_targetVersion} from: {downloadUrl}");
+                                logger.LogInformation($"✅ Downloading Blender {targetVersion} from: {downloadUrl}");
                                 
                                 using (var stream = await response.Content.ReadAsStreamAsync())
                                 using (var fs = new FileStream(tempZip, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
@@ -326,16 +325,16 @@ namespace BlendFarm.Node
                                 // Find blender.exe
                                 var blenderExe = FindBlenderInDirectory(downloadDir);
                                 
-                                if (!string.IsNullOrEmpty(blenderExe) && await TestBlenderExecutableAsync(blenderExe, _targetVersion))
+                                if (!string.IsNullOrEmpty(blenderExe) && await TestBlenderExecutableAsync(blenderExe, targetVersion))
                                 {
-                                    logger.LogInformation($"✅ Blender {_targetVersion} installed to: {blenderExe}");
+                                    logger.LogInformation($"✅ Blender {targetVersion} installed to: {blenderExe}");
                                     return blenderExe;
                                 }
                                 else if (!string.IsNullOrEmpty(blenderExe))
                                 {
                                     // Found Blender but wrong version
                                     var version = await GetBlenderVersionAsync(blenderExe);
-                                    logger.LogWarning($"⚠️  Found Blender {version}, but looking for {_targetVersion}");
+                                    logger.LogWarning($"⚠️  Found Blender {version}, but looking for {targetVersion}");
                                     // Continue to try next URL
                                 }
                                 else
@@ -367,7 +366,7 @@ namespace BlendFarm.Node
             
             // If all URLs failed, try a manual approach
             logger.LogError("❌ All download URLs failed. Trying alternative approach...");
-            return await DownloadBlenderManualFallbackAsync(logger, downloadDir);
+            return await DownloadBlenderManualFallbackAsync(logger, downloadDir, targetVersion);
         }
         
         // Helper method to extract ZIP with progress
@@ -442,7 +441,7 @@ namespace BlendFarm.Node
             return $"{size:0.##} {suffixes[suffixIndex]}";
         }
         
-        private static async Task<string> DownloadBlenderManualFallbackAsync(ILogger logger, string downloadDir)
+        private static async Task<string> DownloadBlenderManualFallbackAsync(ILogger logger, string downloadDir, string targetVersion)
         {
             try
             {
@@ -450,9 +449,10 @@ namespace BlendFarm.Node
                 logger.LogInformation("🔄 Trying PowerShell download...");
                 
                 var psScript = @"
-$url = 'https://download.blender.org/release/Blender5.0/blender-5.0.1-windows-x64.zip'
+$url = 'https://download.blender.org/release/Blender" + targetVersion.Substring(0, 3) + "/blender-" + targetVersion + @"-windows-x64.zip'
 $output = $env:TEMP + '\blender.zip'
 $installDir = '" + downloadDir.Replace("\\", "\\\\") + @"'
+
 
 # Download
 Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing
@@ -492,15 +492,15 @@ if ($blenderExe) {
                     var blenderExe = output.Trim();
                     if (File.Exists(blenderExe))
                     {
-                        if (await TestBlenderExecutableAsync(blenderExe, _targetVersion))
+                        if (await TestBlenderExecutableAsync(blenderExe, targetVersion))
                         {
-                            logger.LogInformation($"✅ Blender {_targetVersion} downloaded via PowerShell: {blenderExe}");
+                            logger.LogInformation($"✅ Blender {targetVersion} downloaded via PowerShell: {blenderExe}");
                             return blenderExe;
                         }
                         else
                         {
                             var version = await GetBlenderVersionAsync(blenderExe);
-                            logger.LogWarning($"Downloaded Blender {version}, but wanted {_targetVersion}");
+                            logger.LogWarning($"Downloaded Blender {version}, but wanted {targetVersion}");
                         }
                     }
                 }
@@ -512,14 +512,14 @@ if ($blenderExe) {
             
             // Last resort: Manual instructions
             logger.LogError($@"
-❌ Failed to download Blender {_targetVersion} automatically.
+❌ Failed to download Blender {targetVersion} automatically.
 
 📋 MANUAL INSTALLATION REQUIRED:
 
-1. Please download Blender {_targetVersion} manually from:
+1. Please download Blender {targetVersion} manually from:
    https://www.blender.org/download/
 
-2. Choose: Blender {_targetVersion}
+2. Choose: Blender {targetVersion}
 
 3. Download the ZIP version (not installer)
 
@@ -527,7 +527,7 @@ if ($blenderExe) {
    {downloadDir}
 
 5. Make sure 'blender.exe' is in:
-   {downloadDir}\blender-{_targetVersion}-windows-x64\blender.exe
+   {downloadDir}\blender-{targetVersion}-windows-x64\blender.exe
 
 6. Run the node again
 ");
@@ -719,9 +719,9 @@ if ($blenderExe) {
             await RunAsServiceAsync();
         }
         
-        static async Task RunBlenderTestAsync()
+        static async Task RunBlenderTestAsync(string targetVersion = "4.5.0")
         {
-            Console.WriteLine($"🧪 Testing Blender {_targetVersion} + Python Integration...");
+            Console.WriteLine($"🧪 Testing Blender {targetVersion} + Python Integration...");
             Console.WriteLine(new string('═', 50));
             
             try
@@ -756,10 +756,10 @@ if ($blenderExe) {
                 Console.WriteLine("✅ Found: Scripts/render.py");
                 
                 // Step 3: Get or install SPECIFIC VERSION of Blender
-                _blenderPath = await GetOrInstallSpecificBlenderAsync();
+                _blenderPath = await GetOrInstallSpecificBlenderAsync(targetVersion);
                 if (string.IsNullOrEmpty(_blenderPath))
                 {
-                    Console.WriteLine($"❌ Failed to get Blender {_targetVersion}!");
+                    Console.WriteLine($"❌ Failed to get Blender {targetVersion}!");
                     return;
                 }
                 
@@ -767,9 +767,9 @@ if ($blenderExe) {
                 var actualVersion = await GetBlenderVersionAsync(_blenderPath);
                 Console.WriteLine($"✅ Blender {actualVersion} found at: {_blenderPath}");
                 
-                if (actualVersion != _targetVersion)
+                if (actualVersion != targetVersion)
                 {
-                    Console.WriteLine($"⚠️  Warning: Found Blender {actualVersion}, but wanted {_targetVersion}");
+                    Console.WriteLine($"⚠️  Warning: Found Blender {actualVersion}, but wanted {targetVersion}");
                 }
                 
                 // Step 4: Check .blend file compatibility with installed Blender version
@@ -838,9 +838,9 @@ if ($blenderExe) {
             Console.ReadKey();
         }
         
-        static async Task<string> GetOrInstallSpecificBlenderAsync()
+        static async Task<string> GetOrInstallSpecificBlenderAsync(string targetVersion)
         {
-            Console.WriteLine($"\n🔍 Looking for Blender {_targetVersion} installation...");
+            Console.WriteLine($"\n🔍 Looking for Blender {targetVersion} installation...");
             
             using var loggerFactory = LoggerFactory.Create(builder =>
             {
@@ -851,7 +851,7 @@ if ($blenderExe) {
             var logger = loggerFactory.CreateLogger("BlenderFinder");
             
             // Use the improved BlenderFinder
-            return await BlenderFinder.FindBlenderAsync(logger);
+            return await BlenderFinder.FindBlenderAsync(logger, targetVersion);
         }
         
         static async Task<string> GetBlenderVersionAsync(string blenderPath)
@@ -946,7 +946,7 @@ if ($blenderExe) {
         
         static async Task RunAsServiceAsync()
         {
-            Console.WriteLine($"🚀 Starting BlendFarm Node as Service (Blender {_targetVersion})...");
+            Console.WriteLine($"🚀 Starting BlendFarm Node as Service (Blender default 4.5.0)...");
             
             using var loggerFactory = LoggerFactory.Create(builder =>
             {
@@ -970,10 +970,11 @@ if ($blenderExe) {
             }
             
             // Find or download SPECIFIC VERSION of Blender
-            _blenderPath = await BlenderFinder.FindBlenderAsync(logger);
+            string defaultTargetVersion = "4.5.0";
+            _blenderPath = await BlenderFinder.FindBlenderAsync(logger, defaultTargetVersion);
             if (string.IsNullOrEmpty(_blenderPath))
             {
-                Console.WriteLine($"❌ Failed to find or install Blender {_targetVersion}. Service cannot start.");
+                Console.WriteLine($"❌ Failed to find or install Blender {defaultTargetVersion}. Service cannot start.");
                 Console.WriteLine("Press any key to exit...");
                 Console.ReadKey();
                 return;
@@ -982,9 +983,9 @@ if ($blenderExe) {
             var actualVersion = await GetBlenderVersionAsync(_blenderPath);
             Console.WriteLine($"🎬 Using Blender {actualVersion}: {_blenderPath}");
             
-            if (actualVersion != _targetVersion)
+            if (actualVersion != defaultTargetVersion)
             {
-                Console.WriteLine($"⚠️  Note: Using Blender {actualVersion} instead of requested {_targetVersion}");
+                Console.WriteLine($"⚠️  Note: Using Blender {actualVersion} instead of requested {defaultTargetVersion}");
             }
             
             // Check if Scripts directory exists

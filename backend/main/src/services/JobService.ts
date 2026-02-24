@@ -18,6 +18,7 @@ import {
     UserJobStats
 } from '../types/job.types';
 import { AppError } from '../middleware/error';
+import { normalizeBlenderVersion } from '../utils/blenderVersionMapper';
 
 export class JobService {
     private s3Service: S3Service;
@@ -98,6 +99,7 @@ export class JobService {
                     denoiser: settings.denoiser,
                     outputFormat: settings.outputFormat || 'PNG',
                     creditsPerFrame: settings.creditsPerFrame || 1,
+                    blenderVersion: normalizeBlenderVersion(settings.blenderVersion || '4.5.0'),
                     selectedFrame: settings.selectedFrame || selectedFrame
                 },
                 frames: {
@@ -138,17 +140,22 @@ export class JobService {
 
             console.log(`🎬 New ${type} job created: ${jobId} by user ${userId}`);
 
-            // Broadcast via WebSocket
-            this.wsService?.broadcastSystemUpdate({
-                type: 'job_created',
-                data: {
-                    jobId,
-                    userId,
-                    type,
-                    estimatedCost,
-                    estimatedTime
-                }
-            });
+            // Broadcast via WebSocket and notify nodes to check for work
+            if (this.wsService) {
+                this.wsService.broadcastSystemUpdate({
+                    type: 'job_created',
+                    data: {
+                        jobId,
+                        userId,
+                        type,
+                        estimatedCost,
+                        estimatedTime
+                    }
+                });
+                // Proactively tell every connected node to poll for the new job
+                // so it doesn't have to wait for the next REST fallback cycle.
+                this.wsService.notifyNodesToCheckJobs();
+            }
 
             return {
                 success: true,

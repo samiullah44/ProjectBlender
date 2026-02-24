@@ -148,18 +148,28 @@ export class NodeController {
         assignedNodesMap?.delete(nodeId);
 
         // Update status if needed
-        const totalFrames = job.frames.total;
+        // Update status if needed
+        const totalFramesToRender = job.frames.selected && job.frames.selected.length > 0
+          ? job.frames.selected.length
+          : job.frames.total;
         const renderedFrames = job.frames.rendered.length;
-        const failedFrames = job.frames.failed.length;
 
-        if (renderedFrames + failedFrames === totalFrames) {
-          job.status = renderedFrames > 0 ? 'completed' : 'failed';
-          if (job.status === 'completed') {
-            job.completedAt = new Date();
+        // ONLY mark as completed if all frames that were supposed to be rendered are actually rendered
+        if (renderedFrames === totalFramesToRender) {
+          job.status = 'completed';
+          job.completedAt = new Date();
+        } else {
+          // Check if it's actually failed (all possible frames have been attempted and failed or rendered, but not all rendered)
+          // For now, keep it in processing if there are still pending or failed frames that could be retried
+          const pendingCount = job.frames.pending?.length || 0;
+          const assignedCount = job.frames.assigned?.length || 0;
+
+          if (pendingCount === 0 && assignedCount === 0 && renderedFrames < totalFramesToRender) {
+            job.status = 'failed';
           }
         }
 
-        job.progress = Math.round((renderedFrames / totalFrames) * 100);
+        job.progress = Math.round((renderedFrames / totalFramesToRender) * 100);
         job.updatedAt = new Date();
 
         await job.save();
@@ -735,7 +745,7 @@ export class NodeController {
             job.completedAt = now;
             job.progress = 100;
             await job.save();
-            console.log(`✅ Job ${job.jobId} completed automatically`);
+            console.log(`✅ Job ${job.jobId} completed automatically (all frames rendered)`);
 
             // Broadcast job completion
             const wsService = NodeController.getWsService(req);
@@ -1113,7 +1123,11 @@ export class NodeController {
       });
 
       // Check if job is completed
-      if (renderedFrames === totalFrames) {
+      const totalFramesToRender = job.frames.selected && job.frames.selected.length > 0
+        ? job.frames.selected.length
+        : job.frames.total;
+
+      if (renderedFrames === totalFramesToRender) {
         job.status = 'completed';
         job.completedAt = now;
 

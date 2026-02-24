@@ -58,6 +58,9 @@ namespace BlendFarm.Node.Services
         /// <summary>Raised when the backend pushes a <c>job_assigned</c> message.</summary>
         public event Func<JobAssignment, Task>? OnJobAssigned;
 
+        /// <summary>Raised when the backend sends <c>request_job_poll</c> (e.g. a new job just appeared).</summary>
+        public event Func<Task>? OnJobPollRequested;
+
         // ─── Public API ────────────────────────────────────────────────────────
 
         public bool IsConnected => _ws?.State == WebSocketState.Open;
@@ -234,6 +237,14 @@ namespace BlendFarm.Node.Services
                             var assignment = JsonConvert.DeserializeObject<JobAssignment>(json);
                             if (assignment != null)
                                 await OnJobAssigned(assignment);
+                        }
+                        break;
+
+                    case "request_job_poll":
+                        _logger.LogInformation("📢 Backend requested job poll — calling /assign endpoint now");
+                        if (OnJobPollRequested != null)
+                        {
+                            await OnJobPollRequested();
                         }
                         break;
 

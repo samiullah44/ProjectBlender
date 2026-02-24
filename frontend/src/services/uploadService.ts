@@ -13,6 +13,7 @@ export interface JobSettings {
   denoiser?: 'NONE' | 'OPTIX' | 'OPENIMAGEDENOISE' | 'NLM'
   outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF'
   creditsPerFrame: number
+  blenderVersion?: string
 }
 
 export interface JobUploadData {

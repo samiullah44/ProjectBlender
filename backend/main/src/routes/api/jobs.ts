@@ -1,18 +1,39 @@
 // backend/src/routes/api/jobs.ts
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { JobController } from '../../controllers/jobs';
 import { JobService } from '../../services/JobService';
 import { S3Service } from '../../services/S3Service';
 import { authenticate, authorize } from '../../middleware/auth';
 import { UploadController } from '../../controllers/uploadController';
+import { WebSocketService } from '../../services/WebSocketService';
 
 const router = express.Router();
 
-// Initialize services
+// ── Use the shared services from app.ts instead of creating new isolated ones.
+// Services are attached to the Express app in app.ts and retrieved per-request.
+// We create one controller instance but always give it the app-level jobService
+// (which has wsService properly wired) before each request.
 const s3Service = new S3Service();
-const jobService = new JobService(s3Service);
-const jobController = new JobController(jobService, s3Service);
+// Fallback controller used only if app-level jobService is somehow unavailable
+const fallbackJobService = new JobService(s3Service);
+const jobController = new JobController(fallbackJobService, s3Service);
+
+// Middleware: inject the app-level jobService + wsService into the controller
+// so `notifyNodesToCheckJobs` is called on job creation.
+const injectServices = (req: Request, _res: Response, next: NextFunction) => {
+    const appJobService: JobService | undefined = req.app.get('jobService');
+    const appWsService: WebSocketService | undefined = req.app.get('wsService');
+    if (appJobService) {
+        // Swap to the shared service that has wsService wired
+        (jobController as any).jobService = appJobService;
+        // Ensure wsService is set (defensive)
+        if (appWsService && !appJobService['wsService']) {
+            appJobService.setWebSocketService(appWsService);
+        }
+    }
+    next();
+};
 
 // Configure multer
 const storage = multer.memoryStorage();
@@ -32,6 +53,7 @@ router.delete('/upload/abort', authenticate, UploadController.abortUpload);
 // Public job routes (authenticated)
 router.post('/upload',
     authenticate,
+    injectServices,
     upload.single('blendFile'),
     jobController.createJob.bind(jobController)
 );

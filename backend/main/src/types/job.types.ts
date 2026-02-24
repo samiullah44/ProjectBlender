@@ -32,6 +32,7 @@ export interface IJobSettings {
     denoiser?: 'NONE' | 'OPTIX' | 'OPENIMAGEDENOISE' | 'NLM';
     outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF';
     creditsPerFrame: number;
+    blenderVersion?: string;
     selectedFrame?: number;
     animationFrameRate?: number;
     useCompositing?: boolean;

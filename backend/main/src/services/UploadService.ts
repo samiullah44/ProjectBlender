@@ -2,6 +2,7 @@
 import { Job } from '../models/Job';
 import { S3Service } from './S3Service';
 import { v4 as uuidv4 } from 'uuid';
+import { normalizeBlenderVersion } from '../utils/blenderVersionMapper';
 
 export class UploadService {
   private s3Service: S3Service;
@@ -48,7 +49,7 @@ export class UploadService {
       // 3. Calculate frame details
       let totalFrames = 1;
       let selectedFrames: number[] = [];
-      
+
       if (type === 'animation') {
         totalFrames = endFrame - startFrame + 1;
         selectedFrames = Array.from({ length: totalFrames }, (_, i) => startFrame + i);
@@ -68,7 +69,10 @@ export class UploadService {
         blendFileUrl,
         blendFileName: filename,
         type,
-        settings: jobSettings,
+        settings: {
+          ...jobSettings,
+          blenderVersion: normalizeBlenderVersion(jobSettings?.blenderVersion || '4.5.0')
+        },
         frames: {
           start: type === 'animation' ? startFrame : selectedFrame,
           end: type === 'animation' ? endFrame : selectedFrame,

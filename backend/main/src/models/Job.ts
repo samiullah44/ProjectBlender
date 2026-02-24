@@ -61,6 +61,7 @@ const JobSettingsSchema = new Schema<IJobSettings>({
     default: 'PNG'
   },
   creditsPerFrame: { type: Number, default: 1 },
+  blenderVersion: { type: String, default: '4.5.0' },
   selectedFrame: Number,
   animationFrameRate: Number,
   useCompositing: Boolean,

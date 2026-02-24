@@ -48,6 +48,7 @@ export class JobController {
           denoiser: req.body.denoiser,
           outputFormat: req.body.outputFormat || 'PNG',
           creditsPerFrame: parseFloat(req.body.creditsPerFrame) || 1,
+          blenderVersion: req.body.blenderVersion || '4.5.0',
           selectedFrame: parseInt(req.body.selectedFrame)
         },
         startFrame: parseInt(req.body.startFrame) || 1,
@@ -60,15 +61,14 @@ export class JobController {
         requireApproval: req.body.requireApproval === 'true'
       };
 
-      const result = await this.jobService.createJob(createJobRequest);
-
-      // Set WebSocket service if not already set
-      if (!this.jobService['wsService']) {
-        const wsService = this.getWsService(req);
-        if (wsService) {
-          this.jobService.setWebSocketService(wsService);
-        }
+      // Ensure wsService is available on the jobService BEFORE creating the job
+      // so the job_created notification reaches connected nodes immediately.
+      const wsService = this.getWsService(req);
+      if (wsService && !this.jobService['wsService']) {
+        this.jobService.setWebSocketService(wsService);
       }
+
+      const result = await this.jobService.createJob(createJobRequest);
 
       res.status(201).json(result);
     } catch (error) {

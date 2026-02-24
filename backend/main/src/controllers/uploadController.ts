@@ -93,7 +93,8 @@ export class UploadController {
         tileSize: parseInt(jobSettings?.tileSize || '256'),
         denoiser: type === 'image' ? jobSettings?.denoiser || 'OPTIX' : undefined,
         outputFormat: jobSettings?.outputFormat || 'PNG',
-        creditsPerFrame: jobSettings?.creditsPerFrame || 1
+        creditsPerFrame: jobSettings?.creditsPerFrame || 1,
+        blenderVersion: jobSettings?.blenderVersion || '4.5.0'
       };
 
       // Complete upload and create job
