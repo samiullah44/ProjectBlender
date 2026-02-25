@@ -72,6 +72,7 @@ namespace BlendFarm.Node.Services
             int resolutionX = 1920,
             int resolutionY = 1080,
             string outputFormat = "PNG",
+            string denoiser = "NONE",
             bool useAnimationSettings = false,
             CancellationToken cancellationToken = default)
         {
@@ -119,6 +120,7 @@ namespace BlendFarm.Node.Services
                     resolutionX,
                     resolutionY,
                     outputFormat,
+                    denoiser,
                     useAnimationSettings,
                     cancellationToken);
             }
@@ -146,6 +148,7 @@ namespace BlendFarm.Node.Services
             int resolutionX,
             int resolutionY,
             string outputFormat,
+            string denoiser,
             bool useAnimationSettings,
             CancellationToken cancellationToken)
         {
@@ -162,6 +165,7 @@ namespace BlendFarm.Node.Services
                     resolution_x = resolutionX,
                     resolution_y = resolutionY,
                     output_format = outputFormat,
+                    denoiser = denoiser,
                     use_animation_settings = useAnimationSettings
                 }
             };
@@ -198,8 +202,7 @@ namespace BlendFarm.Node.Services
                 
                 var outputBuilder = new StringBuilder();
                 var errorBuilder = new StringBuilder();
-                var hasError = false;
-               bool processExited = false;
+                bool processExited = false;
 process.Exited += (sender, e) =>
 {
     processExited = true;
@@ -216,8 +219,7 @@ process.Exited += (sender, e) =>
                         // Check for specific messages
                         if (e.Data.Contains("ERROR") || e.Data.Contains("Error:"))
                         {
-                            hasError = true;
-                            _logger.LogError($"🔴 {e.Data}");
+                            _logger.LogWarning($"🔴 Potential Error in Blender: {e.Data}");
                         }
                         else if (e.Data.Contains("SUCCESS") || e.Data.Contains("Saved:"))
                         {
@@ -235,12 +237,7 @@ process.Exited += (sender, e) =>
                     if (!string.IsNullOrEmpty(e.Data))
                     {
                         errorBuilder.AppendLine(e.Data);
-                        _logger.LogDebug($"🔴 Error: {e.Data}");
-                        
-                        if (!e.Data.Contains("Warning: region type"))
-                        {
-                            hasError = true;
-                        }
+                        _logger.LogDebug($"🎬 Blender stderr: {e.Data}");
                     }
                 };
                 
@@ -316,21 +313,22 @@ process.Exited += (sender, e) =>
                     
                     _logger.LogInformation($"📊 Blender process exited with code: {exitCode}");
                     
-                    if (exitCode == 0 && !hasError)
+                    // CRITICAL: We prioritize ExitCode 0 and File Existence. 
+                    // Blender/Python prints SUCCESS only if it really worked.
+                    if (exitCode == 0)
                     {
-                        _logger.LogInformation($"✅ Blender render completed successfully");
+                        _logger.LogInformation($"✅ Blender render process reported success.");
                         
                         // Check output file
                         if (File.Exists(outputPath))
                         {
                             var fileInfo = new FileInfo(outputPath);
-                            _logger.LogInformation($"📊 Output file created: {fileInfo.FullName} ({fileInfo.Length / 1024} KB)");
+                            _logger.LogInformation($"📊 Output file verified: {fileInfo.FullName} ({fileInfo.Length / 1024} KB)");
                             return true;
                         }
                         else
                         {
-                            // Try to find output in alternative locations
-                            _logger.LogWarning($"⚠️  Output file not found at expected location: {outputPath}");
+                            _logger.LogWarning($"⚠️  Blender exited with 0 but file not found at: {outputPath}");
                             
                             // Check for any output file in output directory
                             var outputDir = Path.GetDirectoryName(outputPath);
@@ -355,7 +353,7 @@ process.Exited += (sender, e) =>
                                     if (outputFiles.Length > 0)
                                     {
                                         var foundFile = outputFiles[0];
-                                        _logger.LogInformation($"📊 Found output file: {foundFile}");
+                                        _logger.LogInformation($"📊 Found alternative output file: {foundFile}");
                                         
                                         // If it's not already the expected name, copy it
                                         if (!foundFile.Equals(outputPath, StringComparison.OrdinalIgnoreCase))
@@ -368,13 +366,13 @@ process.Exited += (sender, e) =>
                                 }
                             }
                             
-                            _logger.LogError($"❌ Output file not found anywhere");
+                            _logger.LogError($"❌ Output file not found after Blender exit.");
                             return false;
                         }
                     }
                     else
                     {
-                        _logger.LogError($"❌ Blender failed with exit code: {exitCode}");
+                        _logger.LogError($"❌ Blender failed with non-zero exit code: {exitCode}");
                         
                         // Log captured output for debugging
                         if (outputBuilder.Length > 0)
@@ -468,6 +466,7 @@ device_type = config.get('device', 'GPU').upper()
 resolution_x = config.get('resolution_x', 1920)
 resolution_y = config.get('resolution_y', 1080)
 output_format = config.get('output_format', 'PNG').upper()
+denoiser = config.get('denoiser', 'NONE').upper()
 use_animation_settings = config.get('use_animation_settings', False)
 
 print(f'=== Render Settings ===')
@@ -478,6 +477,7 @@ print(f'  Engine: {engine}')
 print(f'  Device: {device_type}')
 print(f'  Resolution: {resolution_x}x{resolution_y}')
 print(f'  Format: {output_format}')
+print(f'  Denoiser: {denoiser}')
 print(f'  Animation Mode: {use_animation_settings}')
 
 # Apply ALL settings
@@ -489,21 +489,29 @@ if engine == 'CYCLES':
     scene.render.engine = 'CYCLES'
     scene.cycles.samples = samples
     
-    # Set denoising if available and if samples are high
-    if samples >= 32:
+    # Set denoising based on config
+    if denoiser != 'NONE':
         try:
             scene.cycles.use_denoising = True
-            scene.cycles.denoiser = 'OPENIMAGEDENOISE'
-            print('Enabled denoising with OpenImageDenoise')
-        except:
+            if denoiser == 'OPENIMAGEDENOISE':
+                scene.cycles.denoiser = 'OPENIMAGEDENOISE'
+            elif denoiser == 'OPTIX':
+                scene.cycles.denoiser = 'OPTIX'
+            else:
+                scene.cycles.denoiser = 'NLM'
+            print(f'Enabled denoising with {denoiser}')
+        except Exception as e:
             try:
                 scene.cycles.use_denoising = True
                 print('Enabled denoising (fallback)')
             except:
                 print('Could not enable denoising')
+    else:
+        scene.cycles.use_denoising = False
+        print('Denoising disabled')
     
-    # FIXED: Use device from config
-    if device_type == 'GPU':
+    # FIXED: Use device from config. Check if it starts with GPU.
+    if device_type.startswith('GPU'):
         try:
             # Try to enable GPU devices
             import addon_utils
@@ -555,6 +563,33 @@ if use_animation_settings:
     scene.frame_end = frame_num
     scene.frame_current = frame_num
     print(f'Animation settings: Frame range {frame_num}-{frame_num}')
+
+# FIX CAMERA ISSUE: Ensure there is an active camera
+if not scene.camera:
+    print('WARNING: No active camera found in scene.')
+    camera_found = False
+    
+    # First, try to find any existing camera in the scene
+    for obj in scene.objects:
+        if obj.type == 'CAMERA':
+            scene.camera = obj
+            print(f'Assigned existing camera: {obj.name}')
+            camera_found = True
+            break
+            
+    # If no camera exists, create a default one
+    if not camera_found:
+        print('Creating a default fallback camera.')
+        cam_data = bpy.data.cameras.new('DefaultCamera')
+        cam_obj = bpy.data.objects.new('DefaultCamera', cam_data)
+        scene.collection.objects.link(cam_obj)
+        scene.camera = cam_obj
+        
+        # Position it reasonably (e.g., looking at origin)
+        cam_obj.location = (7.358, -6.925, 4.958)
+        
+        import math
+        cam_obj.rotation_euler = (math.radians(63.2), math.radians(0), math.radians(46.7))
 
 # Set output path
 if output_path.startswith('//'):

@@ -481,8 +481,8 @@ export class NodeController {
         }
       }
 
-      if (heartbeatData.currentJob && heartbeatData.progress !== undefined) {
-        node.currentJob = heartbeatData.currentJob;
+      if ('currentJob' in heartbeatData && heartbeatData.progress !== undefined) {
+        node.currentJob = heartbeatData.currentJob || undefined;
         node.set('currentProgress', heartbeatData.progress);
       }
 
@@ -720,7 +720,9 @@ export class NodeController {
         }
 
         // Get frames that need to be rendered (considering selected frames)
+        // IMPORTANT: Include failed frames so they can be retried (node may have disconnected)
         const pendingFrames: number[] = [];
+        const failedFrames: number[] = [];  // track which ones were previously failed
         const framesToCheck = job.frames.selected && job.frames.selected.length > 0
           ? job.frames.selected
           : Array.from({ length: job.frames.end - job.frames.start + 1 },
@@ -728,9 +730,11 @@ export class NodeController {
 
         for (const frame of framesToCheck) {
           if (!job.frames.rendered.includes(frame) &&
-            !job.frames.failed.includes(frame) &&
             !job.frames.assigned.includes(frame)) {
             pendingFrames.push(frame);
+            if (job.frames.failed.includes(frame)) {
+              failedFrames.push(frame); // mark so we can remove from failed on assignment
+            }
           }
         }
 
@@ -785,32 +789,42 @@ export class NodeController {
         }
 
         // Use atomic operations to prevent duplicates
+        // Also pull retried frames out of frames.failed so they can be tracked properly again
+        const updateOp: any = {
+          $set: {
+            status: 'processing',
+            updatedAt: now,
+            [`assignedNodes.${nodeId}`]: assignedFrames
+          },
+          $addToSet: {
+            'frames.assigned': { $each: assignedFrames }
+          },
+          $push: {
+            frameAssignments: {
+              $each: assignedFrames.map(frame => ({
+                frame,
+                nodeId,
+                status: 'assigned',
+                assignedAt: now,
+                creditsEarned: job.settings.creditsPerFrame || DEFAULT_CREDITS_PER_FRAME
+              }))
+            }
+          }
+        };
+
+        // Remove any of the newly-assigned frames from the failed list (retry)
+        const reassignedFailedFrames = assignedFrames.filter(f => failedFrames.includes(f));
+        if (reassignedFailedFrames.length > 0) {
+          updateOp.$pull = { 'frames.failed': { $in: reassignedFailedFrames } };
+          console.log(`🔄 Retrying ${reassignedFailedFrames.length} previously-failed frame(s): [${reassignedFailedFrames.join(', ')}]`);
+        }
+
         const result = await Job.findOneAndUpdate(
           {
             jobId: job.jobId,
             'frames.assigned': { $nin: assignedFrames }
           },
-          {
-            $set: {
-              status: 'processing',
-              updatedAt: now,
-              [`assignedNodes.${nodeId}`]: assignedFrames
-            },
-            $addToSet: {
-              'frames.assigned': { $each: assignedFrames }
-            },
-            $push: {
-              frameAssignments: {
-                $each: assignedFrames.map(frame => ({
-                  frame,
-                  nodeId,
-                  status: 'assigned',
-                  assignedAt: now,
-                  creditsEarned: job.settings.creditsPerFrame || DEFAULT_CREDITS_PER_FRAME
-                }))
-              }
-            }
-          },
+          updateOp,
           {
             new: true,
             timestamps: false
@@ -1123,9 +1137,15 @@ export class NodeController {
       });
 
       // Check if job is completed
-      const totalFramesToRender = job.frames.selected && job.frames.selected.length > 0
-        ? job.frames.selected.length
-        : job.frames.total;
+      // Re-count pending failed frames to decide if this job truly can complete now
+      const selectedOrAll = job.frames.selected && job.frames.selected.length > 0
+        ? job.frames.selected
+        : Array.from({ length: job.frames.total }, (_, i) => job.frames.start + i);
+
+      const totalFramesToRender = selectedOrAll.length;
+      // Frames still needing work: assigned (in-flight) OR still failed (will retry)
+      const stillInFlight = job.frames.assigned.length;
+      const stillFailed = job.frames.failed.filter((f: number) => !job.frames.rendered.includes(f)).length;
 
       if (renderedFrames === totalFramesToRender) {
         job.status = 'completed';
@@ -1180,6 +1200,24 @@ export class NodeController {
           creditsEarned: creditsEarned,
           lastUpdate: now.toISOString()
         });
+
+        // If the job is not yet done, trigger poll for remaining/retryable frames
+        if (job.status !== 'completed' && job.status !== 'failed') {
+          // Always ask the completing node to check for more work
+          wsService.sendToNode(nodeId, { type: 'request_job_poll' });
+
+          // If there are failed frames still waiting to be retried and no in-flight assignments,
+          // broadcast to ALL online nodes so any available node can pick them up immediately
+          if (stillFailed > 0 && stillInFlight === 0) {
+            console.log(`🔄 ${stillFailed} failed frame(s) need retry — broadcasting poll to all online nodes`);
+            const onlineNodes = await Node.find({ status: { $in: ['online', 'busy'] } }, { nodeId: 1 });
+            for (const n of onlineNodes) {
+              if (n.nodeId !== nodeId) {  // completing node already polled above
+                wsService.sendToNode(n.nodeId, { type: 'request_job_poll' });
+              }
+            }
+          }
+        }
       }
 
       res.json({

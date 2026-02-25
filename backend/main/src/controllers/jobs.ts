@@ -442,6 +442,40 @@ export class JobController {
     }
   }
 
+  // Get job status for node
+  async getJobStatusForNode(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+
+      if (!jobId) {
+        throw new AppError('Job ID is required', 400);
+      }
+
+      const job = await this.jobService.getJobByIdMinimal(jobId as string);
+
+      if (!job) {
+        res.json({
+          success: true,
+          status: 'not_found'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        status: job.status,
+        jobId: job.jobId
+      });
+    } catch (error) {
+      console.error('Get job status error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get job status',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
   // Health check
   async healthCheck(req: Request, res: Response): Promise<void> {
     try {

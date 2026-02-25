@@ -218,17 +218,23 @@ namespace BlendFarm.Node
                 }
             }
             
+            // Determine version prefix for the release folder:
+            // Blender < 3.0 has 4-digit minor (e.g. "2.93"), >= 3.0 has 3-digit (e.g. "4.1")
+            var versionPrefix = (Version.TryParse(targetVersion, out var parsedVer) && parsedVer.Major < 3)
+                ? targetVersion.Substring(0, 4)
+                : targetVersion.Substring(0, 3);
+            
             // Try different URLs for Blender download
             var urlsToTry = new[]
             {
                 // Primary URL - Direct download from blender.org
-                $"https://download.blender.org/release/Blender{targetVersion.Substring(0, 3)}/blender-{targetVersion}-windows-x64.zip",
+                $"https://download.blender.org/release/Blender{versionPrefix}/blender-{targetVersion}-windows-x64.zip",
                 
                 // Alternative URL structure
-                $"https://download.blender.org/release/Blender{targetVersion.Substring(0, 3)}/blender-{targetVersion}-windows64.zip",
+                $"https://download.blender.org/release/Blender{versionPrefix}/blender-{targetVersion}-windows64.zip",
                 
                 // Mirror URL
-                $"https://mirror.clarkson.edu/blender/release/Blender{targetVersion.Substring(0, 3)}/blender-{targetVersion}-windows-x64.zip",
+                $"https://mirror.clarkson.edu/blender/release/Blender{versionPrefix}/blender-{targetVersion}-windows-x64.zip",
                 
                 // If 5.0.1 fails, try 4.1.1 as fallback
                 "https://download.blender.org/release/Blender4.1/blender-4.1.1-windows-x64.zip"
@@ -448,24 +454,25 @@ namespace BlendFarm.Node
                 // Try using PowerShell to download
                 logger.LogInformation("🔄 Trying PowerShell download...");
                 
-                var psScript = @"
-$url = 'https://download.blender.org/release/Blender" + targetVersion.Substring(0, 3) + "/blender-" + targetVersion + @"-windows-x64.zip'
-$output = $env:TEMP + '\blender.zip'
-$installDir = '" + downloadDir.Replace("\\", "\\\\") + @"'
-
-
-# Download
-Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing
-
-# Extract
-Expand-Archive -Path $output -DestinationPath $installDir -Force
-
-# Find blender.exe
-$blenderExe = Get-ChildItem -Path $installDir -Filter 'blender.exe' -Recurse | Select-Object -First 1
-if ($blenderExe) {
-    $blenderExe.FullName
-}
-";
+                var psPrefix = (Version.TryParse(targetVersion, out var psFallbackVer) && psFallbackVer.Major < 3)
+                    ? targetVersion.Substring(0, 4)
+                    : targetVersion.Substring(0, 3);
+                var psScript =
+                    "$url = 'https://download.blender.org/release/Blender" + psPrefix + "/blender-" + targetVersion + "-windows-x64.zip'\n" +
+                    "$output = $env:TEMP + '\\blender.zip'\n" +
+                    "$installDir = '" + downloadDir.Replace("\\", "\\\\") + "'\n" +
+                    "\n" +
+                    "# Download\n" +
+                    "Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing\n" +
+                    "\n" +
+                    "# Extract\n" +
+                    "Expand-Archive -Path $output -DestinationPath $installDir -Force\n" +
+                    "\n" +
+                    "# Find blender.exe\n" +
+                    "$blenderExe = Get-ChildItem -Path $installDir -Filter 'blender.exe' -Recurse | Select-Object -First 1\n" +
+                    "if ($blenderExe) {\n" +
+                    "    $blenderExe.FullName\n" +
+                    "}\n";
                 
                 var tempScript = Path.GetTempFileName() + ".ps1";
                 File.WriteAllText(tempScript, psScript);
@@ -581,15 +588,15 @@ if ($blenderExe) {
                 if (process.ExitCode == 0 && output.Contains("Blender"))
                 {
                     var version = ParseBlenderVersion(output);
-                    return version == expectedVersion;
+                    if (version == expectedVersion)
+                        return true;
                 }
             }
-            catch
-            {
-                return false;
-            }
+            catch { }
             
-            return false;
+            // Fallback: check for a version-matching subfolder next to blender.exe
+            // e.g. blender-windows64/2.93/ tells us this is a 2.93.x installation
+            return CheckVersionSubfolder(path, expectedVersion);
         }
         
         private static async Task<bool> TestBlenderExecutableAsync(string path, string expectedVersion)
@@ -616,13 +623,45 @@ if ($blenderExe) {
                 if (process.ExitCode == 0 && output.Contains("Blender"))
                 {
                     var version = ParseBlenderVersion(output);
-                    return version == expectedVersion;
+                    if (version == expectedVersion)
+                        return true;
                 }
             }
-            catch
+            catch { }
+            
+            // Fallback: check for a version-matching subfolder next to blender.exe
+            // e.g. blender-windows64/2.93/ tells us this is a 2.93.x installation
+            return CheckVersionSubfolder(path, expectedVersion);
+        }
+        
+        /// <summary>
+        /// Checks if a subfolder whose name matches major.minor of <paramref name="expectedVersion"/>
+        /// exists in the same directory as <paramref name="blenderExePath"/>.
+        /// e.g. for "2.93.0" it looks for a subfolder called "2.93" next to blender.exe.
+        /// </summary>
+        private static bool CheckVersionSubfolder(string blenderExePath, string expectedVersion)
+        {
+            try
             {
-                return false;
+                var blenderDir = Path.GetDirectoryName(blenderExePath);
+                if (string.IsNullOrEmpty(blenderDir) || !Directory.Exists(blenderDir))
+                    return false;
+                
+                // Build major.minor prefix from expectedVersion ("2.93.0" → "2.93")
+                var parts = expectedVersion.Split('.');
+                if (parts.Length < 2) return false;
+                var majorMinor = $"{parts[0]}.{parts[1]}";
+                
+                // Look for a direct subfolder matching or starting with major.minor
+                var subDirs = Directory.GetDirectories(blenderDir);
+                foreach (var dir in subDirs)
+                {
+                    var dirName = Path.GetFileName(dir);
+                    if (dirName == majorMinor || dirName.StartsWith(majorMinor + "."))
+                        return true;
+                }
             }
+            catch { }
             
             return false;
         }
@@ -1028,6 +1067,9 @@ if ($blenderExe) {
 
             var identityLogger = loggerFactory.CreateLogger<NodeIdentityService>();
             var identityService = new NodeIdentityService(finalFriendlyName == "node_auto" ? null : finalFriendlyName, identityLogger);
+            
+            // Try to load existing identity early so background services (like CleanupService) have access to it
+            identityService.TryLoadIdentity();
 
             // Build the host - pass blender path as parameter
            var host = Host.CreateDefaultBuilder()
@@ -1047,6 +1089,12 @@ if ($blenderExe) {
         
         // Register NodeBackendService - ILoggerFactory will be auto-injected
         services.AddHostedService<NodeBackendService>();
+
+        // Register CleanupService
+        services.AddHostedService<CleanupService>();
+
+        // Register HttpClient
+        services.AddHttpClient();
         
         // Configure logging
         services.AddLogging(configure =>

@@ -253,6 +253,19 @@ export class JobService {
         }
     }
 
+    // Get job status/basic info by ID (no user check, used by nodes)
+    async getJobByIdMinimal(jobId: string): Promise<IJob | null> {
+        try {
+            const job = await Job.findOne({ jobId })
+                .select('jobId status userId createdAt updatedAt')
+                .lean();
+            return job as IJob;
+        } catch (error) {
+            console.error(`Error in getJobByIdMinimal for ${jobId}:`, error);
+            return null;
+        }
+    }
+
     // List jobs with filtering and pagination
     async listJobs(
         filters: JobFilterOptions,

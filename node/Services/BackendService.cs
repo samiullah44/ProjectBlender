@@ -1057,8 +1057,9 @@ private string CalculateNodeTier(HardwareInfo hw)
                 var resolutionY = settings.ResolutionY > 0 ? settings.ResolutionY : 1080;
                 var outputFormat = settings.OutputFormat ?? "PNG";
                 var blenderVersion = settings.BlenderVersion ?? "4.5.0";
+                var denoiser = settings.Denoiser ?? "NONE";
 
-                _logger.LogInformation($"⚙️  Render settings: {engine}, {device}, {samples} samples, {resolutionX}x{resolutionY}, Output: {outputFormat}, Blender: {blenderVersion}");
+                _logger.LogInformation($"⚙️  Render settings: {engine}, {device}, {samples} samples, {resolutionX}x{resolutionY}, Output: {outputFormat}, Blender: {blenderVersion}, Denoiser: {denoiser}");
 
                 // Ensure the correct Blender version is available and set
                 _logger.LogInformation($"🔍 Acquiring Blender {blenderVersion} for job...");
@@ -1107,6 +1108,7 @@ private string CalculateNodeTier(HardwareInfo hw)
                         resolutionX: resolutionX,
                         resolutionY: resolutionY,
                         outputFormat: outputFormat,
+                        denoiser: denoiser,
                         useAnimationSettings: isAnimation,
                         cancellationToken: cancellationToken);
 
@@ -1188,6 +1190,10 @@ private string CalculateNodeTier(HardwareInfo hw)
             {
                 ClearCurrentJob();
                 _frameUploadUrls.Clear();
+                
+                // CRITICAL: Force an immediate poll to fetch remaining frames for this job, or new jobs
+                _logger.LogInformation("🔄 Job batch finished, immediately polling for more work...");
+                _ = PollForJobsAsync(cancellationToken);
             }
         }
 

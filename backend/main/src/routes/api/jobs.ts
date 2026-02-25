@@ -7,6 +7,7 @@ import { S3Service } from '../../services/S3Service';
 import { authenticate, authorize } from '../../middleware/auth';
 import { UploadController } from '../../controllers/uploadController';
 import { WebSocketService } from '../../services/WebSocketService';
+import { validateNodeSecret } from '../../middleware/nodeAuth';
 
 const router = express.Router();
 
@@ -99,6 +100,12 @@ router.post('/:jobId/approve',
 );
 
 // Node-specific routes (for rendering nodes)
+router.get('/:jobId/status-for-node',
+    validateNodeSecret,
+    injectServices,
+    jobController.getJobStatusForNode.bind(jobController)
+);
+
 router.get('/:jobId/upload-url/:frame',
     jobController.generateFrameUploadUrl.bind(jobController)
 );

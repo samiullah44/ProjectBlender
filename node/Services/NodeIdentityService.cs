@@ -33,7 +33,7 @@ namespace BlendFarm.Node.Services
         private const string IdentityFileName = "node_identity.json";
 
         // ── Constructor ─────────────────────────────────────────────────────
-        public NodeIdentityService(string name, ILogger<NodeIdentityService> logger = null)
+        public NodeIdentityService(string name, ILogger<NodeIdentityService>? logger = null)
         {
             UserProvidedName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
             _logger = logger;
@@ -125,7 +125,7 @@ namespace BlendFarm.Node.Services
             string registrationToken,
             string backendUrl,
             HttpClient httpClient,
-            object hardwarePayload = null)
+            object? hardwarePayload = null)
         {
             try
             {

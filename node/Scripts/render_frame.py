@@ -38,6 +38,7 @@ device_type = config.get('device', 'GPU').upper()
 resolution_x = config.get('resolution_x', 1920)
 resolution_y = config.get('resolution_y', 1080)
 output_format = config.get('output_format', 'PNG').upper()
+denoiser = config.get('denoiser', 'NONE').upper()
 use_animation_settings = config.get('use_animation_settings', False)
 
 print(f'=== Render Settings ===')
@@ -48,6 +49,7 @@ print(f'  Engine: {engine}')
 print(f'  Device: {device_type}')
 print(f'  Resolution: {resolution_x}x{resolution_y}')
 print(f'  Format: {output_format}')
+print(f'  Denoiser: {denoiser}')
 print(f'  Animation Mode: {use_animation_settings}')
 
 # Apply ALL settings
@@ -59,21 +61,29 @@ if engine == 'CYCLES':
     scene.render.engine = 'CYCLES'
     scene.cycles.samples = samples
     
-    # Set denoising if available and if samples are high
-    if samples >= 32:
+    # Set denoising based on config
+    if denoiser != 'NONE':
         try:
             scene.cycles.use_denoising = True
-            scene.cycles.denoiser = 'OPENIMAGEDENOISE'
-            print('Enabled denoising with OpenImageDenoise')
-        except:
+            if denoiser == 'OPENIMAGEDENOISE':
+                scene.cycles.denoiser = 'OPENIMAGEDENOISE'
+            elif denoiser == 'OPTIX':
+                scene.cycles.denoiser = 'OPTIX'
+            else:
+                scene.cycles.denoiser = 'NLM'
+            print(f'Enabled denoising with {denoiser}')
+        except Exception as e:
             try:
                 scene.cycles.use_denoising = True
                 print('Enabled denoising (fallback)')
             except:
                 print('Could not enable denoising')
+    else:
+        scene.cycles.use_denoising = False
+        print('Denoising disabled')
     
-    # FIXED: Use device from config
-    if device_type == 'GPU':
+    # FIXED: Use device from config. Check if it starts with GPU.
+    if device_type.startswith('GPU'):
         try:
             # Try to enable GPU devices
             import addon_utils
@@ -125,6 +135,33 @@ if use_animation_settings:
     scene.frame_end = frame_num
     scene.frame_current = frame_num
     print(f'Animation settings: Frame range {frame_num}-{frame_num}')
+
+# FIX CAMERA ISSUE: Ensure there is an active camera
+if not scene.camera:
+    print('WARNING: No active camera found in scene.')
+    camera_found = False
+    
+    # First, try to find any existing camera in the scene
+    for obj in scene.objects:
+        if obj.type == 'CAMERA':
+            scene.camera = obj
+            print(f'Assigned existing camera: {obj.name}')
+            camera_found = True
+            break
+            
+    # If no camera exists, create a default one
+    if not camera_found:
+        print('Creating a default fallback camera.')
+        cam_data = bpy.data.cameras.new('DefaultCamera')
+        cam_obj = bpy.data.objects.new('DefaultCamera', cam_data)
+        scene.collection.objects.link(cam_obj)
+        scene.camera = cam_obj
+        
+        # Position it reasonably (e.g., looking at origin)
+        cam_obj.location = (7.358, -6.925, 4.958)
+        
+        import math
+        cam_obj.rotation_euler = (math.radians(63.2), math.radians(0), math.radians(46.7))
 
 # Set output path
 if output_path.startswith('//'):
