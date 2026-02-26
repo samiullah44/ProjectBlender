@@ -3,13 +3,24 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using BlendFarm.Node.Models;
 
 namespace BlendFarm.Node.Services
 {
+    [JsonSerializable(typeof(NodeIdentityService.NodeIdentityFile))]
+    [JsonSerializable(typeof(NodeIdentityService.RegistrationPayload))]
+    [JsonSerializable(typeof(NodeIdentityService.RegistrationResponse))]
+    [JsonSerializable(typeof(NodeIdentityService.ErrorResponse))]
+    [JsonSerializable(typeof(System.Collections.Generic.Dictionary<string, object>))]
+    public partial class NodeIdentitySerializerContext : JsonSerializerContext
+    {
+    }
+
     /// <summary>
     /// Manages the node's permanent identity (nodeId + nodeSecret) and
     /// handles the one-time token-based registration flow.
@@ -38,10 +49,16 @@ namespace BlendFarm.Node.Services
             UserProvidedName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
             _logger = logger;
 
-            // Store identity file next to the executable
-            var exeDir = Path.GetDirectoryName(Environment.ProcessPath)
-                         ?? AppDomain.CurrentDomain.BaseDirectory;
-            _identityFilePath = Path.Combine(exeDir, IdentityFileName);
+            // Store identity file in a stable global location immune to build/publish path changes
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+            var blendFarmDir = Path.Combine(appData, "BlendFarm");
+            
+            if (!Directory.Exists(blendFarmDir))
+            {
+                Directory.CreateDirectory(blendFarmDir);
+            }
+            
+            _identityFilePath = Path.Combine(blendFarmDir, IdentityFileName);
         }
 
         // ── Load / Save identity ────────────────────────────────────────────
@@ -57,7 +74,9 @@ namespace BlendFarm.Node.Services
                     return false;
 
                 var json = File.ReadAllText(_identityFilePath);
-                var identity = JsonConvert.DeserializeObject<NodeIdentityFile>(json);
+                var identity = System.Text.Json.JsonSerializer.Deserialize(
+                    json,
+                    NodeIdentitySerializerContext.Default.NodeIdentityFile);
 
                 if (identity == null || string.IsNullOrEmpty(identity.NodeId) || string.IsNullOrEmpty(identity.NodeSecret))
                     return false;
@@ -106,7 +125,10 @@ namespace BlendFarm.Node.Services
                     SavedAt      = DateTime.UtcNow,
                 };
 
-                File.WriteAllText(_identityFilePath, JsonConvert.SerializeObject(identity, Formatting.Indented));
+                var jsonText = System.Text.Json.JsonSerializer.Serialize(
+                    identity,
+                    NodeIdentitySerializerContext.Default.NodeIdentityFile);
+                File.WriteAllText(_identityFilePath, jsonText);
                 _logger?.LogInformation($"💾 Node identity saved to {_identityFilePath}");
             }
             catch (Exception ex)
@@ -131,32 +153,66 @@ namespace BlendFarm.Node.Services
             {
                 _logger?.LogInformation("🔑 Registering node with backend using registration token...");
 
-                var payload = new System.Collections.Generic.Dictionary<string, object>
+                // Map the raw HardwareInfo to the exact flat schema the backend's 
+                // register-with-token endpoint reads (hardware.ramGB, hardware.gpuVRAM, etc.)
+                var payloadDict = new System.Collections.Generic.Dictionary<string, object>
                 {
                     ["registrationToken"] = registrationToken,
-                    ["name"]              = UserProvidedName ?? "BlendFarm Node",
+                    ["name"]              = UserProvidedName ?? "BlendFarm Node"
                 };
 
-                // Merge hardware data if provided
-                if (hardwarePayload != null)
+                if (hardwarePayload is HardwareInfo hw)
                 {
-                    var hwJson  = JsonConvert.SerializeObject(hardwarePayload);
-                    var hwDict  = JsonConvert.DeserializeObject<System.Collections.Generic.Dictionary<string, object>>(hwJson);
-                    if (hwDict != null)
-                        foreach (var kv in hwDict)
-                            payload[kv.Key] = kv.Value;
+                    var gpu = hw.Gpus?.Count > 0 ? hw.Gpus[0] : null;
+
+                    // Top-level fields expected by register-with-token
+                    payloadDict["os"]                  = hw.Os?.Name ?? "";
+                    payloadDict["ipAddress"]           = hw.Ip?.LocalIP ?? "";
+                    payloadDict["publicIp"]            = hw.Ip?.PublicIP ?? "";
+                    payloadDict["hostname"]            = hw.Ip?.Hostname ?? "";
+                    payloadDict["hardwareFingerprint"] = hw.HardwareFingerprint ?? "";
+
+                    // Flat hardware object — these are the fields the backend validation reads
+                    payloadDict["hardware"] = new System.Collections.Generic.Dictionary<string, object>
+                    {
+                        ["cpuModel"]          = hw.Cpu?.Model ?? "",
+                        ["cpuCores"]          = hw.Cpu?.PhysicalCores ?? 0,
+                        ["cpuThreads"]        = hw.Cpu?.LogicalCores ?? 0,
+                        ["cpuSpeedGHz"]       = hw.Cpu?.BaseClockGHz ?? 0,
+                        ["cpuScore"]          = hw.Cpu?.CpuScore ?? 0,
+                        ["ramGB"]             = hw.Ram?.TotalGB ?? 0,
+                        ["ramType"]           = hw.Ram?.Type ?? "",
+                        ["gpuName"]           = gpu?.Model ?? "",
+                        ["gpuVRAM"]           = gpu?.VramMB ?? 0,
+                        ["storageFreeGB"]     = hw.Storage?.FreeGB ?? 0,
+                        ["storageType"]       = hw.Storage?.Type ?? "",
+                        ["uploadSpeedMbps"]   = hw.Network?.UploadSpeedMbps ?? 0,
+                        ["downloadSpeedMbps"] = hw.Network?.DownloadSpeedMbps ?? 0,
+                        ["latencyMs"]         = hw.Network?.LatencyMs ?? 0
+                    };
                 }
 
-                var json    = JsonConvert.SerializeObject(payload);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var payloadJson = Newtonsoft.Json.JsonConvert.SerializeObject(payloadDict);
+                var content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
+
+
+
 
                 var response = await httpClient.PostAsync($"{backendUrl.TrimEnd('/')}/api/nodes/register-with-token", content);
                 var body     = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    dynamic errorObj = JsonConvert.DeserializeObject(body);
-                    string errorMsg = errorObj?.message ?? body;
+                    string errorMsg = body;
+                    try 
+                    {
+                        var errorObj = System.Text.Json.JsonSerializer.Deserialize(
+                            body, 
+                            NodeIdentitySerializerContext.Default.ErrorResponse);
+                        if (errorObj != null && !string.IsNullOrEmpty(errorObj.message))
+                            errorMsg = errorObj.message;
+                    } 
+                    catch { }
                     
                     _logger?.LogError($"❌ Registration Refused:");
                     _logger?.LogCritical($"{errorMsg}");
@@ -174,10 +230,12 @@ namespace BlendFarm.Node.Services
                     return false;
                 }
 
-                dynamic result = JsonConvert.DeserializeObject(body);
+                var result = System.Text.Json.JsonSerializer.Deserialize(
+                    body,
+                    NodeIdentitySerializerContext.Default.RegistrationResponse);
 
-                NodeId     = (string)result.nodeId;
-                NodeSecret = (string)result.nodeSecret;
+                NodeId     = result?.nodeId;
+                NodeSecret = result?.nodeSecret;
 
                 if (string.IsNullOrEmpty(NodeId) || string.IsNullOrEmpty(NodeSecret))
                 {
@@ -200,7 +258,25 @@ namespace BlendFarm.Node.Services
 
         // ── Data models ─────────────────────────────────────────────────────
 
-        private class NodeIdentityFile
+        public class RegistrationPayload
+        {
+            public string registrationToken { get; set; }
+            public string name { get; set; }
+            // hardware is omitted here — sent as raw JSON in the request body manually
+        }
+
+        public class RegistrationResponse
+        {
+            public string nodeId { get; set; }
+            public string nodeSecret { get; set; }
+        }
+
+        public class ErrorResponse
+        {
+            public string message { get; set; }
+        }
+
+        public class NodeIdentityFile
         {
             public string   NodeId       { get; set; }
             public string   NodeSecret   { get; set; }

@@ -29,7 +29,7 @@ export const NotificationBell: React.FC = () => {
 
     useEffect(() => {
         fetchUnreadCount()
-        fetchNotifications(10) // Get the 10 most recent
+        fetchNotifications(5) // Get the 5 most recent for the bell
     }, [fetchNotifications, fetchUnreadCount])
 
     const handleToggle = () => setIsOpen(!isOpen)
@@ -115,7 +115,7 @@ export const NotificationBell: React.FC = () => {
                             <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
                                 {notifications.length > 0 ? (
                                     <div className="divide-y divide-white/5">
-                                        {notifications.map((n) => (
+                                        {notifications.slice(0, 5).map((n) => (
                                             <div
                                                 key={n._id}
                                                 className={cn(
@@ -142,7 +142,10 @@ export const NotificationBell: React.FC = () => {
                                                             {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                                                         </span>
                                                     </div>
-                                                    <p className="text-xs text-gray-400 mt-1 line-clamp-2 leading-relaxed">
+                                                    <p 
+                                                        className="text-xs text-gray-400 mt-1 line-clamp-2 leading-relaxed break-words"
+                                                        title={n.message}
+                                                    >
                                                         {n.message}
                                                     </p>
                                                 </div>

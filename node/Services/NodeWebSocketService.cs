@@ -248,6 +248,24 @@ namespace BlendFarm.Node.Services
                         }
                         break;
 
+                    case "command":
+                        var cmd = msg.GetValueOrDefault("command")?.ToString() ?? "";
+                        if (cmd == "node_rejected")
+                        {
+                            var reason = msg.GetValueOrDefault("reason")?.ToString() ?? "Unknown hardware issue";
+                            _logger.LogCritical("\n" + new string('=', 60));
+                            _logger.LogCritical("🚫 NODE REJECTED BY BACKEND");
+                            _logger.LogCritical($"Reason: {reason}");
+                            _logger.LogCritical(new string('=', 60) + "\n");
+                            _logger.LogCritical("This node does not meet the requirements to remain on the network.");
+                            _logger.LogCritical("💰 Tip: Update or upgrade your system to earn more from the network!");
+                            _logger.LogCritical("The application will now shut down.");
+                            
+                            // Hard kill as requested by user
+                            Environment.Exit(1);
+                        }
+                        break;
+
                     case "disconnect":
                         _logger.LogWarning($"⚠️  Server requested disconnect: {msg.GetValueOrDefault("reason")}");
                         return;

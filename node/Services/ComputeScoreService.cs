@@ -22,7 +22,7 @@ namespace BlendFarm.Node.Services
             _cache = new BenchmarkCache(logger);
         }
 
-        public async Task<BenchmarkResult> GetOrRunBenchmarkAsync(bool force = false)
+        public async Task<BenchmarkResult> GetOrRunBenchmarkAsync(bool force = false, HardwareInfo currentHardware = null)
         {
             if (!force)
             {
@@ -41,6 +41,7 @@ namespace BlendFarm.Node.Services
 
                 if (result.IsComplete && (result.CpuScore > 0 || result.GpuScore > 0))
                 {
+                    if (currentHardware != null) result.Hardware = currentHardware;
                     await _cache.SaveBenchmarkAsync(result);
                     return result;
                 }
@@ -53,7 +54,10 @@ namespace BlendFarm.Node.Services
                 result.BenchmarkType = "Blender";
 
                 if (result.IsComplete)
+                {
+                    if (currentHardware != null) result.Hardware = currentHardware;
                     await _cache.SaveBenchmarkAsync(result);
+                }
 
                 return result;
             }

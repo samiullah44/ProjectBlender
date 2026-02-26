@@ -1,8 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using BlendFarm.Node.Models;
 
 namespace BlendFarm.Node.Benchmark.Models
 {
+    [JsonSerializable(typeof(BenchmarkResult))]
+    public partial class BenchmarkSerializerContext : JsonSerializerContext
+    {
+    }
+
     public class BenchmarkResult
     {
         public DateTime RunDate { get; set; }
@@ -33,6 +40,9 @@ namespace BlendFarm.Node.Benchmark.Models
         public bool IsComplete { get; set; }
         public string Error { get; set; }
         public string BenchmarkType { get; set; } // "Blender" or "V-Ray"
+        
+        // Attached Hardware Information for change detection
+        public HardwareInfo Hardware { get; set; }
         
         // Cache validity (7 days)
         public bool IsValid() => IsComplete && (GpuScore > 0 || CpuScore > 0) && (DateTime.UtcNow - RunDate).TotalDays < 7;

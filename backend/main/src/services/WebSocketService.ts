@@ -18,6 +18,8 @@ export class WebSocketService {
   private jobSubscriptions: Map<string, Set<Client>> = new Map();
   // keyed by nodeId — only one entry per node (latest connection wins)
   private nodeClients: Map<string, Client> = new Map();
+  // keyed by userId — set of clients connected for that user (rooms)
+  private userClients: Map<string, Set<Client>> = new Map();
 
   constructor(server: Server) {
     this.wss = new WebSocketServer({ server });
@@ -55,6 +57,17 @@ export class WebSocketService {
           this.nodeClients.delete(client.nodeId);
           this.markNodeWsDisconnected(client.nodeId).catch(() => { });
         }
+        // Clean up user rooms
+        if (client.userId) {
+          const userSet = this.userClients.get(client.userId);
+          if (userSet) {
+            userSet.delete(client);
+            if (userSet.size === 0) {
+              this.userClients.delete(client.userId);
+            }
+          }
+        }
+
         // Clean up subscriptions
         for (const [jobId, clients] of this.jobSubscriptions) {
           clients.delete(client);
@@ -380,15 +393,33 @@ export class WebSocketService {
     try {
       // Implement authentication if needed
       if (message.userId) {
+        // Remove from old room if changed
+        if (client.userId && client.userId !== message.userId) {
+          const oldSet = this.userClients.get(client.userId);
+          if (oldSet) {
+            oldSet.delete(client);
+            if (oldSet.size === 0) this.userClients.delete(client.userId);
+          }
+        }
+
         client.userId = message.userId;
+
+        // Add to new room
+        if (!this.userClients.has(message.userId)) {
+          this.userClients.set(message.userId, new Set());
+        }
+        this.userClients.get(message.userId)!.add(client);
       }
+      
       if (message.nodeId) {
         client.nodeId = message.nodeId;
       }
       this.send(client, {
         type: 'auth_success',
-        message: 'Authentication successful'
+        message: 'Authentication successful',
+        userId: client.userId
       });
+      console.log(`🔐 WS User Authenticated: ${client.userId}`);
     } catch (error) {
       this.send(client, {
         type: 'auth_error',
@@ -411,8 +442,11 @@ export class WebSocketService {
     }
   }
 
-  // Send message to a specific user
+  // Send message to a specific user (using rooms)
   public emitToUser(userId: string, type: string, data: any) {
+    const clients = this.userClients.get(userId);
+    if (!clients || clients.size === 0) return;
+
     const message = {
       type,
       data,
@@ -420,12 +454,12 @@ export class WebSocketService {
     };
     const messageJson = JSON.stringify(message);
 
-    for (const client of this.clients) {
-      if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+    for (const client of clients) {
+      if (client.ws.readyState === WebSocket.OPEN) {
         try {
           client.ws.send(messageJson);
         } catch (error) {
-          console.error(`Error emitting to user ${userId}:`, error);
+          console.error(`Error emitting to user client in room ${userId}:`, error);
         }
       }
     }

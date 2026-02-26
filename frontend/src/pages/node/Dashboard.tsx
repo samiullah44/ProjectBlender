@@ -128,16 +128,18 @@ const NodeDashboard: React.FC = () => {
         // Simple polling for real-time-ish stats updates
         const interval = setInterval(fetchData, 15000)
 
-        // WebSockets for Real-time push updates for Node Linking
+        // WebSockets for Real-time push updates
         const unsubscribeSystem = websocketService.subscribeToSystem((data) => {
             if (data.type === 'node_registered') {
-                // The backend pushes this when a registration token is consumed!
                 toast.success(`🎉 Hardware Node Connected: ${data.nodeName || 'New Node'}`, {
-                    id: `node_reg_${data.nodeId}`, // prevents duplicate toasts
+                    id: `node_reg_${data.nodeId}`,
                     duration: 6000
                 })
-                // Auto-refresh the nodes list!
                 fetchData()
+            }
+            // Add real-time refresh for status changes or hardware rejections
+            if (data.type === 'node_status_change' || data.type === 'node_update') {
+               fetchData() 
             }
         })
 

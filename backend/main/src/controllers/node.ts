@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { Node } from '../models/Node';
 import { Job } from '../models/Job';
+import { User } from '../models/User';
+import { Notification } from '../models/Notification';
+import { HardwareValidationService } from '../services/HardwareValidationService';
 import { IFrameAssignment } from '../types/job.types';
 import { AppError } from '../middleware/error';
 import { S3Service } from '../services/S3Service';
@@ -204,10 +207,19 @@ export class NodeController {
 
       // ── Security: Block duplicate hardware registrations ──────────────────
       if (incomingFingerprint) {
-        const hwMatch = await Node.findOne({ hardwareFingerprint: incomingFingerprint });
+        const hwMatch = await Node.findOne({ hardwareFingerprint: incomingFingerprint }).select('+nodeSecretHash');
         if (hwMatch && hwMatch.nodeId !== nodeId) {
-          // Same hardware, but a DIFFERENT nodeId → duplicate device
-          if (hwMatch.status !== 'offline') {
+          // Same hardware, but a DIFFERENT nodeId → check if the INCOMING nodeId already
+          // has a properly registered document (with a nodeSecretHash). If so, do NOT reclaim —
+          // the connecting node is legitimate and the old doc is a leftover/duplicate.
+          const incomingNodeDoc = await Node.findOne({ nodeId }).select('+nodeSecretHash');
+          if (incomingNodeDoc?.nodeSecretHash) {
+            // The connecting node has its own valid registered record — skip reclaim.
+            // The old fingerprint-only document is a stale orphan; delete it to keep DB clean.
+            console.log(`🧹 Deleting stale orphan node document ${hwMatch.nodeId} — connecting node ${nodeId} is the legitimate owner of this hardware.`);
+            await Node.deleteOne({ nodeId: hwMatch.nodeId });
+            // Fall through to the normal existingNode update path below
+          } else if (hwMatch.status !== 'offline') {
             // Active duplicate → reject
             console.warn(`🚫 Duplicate hardware fingerprint from ${nodeId} — already registered as ${hwMatch.nodeId}`);
             res.status(409).json({
@@ -217,7 +229,7 @@ export class NodeController {
             });
             return;
           } else {
-            // The previous node with this hardware is offline → reuse its record
+            // The previous node with this hardware is offline and no better record exists → reuse its record
             console.log(`🔄 Reclaiming offline node ${hwMatch.nodeId} for hardware fingerprint re-registration as ${nodeId}`);
             hwMatch.nodeId = nodeId;
             hwMatch.status = 'online';
@@ -248,11 +260,176 @@ export class NodeController {
         existingNode.updatedAt = now;
         existingNode.connectionCount = (existingNode.connectionCount || 0) + 1;
         existingNode.lastStatusChange = existingNode.status !== 'online' && existingNode.status !== 'busy' ? now : existingNode.lastStatusChange;
-
         // Link node to user if not already linked (for backward compatibility)
         if (!existingNode.userId && userId) {
           existingNode.userId = userId as any;
         }
+
+        // --- NEW: Auto-Recovery Logic for Revoked Nodes ---
+        if (existingNode.isRevoked && nodeInfo.hardware) {
+          const recoveryCheck = HardwareValidationService.checkMinimumRequirements(nodeInfo.hardware);
+          if (recoveryCheck.meetsRequirements) {
+            console.log(`🔓 Node ${nodeId} hardware requirements restored. Auto-recovering status...`);
+            existingNode.isRevoked = false;
+            existingNode.revokedReason = undefined;
+            existingNode.revokedAt = undefined;
+            existingNode.status = 'online';
+            
+            // Notify User: Hardware Restored
+            if (existingNode.userId) {
+              Notification.create({
+                userId: existingNode.userId,
+                type: 'system',
+                title: 'Node Access Restored! ✅',
+                message: `Great news! Your node "${existingNode.name}" now meets the minimum system requirements again. Access has been automatically restored.`,
+                metadata: { nodeId }
+              }).catch(err => console.error('Failed to create recovery notification:', err));
+            }
+          }
+        }
+        // --- End Auto-Recovery ---
+
+        // --- Hardware Specification Change Detection (Upgrade/Downgrade) ---
+        let hwChangeMessage = '';
+        let isDowngrade = false;
+        let isUpgrade = false;
+
+        if (nodeInfo.hardware && existingNode.hardware) {
+          const oldHw = existingNode.hardware as any;
+          const newHw = nodeInfo.hardware;
+
+          // Check RAM
+          if (newHw.ramGB !== undefined && oldHw.ramGB !== undefined) {
+            const diff = Math.round(newHw.ramGB) - Math.round(oldHw.ramGB);
+            if (diff <= -2) { hwChangeMessage += `RAM decreased from ${oldHw.ramGB}GB to ${newHw.ramGB}GB. `; isDowngrade = true; }
+            else if (diff >= 2) { hwChangeMessage += `RAM increased from ${oldHw.ramGB}GB to ${newHw.ramGB}GB. `; isUpgrade = true; }
+          }
+
+          // Check CPU Cores
+          if (newHw.cpuCores !== undefined && oldHw.cpuCores !== undefined) {
+            if (newHw.cpuCores < oldHw.cpuCores) { hwChangeMessage += `CPU Cores decreased from ${oldHw.cpuCores} to ${newHw.cpuCores}. `; isDowngrade = true; }
+            else if (newHw.cpuCores > oldHw.cpuCores) { hwChangeMessage += `CPU Cores increased from ${oldHw.cpuCores} to ${newHw.cpuCores}. `; isUpgrade = true; }
+          }
+
+          // Check CPU Model Swap
+          if (newHw.cpuModel && oldHw.cpuModel && newHw.cpuModel !== oldHw.cpuModel) {
+            hwChangeMessage += `CPU Model changed from '${oldHw.cpuModel}' to '${newHw.cpuModel}'. `;
+            // We don't mark as up/down immediately, benchmarking handles true performance.
+          }
+
+          // Check GPU VRAM
+          if (newHw.gpuVRAM !== undefined && oldHw.gpuVRAM !== undefined) {
+            const diffMB = newHw.gpuVRAM - oldHw.gpuVRAM;
+            if (diffMB <= -1000) { hwChangeMessage += `GPU VRAM decreased from ${oldHw.gpuVRAM}MB to ${newHw.gpuVRAM}MB. `; isDowngrade = true; }
+            else if (diffMB >= 1000) { hwChangeMessage += `GPU VRAM increased from ${oldHw.gpuVRAM}MB to ${newHw.gpuVRAM}MB. `; isUpgrade = true; }
+          }
+
+          // Check GPU Model Swap
+          if (newHw.gpuName && oldHw.gpuName && newHw.gpuName !== oldHw.gpuName) {
+            hwChangeMessage += `GPU changed from '${oldHw.gpuName}' to '${newHw.gpuName}'. `;
+          }
+
+          if (hwChangeMessage.trim().length > 0) {
+            console.log(`⚠️ Hardware change detected for node ${nodeId}: ${hwChangeMessage}`);
+
+            // Check minimum requirements if it was a downgrade
+            let failedMinReqs = false;
+            let reqReason = '';
+
+            if (isDowngrade) {
+              const check = HardwareValidationService.checkMinimumRequirements(newHw);
+              if (!check.meetsRequirements) {
+                failedMinReqs = true;
+                reqReason = check.reason || 'Failed minimum rendering requirements.';
+                console.warn(`🚫 Node ${nodeId} degraded below minimum specs: ${reqReason}`);
+                existingNode.status = 'offline'; 
+                existingNode.isRevoked = true; // Hide from frontend as requested
+                existingNode.revokedReason = reqReason;
+                existingNode.revokedAt = new Date();
+              }
+            }
+
+            // Send Notifications
+            if (existingNode.userId) {
+              try {
+                const adminUsers = await User.find({ roles: 'admin' }).select('_id');
+
+                if (failedMinReqs) {
+                  // Notify User: Rejected
+                  const notifyDoc = await Notification.create({
+                    userId: existingNode.userId,
+                    type: 'system',
+                    title: 'Node Status Revoked (Hardware Degradation)',
+                    message: `Your node "${existingNode.name}" no longer meets the minimum system requirements because hardware was removed/downgraded.\n\nChanges: ${hwChangeMessage}\nReason: ${reqReason}\n\n💡 Tip: Upgrade your hardware components to meet requirements and earn more from the network!`,
+                    metadata: { nodeId }
+                  });
+
+                  // --- Real-time WebSocket Updates ---
+                  const wsService = NodeController.getWsService(req);
+                  if (wsService) {
+                    // 1. Tell the Node software to SHUT DOWN immediately
+                    wsService.sendToNode(nodeId, {
+                      type: 'command',
+                      command: 'node_rejected',
+                      reason: reqReason
+                    });
+
+                    // 2. Push Notification to User Dashboard (real-time popup)
+                    // The frontend handleNotification expects type 'notification:new' 
+                    // and then looks into 'data.notification' (emitToUser wraps our payload in a 'data' property)
+                    wsService.emitToUser(existingNode.userId.toString(), 'notification:new', {
+                      notification: notifyDoc
+                    });
+                  }
+
+                  // Notify Admins
+                  for (const admin of adminUsers) {
+                    await Notification.create({
+                      userId: admin._id,
+                      type: 'system',
+                      title: '[Admin Alert] Node Degraded Below Minimum',
+                      message: `Node "${existingNode.name}" (${nodeId}) downgraded and failed minimum requirements.\nChanges: ${hwChangeMessage}`,
+                      metadata: { nodeId }
+                    });
+                  }
+                }
+                else if (isUpgrade) {
+                  // Notify User: Encouraging Upgrade
+                  await Notification.create({
+                    userId: existingNode.userId,
+                    type: 'system',
+                    title: 'Node Hardware Upgraded! 🚀',
+                    message: `Awesome! We noticed you upgraded your node "${existingNode.name}". A benchmark test has been scheduled.\n\nChanges: ${hwChangeMessage}\n\nThis may increase your Node Tier and earnings!`,
+                    metadata: { nodeId }
+                  });
+                }
+                else if (isDowngrade) {
+                  // Notify User: Downgrade Warning
+                  await Notification.create({
+                    userId: existingNode.userId,
+                    type: 'system',
+                    title: 'Node Hardware Degraded',
+                    message: `We detected hardware was removed or downgraded on node "${existingNode.name}". A new benchmark test has been scheduled.\n\nChanges: ${hwChangeMessage}\n\nYour Node Tier may be re-evaluated.`,
+                    metadata: { nodeId }
+                  });
+                  // Notify Admins
+                  for (const admin of adminUsers) {
+                    await Notification.create({
+                      userId: admin._id,
+                      type: 'system',
+                      title: '[Admin Alert] Node Hardware Degraded',
+                      message: `Node "${existingNode.name}" (${nodeId}) reported a hardware downgrade.\nChanges: ${hwChangeMessage}`,
+                      metadata: { nodeId }
+                    });
+                  }
+                }
+              } catch (notifErr) {
+                console.error('Failed to send hardware change notifications:', notifErr);
+              }
+            }
+          }
+        }
+        // --- End Hardware Detection ---
 
         if (nodeInfo.hardware) {
           existingNode.hardware = {
@@ -300,6 +477,7 @@ export class NodeController {
         if (wsService) {
           wsService.broadcastNodeUpdate(nodeId, {
             status: existingNode.status,
+            isRevoked: existingNode.isRevoked, // Add this
             hardware: existingNode.hardware,
             performance: existingNode.performance,
             lastHeartbeat: existingNode.lastHeartbeat,
@@ -1395,6 +1573,9 @@ export class NodeController {
           currentProgress: node.currentProgress,
           jobsCompleted: node.jobsCompleted,
           connectionCount: node.connectionCount || 0,
+          isRevoked: node.isRevoked || false,
+          revokedReason: node.revokedReason,
+          revokedAt: node.revokedAt,
           createdAt: node.createdAt,
           updatedAt: node.updatedAt,
           lastStatusChange: node.lastStatusChange

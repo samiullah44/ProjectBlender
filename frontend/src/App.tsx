@@ -12,6 +12,7 @@ import LoginPage from '@/pages/public/Login'
 import RegisterPage from '@/pages/public/Register'
 import OAuthCallback from '@/pages/public/OAuthCallback'
 import VerifyEmailPage from '@/pages/public/VerifyEmail'
+import NotificationsPage from '@/pages/public/Notifications'
 import ScrollToTop from '@/components/layout/ScrollToTop'
 
 // Client Pages
@@ -108,6 +109,11 @@ function App() {
               <Route path="/apply-node-provider" element={
                 <ProtectedRoute allowedRoles={['client', 'admin']}>
                   <ApplyNodeProvider />
+                </ProtectedRoute>
+              } />
+              <Route path="/notifications" element={
+                <ProtectedRoute allowedRoles={['client', 'admin', 'node_provider']}>
+                  <NotificationsPage />
                 </ProtectedRoute>
               } />
               {/* <Route path="/login" element={<LoginPage />} /> */}

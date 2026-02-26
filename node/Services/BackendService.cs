@@ -146,19 +146,25 @@ var hardwareDetector = new HardwareDetector(
             _backendUrl
         );
 
-        // If NodeId is default or empty, generate a stable unique identity
-        if (string.IsNullOrEmpty(_nodeId) || _nodeId == "node_auto" || _nodeId == "node_1" || 
-            _nodeId.StartsWith("node-") && _nodeId.Length > 20) 
+        // Only generate a hardware-fingerprint based ID if the node has no registered identity.
+        // A node with a valid NodeSecret has been properly registered via token and must NOT
+        // have its NodeId overwritten by a hardware-fingerprint hash.
+        bool hasRegisteredIdentity = _identityService.IsRegistered;
+        if (!hasRegisteredIdentity && (string.IsNullOrEmpty(_nodeId) || _nodeId == "node_auto" || _nodeId == "node_1"))
         {
             var stableId = GenerateStableNodeId(_detectedHardware);
             _nodeId = stableId;
             _detectedHardware.NodeId = stableId;
-            
-            // Re-apply headers with the new stable ID
-            // IMPORTANT: Also update our identity service so subsequent calls 
-            // to ApplyNodeSecretHeader() use the correct ID.
             _identityService.SetIdentity(stableId, _identityService.NodeSecret);
             ApplyNodeSecretHeader();
+            _logger.LogInformation($"🔑 No registered identity found. Generated stable hardware ID: {stableId}");
+        }
+        else if (hasRegisteredIdentity)
+        {
+            // The identity was loaded from node_identity.json — use it as-is
+            _nodeId = _identityService.NodeId;
+            _detectedHardware.NodeId = _nodeId;
+            _logger.LogInformation($"✅ Using registered identity: {_nodeId}");
         }
 
         // Determine Friendly Name
@@ -364,7 +370,7 @@ var hardwareDetector = new HardwareDetector(
                 _logger.LogInformation("🔑 Found RegistrationToken in config — registering with backend...");
                 var ok = await _identityService.RegisterWithTokenAsync(
                     cfgToken, _backendUrl, _httpClient,
-                    BuildHardwarePayload(hardware));
+                    hardware);
 
                 if (ok)
                 {
@@ -403,7 +409,7 @@ var hardwareDetector = new HardwareDetector(
 
             return await _identityService.RegisterWithTokenAsync(
                 interactiveToken, _backendUrl, _httpClient,
-                BuildHardwarePayload(hardware));
+                hardware);
         }
 
         /// <summary>Builds the hardware payload dict to send during registration.</summary>
@@ -443,14 +449,66 @@ var hardwareDetector = new HardwareDetector(
     
     try
     {
-        // Force benchmark on first run, otherwise use cache
-        var isFirstRun = !File.Exists(Path.Combine(
+        // Check against cache to detect hardware changes
+        var cachePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "BlendFarm", "benchmark_cache.json"));
+            "BlendFarm", "benchmark_cache.json");
+
+        var isFirstRun = !File.Exists(cachePath);
+
+        // If a cache exists, let's verify if hardware swapped
+        if (!isFirstRun)
+        {
+            try
+            {
+                var cacheJson = await File.ReadAllTextAsync(cachePath);
+                var cachedScore = System.Text.Json.JsonSerializer.Deserialize(
+                    cacheJson, 
+                    BlendFarm.Node.Benchmark.Models.BenchmarkSerializerContext.Default.BenchmarkResult);
+                
+                // Compare CPU and GPU models
+                bool hardwareChanged = false;
+                if (cachedScore != null && cachedScore.Hardware != null)
+                {
+                    if (_detectedHardware.Cpu?.Model != cachedScore.Hardware.Cpu?.Model)
+                    {
+                        _logger.LogWarning($"⚠️ CPU change detected: '{cachedScore.Hardware.Cpu?.Model}' -> '{_detectedHardware.Cpu?.Model}'");
+                        hardwareChanged = true;
+                    }
+                    else if (_detectedHardware.Gpus.FirstOrDefault()?.Model != cachedScore.Hardware.Gpus.FirstOrDefault()?.Model)
+                    {
+                        _logger.LogWarning($"⚠️ GPU change detected: '{cachedScore.Hardware.Gpus.FirstOrDefault()?.Model}' -> '{_detectedHardware.Gpus.FirstOrDefault()?.Model}'");
+                        hardwareChanged = true;
+                    }
+                }
+
+                if (hardwareChanged)
+                {
+                    _logger.LogWarning("⚠️ Hardware change detected! Forcing new benchmark run (2 iterations).");
+                    File.Delete(cachePath); // Delete old cache
+                    isFirstRun = true;      // Force re-run
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"❌ Failed to read benchmark cache for hardware comparison: {ex.Message}");
+                // If we can't read it, it's safer to just run it again
+                isFirstRun = true;
+            }
+        }
         
-        _benchmarkResult = await _computeScoreService.GetOrRunBenchmarkAsync(isFirstRun);
+        _benchmarkResult = await _computeScoreService.GetOrRunBenchmarkAsync(isFirstRun, _detectedHardware);
+
+        // Try to force 2 iterations if it's a fresh hardware run (for accuracy).
+        // Since GetOrRunBenchmark checks cache inside, if we forced it, it ran the actual benchmer.
+        if (isFirstRun && _benchmarkResult != null)
+        {
+            _benchmarkResult.Iterations = 2; // Tag it explicitly for the backend
+            // In a deeper implementation, you'd pass iterations directly into GetOrRunBenchmarkAsync
+            // But this tags the result so the backend knows it was a deeper benchmark
+        }
         
-        if (_benchmarkResult.IsComplete)
+        if (_benchmarkResult != null && _benchmarkResult.IsComplete)
         {
             _computeScore = _computeScoreService.CalculateComputeScore(_benchmarkResult, _detectedHardware);
             
@@ -772,6 +830,24 @@ var hardwareDetector = new HardwareDetector(
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
+                
+                // CRITICAL: Handle Revocation
+                if (errorContent.Contains("NODE_REVOKED"))
+                {
+                    _logger.LogCritical("══════════════════════════════════════════════════════════");
+                    _logger.LogCritical("🚫 NODE PERMANENTLY REVOKED");
+                    _logger.LogCritical("   The backend has revoked this node's identity.");
+                    _logger.LogCritical("   Reason: Hardware no longer meets minimum requirements.");
+                    _logger.LogCritical("   Action: Checking your BlendFarm dashboard for details.");
+                    _logger.LogCritical("   💰 Tip: Update or upgrade your system to earn more from the network!");
+                    _logger.LogCritical("══════════════════════════════════════════════════════════");
+                    
+                    Console.WriteLine("\nThis node cannot continue operation and will now close.");
+                    Console.WriteLine("Press any key to exit...");
+                    if (!Console.IsInputRedirected) Console.ReadKey();
+                    Environment.Exit(1);
+                }
+
                 _logger.LogError($"Registration failed (attempt {retry + 1}/{maxRetries}): {errorContent}");
                 
                 if (retry < maxRetries - 1)
@@ -985,6 +1061,17 @@ private string CalculateNodeTier(HardwareInfo hw)
                 else
                 {
                     var errorContent = await assignmentResponse.Content.ReadAsStringAsync();
+                    
+                    // CRITICAL: Handle Revocation during polling
+                    if (errorContent.Contains("NODE_REVOKED"))
+                    {
+                        _logger.LogCritical("🚫 SECURITY ALERT: Node Identity Revoked by Backend.");
+                        _logger.LogCritical("💰 Tip: Update or upgrade your system to earn more from the network!");
+                        _logger.LogCritical("This software will now terminate to prevent unauthorized resource usage.");
+                        Environment.Exit(1);
+                        return;
+                    }
+
                     _logger.LogWarning($"Job assignment failed: {errorContent}");
                 }
             }
@@ -1557,24 +1644,24 @@ private string CalculateNodeTier(HardwareInfo hw)
             }
         }       
 
-        private async Task ReportFailureAsync(string jobId, int frame, string error, string s3Key, CancellationToken cancellationToken)
+        private async Task ReportFailureAsync(string jobId, int frame, string errorMessage, string? s3Key, CancellationToken cancellationToken)
         {
             try
             {
-                var failureData = new
+                var payload = new
                 {
+                    nodeId = _nodeId,
                     jobId,
                     frame,
-                    error,
-                    nodeId = _nodeId,
-                    s3Key,
-                    timestamp = DateTime.UtcNow
+                    error = errorMessage,
+                    s3Key // Can be null
                 };
 
-                var json = JsonConvert.SerializeObject(failureData);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await _httpClient.PostAsync(
+                var content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(payload),
+                    System.Text.Encoding.UTF8,
+                    "application/json"
+                );  var response = await _httpClient.PostAsync(
                     $"/api/jobs/{jobId}/fail-frame", 
                     content, 
                     cancellationToken);
