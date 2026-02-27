@@ -104,10 +104,19 @@ export class NodeController {
         }
 
         // Reassign frames from offline nodes
+        let anyFramesFreed = false;
         for (const node of offlineNodes) {
           if (node.currentJob) {
             await this.reassignFramesFromOfflineNode(node.nodeId, node.currentJob);
+            anyFramesFreed = true;
           }
+        }
+
+        // ✅ GAP FIX: Immediately tell all free nodes to poll for the newly freed frames
+        // Without this, nodes would wait up to 30 s before picking up reassigned frames.
+        if (anyFramesFreed && wsService) {
+          console.log('📢 Freed frames detected — notifying all free nodes to pick them up...');
+          await wsService.notifyNodesToCheckJobs();
         }
       }
     } catch (error) {
@@ -251,6 +260,57 @@ export class NodeController {
       }
       // ─────────────────────────────────────────────────────────────────────
 
+      // ── Disk Space Validation ──────────────────────────────────────────
+      const storageFreeGB = nodeInfo.hardware?.storageFreeGB || nodeInfo.storageFreeGB;
+      if (storageFreeGB !== undefined) {
+        const diskCheck = HardwareValidationService.checkFreeDisk(Number(storageFreeGB));
+        if (!diskCheck.allowed) {
+          // If node exists, revoke it first
+          const existing = await Node.findOne({ nodeId });
+          if (existing) {
+            existing.isRevoked = true;
+            existing.status = 'offline';
+            existing.revokedReason = diskCheck.message;
+            existing.revokedAt = now;
+            await existing.save();
+
+            // Notify user
+            try {
+              const { notificationService } = await import('../services/NotificationService');
+              await notificationService.createNotification(
+                userId || existing.userId as any,
+                'system',
+                'Node Revoked',
+                `Node "${existing.name || nodeId}" has been revoked: ${diskCheck.message}`
+              );
+            } catch (e) {
+              console.error('Failed to send registration revocation notification:', e);
+            }
+          }
+
+          res.status(403).json({
+            error: 'INSUFFICIENT_DISK_SPACE',
+            message: diskCheck.message
+          });
+          return;
+        }
+        if (diskCheck.warn && userId) {
+          // Create a warning notification for the user
+          try {
+            const { notificationService } = await import('../services/NotificationService');
+            await notificationService.createNotification(
+              userId as any,
+              'system',
+              'Low Disk Space Warning',
+              diskCheck.message
+            );
+          } catch (e) {
+            console.error('Failed to send disk warning notification:', e);
+          }
+        }
+      }
+      // ──────────────────────────────────────────────────────────────────
+
       const existingNode = await Node.findOne({ nodeId });
 
       if (existingNode) {
@@ -274,7 +334,7 @@ export class NodeController {
             existingNode.revokedReason = undefined;
             existingNode.revokedAt = undefined;
             existingNode.status = 'online';
-            
+
             // Notify User: Hardware Restored
             if (existingNode.userId) {
               Notification.create({
@@ -342,7 +402,7 @@ export class NodeController {
                 failedMinReqs = true;
                 reqReason = check.reason || 'Failed minimum rendering requirements.';
                 console.warn(`🚫 Node ${nodeId} degraded below minimum specs: ${reqReason}`);
-                existingNode.status = 'offline'; 
+                existingNode.status = 'offline';
                 existingNode.isRevoked = true; // Hide from frontend as requested
                 existingNode.revokedReason = reqReason;
                 existingNode.revokedAt = new Date();
@@ -673,7 +733,6 @@ export class NodeController {
         };
       }
 
-      // Update legacy metrics if frame render time is provided
       if (heartbeatData.lastFrameTime && node.performance) {
         const framesRendered = (node.performance.framesRendered || 0) + 1;
         const totalTime = (node.performance.totalRenderTime || 0) + heartbeatData.lastFrameTime;
@@ -688,6 +747,84 @@ export class NodeController {
           node.performance.reliabilityScore = Math.min(100, (node.performance.reliabilityScore || 100) + 1);
         } else if (heartbeatData.frameSuccess === false) {
           node.performance.reliabilityScore = Math.max(10, (node.performance.reliabilityScore || 100) - 5);
+        }
+      }
+
+      // Update storage info if provided
+      if (heartbeatData.storageFreeGB !== undefined) {
+        const storageFreeGB = Number(heartbeatData.storageFreeGB);
+        node.set('hardware.storageFreeGB', storageFreeGB);
+
+        // Check for threshold drop mid-session
+        const diskCheck = HardwareValidationService.checkFreeDisk(storageFreeGB);
+        if (!diskCheck.allowed) {
+          // AUTO-REVOCATION
+          node.status = 'offline';
+          node.isRevoked = true;
+          node.revokedAt = now;
+          node.revokedReason = diskCheck.message;
+
+          await node.save();
+
+          console.log(`🚫 Node ${nodeId} has been AUTO-REVOKED due to low storage: ${storageFreeGB.toFixed(1)}GB`);
+
+          // Notify user
+          try {
+            const { notificationService } = await import('../services/NotificationService');
+            await notificationService.createNotification(
+              node.userId as any,
+              'system',
+              'Node Revoked',
+              `Node "${node.name || node.nodeId}" has been revoked: ${diskCheck.message}`
+            );
+          } catch (e) {
+            console.error('Failed to send mid-session revocation notification:', e);
+          }
+
+          // Broadcast node revocation via WebSocket
+          const wsService = NodeController.getWsService(req);
+          if (wsService) {
+            // Broadcast system update for dashboard
+            wsService.broadcastSystemUpdate({
+              type: 'node_revoked',
+              data: {
+                nodeId,
+                name: node.name,
+                reason: diskCheck.message
+              }
+            });
+          }
+
+          res.status(403).json({
+            error: 'NODE_REVOKED',
+            message: diskCheck.message
+          });
+          return;
+        }
+
+        if (diskCheck.warn) {
+          // Create a throttled notification (once per hour per node)
+          try {
+            const oneHourAgo = new Date(Date.now() - 3600000);
+            const existingWarn = await Notification.findOne({
+              userId: node.userId,
+              type: 'system',
+              title: 'Low Disk Space Warning',
+              createdAt: { $gte: oneHourAgo }
+            });
+
+            if (!existingWarn) {
+              const { notificationService } = await import('../services/NotificationService');
+              await notificationService.createNotification(
+                node.userId as any,
+                'system',
+                'Low Disk Space Warning',
+                diskCheck.message
+              );
+            }
+          } catch (e) {
+            console.error('Failed to send mid-session disk warning:', e);
+          }
         }
       }
 
@@ -769,19 +906,21 @@ export class NodeController {
 
         // Broadcast node offline status
         const wsService = NodeController.getWsService(req);
-        if (wsService) {
-          wsService.broadcastNodeUpdate(nodeId, {
-            status: 'offline',
-            lastHeartbeat: node.lastHeartbeat,
-            offlineReason: 'Heartbeat timeout'
-          });
-        }
-
         throw new AppError(
           `Node is offline (no recent heartbeat). Last heartbeat was ${Math.floor(lastHeartbeatAge / 1000)} seconds ago`,
           400
         );
       }
+
+      // ── Disk Space Pre-Check before Job Assignment ───────────────────
+      const currentFreeGB = node.hardware?.storageFreeGB;
+      if (currentFreeGB !== undefined) {
+        const diskCheck = HardwareValidationService.checkFreeDisk(currentFreeGB);
+        if (!diskCheck.allowed) {
+          throw new AppError(diskCheck.message, 400);
+        }
+      }
+      // ──────────────────────────────────────────────────────────────────
 
       // Check if node already has a job and frames
       if (node.currentJob) {
@@ -1421,6 +1560,164 @@ export class NodeController {
     }
   }
 
+  // ── Blender crash / frame failure report (called by node via POST /api/jobs/:jobId/fail-frame) ──
+  static async reportFrameFailure(req: Request, res: Response): Promise<void> {
+    const MAX_FRAME_RETRIES = 3;
+    try {
+      const { jobId } = req.params;
+      const { nodeId, frame, error: errorMessage } = req.body;
+
+      if (!jobId || frame == null || !nodeId) {
+        res.status(400).json({ error: 'jobId, frame and nodeId are required' });
+        return;
+      }
+
+      const frameNum = Number(frame);
+      if (isNaN(frameNum)) {
+        res.status(400).json({ error: 'frame must be a number' });
+        return;
+      }
+
+      const job = await Job.findOne({ jobId });
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      // ── Find or create the frameAssignment record ──────────────────────────
+      let assignment = job.frameAssignments.find(
+        (a: IFrameAssignment) => a.frame === frameNum && a.nodeId === nodeId && a.status === 'assigned'
+      ) as (IFrameAssignment & { retryCount?: number }) | undefined;
+
+      const currentRetries: number = (assignment as any)?.retryCount ?? 0;
+      const nextRetry = currentRetries + 1;
+
+      console.log(`⚠️  Frame ${frameNum} failure reported by node ${nodeId} for job ${jobId} (attempt ${nextRetry}/${MAX_FRAME_RETRIES}): ${errorMessage}`);
+
+      if (nextRetry < MAX_FRAME_RETRIES) {
+        // ── RETRY: move frame back to pending so any node can pick it up ──────
+        if (assignment) {
+          (assignment as any).retryCount = nextRetry;
+          assignment.status = 'failed';         // mark this attempt failed
+          assignment.completedAt = new Date();
+          if (errorMessage) assignment.errorMessage = errorMessage;
+        }
+
+        // Remove from assigned list
+        const assignedIdx = job.frames.assigned.indexOf(frameNum);
+        if (assignedIdx !== -1) job.frames.assigned.splice(assignedIdx, 1);
+
+        // Put back into pending so the distributor can re-assign it
+        if (!job.frames.pending.includes(frameNum)) {
+          job.frames.pending.push(frameNum);
+        }
+
+        // Remove from node's assignedNodes map
+        const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
+        const nodeFrames = assignedNodesMap?.get(nodeId) ?? [];
+        const frameIdx = nodeFrames.indexOf(frameNum);
+        if (frameIdx !== -1) nodeFrames.splice(frameIdx, 1);
+        if (nodeFrames.length === 0) assignedNodesMap?.delete(nodeId);
+
+        job.updatedAt = new Date();
+        await job.save();
+
+        console.log(`🔄 Frame ${frameNum} queued for retry (attempt ${nextRetry}/${MAX_FRAME_RETRIES}) — re-added to pending`);
+
+        // Broadcast immediately so a free node picks it up
+        const wsService = NodeController.getWsService(req);
+        if (wsService) {
+          await wsService.notifyNodesToCheckJobs();
+          await wsService.broadcastJobUpdate(jobId);
+        }
+
+        res.json({
+          success: true,
+          action: 'retry',
+          retryAttempt: nextRetry,
+          maxRetries: MAX_FRAME_RETRIES,
+          message: `Frame ${frameNum} queued for retry (${nextRetry}/${MAX_FRAME_RETRIES})`
+        });
+
+      } else {
+        // ── PERMANENT FAILURE: all retries exhausted ───────────────────────────
+        if (assignment) {
+          (assignment as any).retryCount = nextRetry;
+          assignment.status = 'failed';
+          assignment.completedAt = new Date();
+          if (errorMessage) assignment.errorMessage = errorMessage;
+        }
+
+        // Remove from assigned, add to permanently failed
+        const assignedIdx = job.frames.assigned.indexOf(frameNum);
+        if (assignedIdx !== -1) job.frames.assigned.splice(assignedIdx, 1);
+
+        // Also remove from pending in case it was re-added
+        const pendingIdx = job.frames.pending.indexOf(frameNum);
+        if (pendingIdx !== -1) job.frames.pending.splice(pendingIdx, 1);
+
+        if (!job.frames.failed.includes(frameNum)) {
+          job.frames.failed.push(frameNum);
+        }
+
+        // Remove from node's assignedNodes map
+        const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
+        const nodeFrames = assignedNodesMap?.get(nodeId) ?? [];
+        const fidx = nodeFrames.indexOf(frameNum);
+        if (fidx !== -1) nodeFrames.splice(fidx, 1);
+        if (nodeFrames.length === 0) assignedNodesMap?.delete(nodeId);
+
+        // Recalculate job status
+        const totalFramesToRender = job.frames.selected?.length > 0 ? job.frames.selected.length : job.frames.total;
+        const renderedFrames = job.frames.rendered.length;
+        const pendingCount = job.frames.pending?.length || 0;
+        const assignedCount = job.frames.assigned?.length || 0;
+
+        if (renderedFrames === totalFramesToRender) {
+          job.status = 'completed';
+          job.completedAt = new Date();
+        } else if (pendingCount === 0 && assignedCount === 0 && renderedFrames < totalFramesToRender) {
+          job.status = 'failed';
+        }
+        // Otherwise stays 'processing' — other frames may still finish
+
+        job.progress = Math.round((renderedFrames / totalFramesToRender) * 100);
+        job.updatedAt = new Date();
+        await job.save();
+
+        console.log(`❌ Frame ${frameNum} permanently failed after ${MAX_FRAME_RETRIES} attempts for job ${jobId}`);
+
+        const wsService = NodeController.getWsService(req);
+        if (wsService) {
+          await wsService.broadcastJobUpdate(jobId);
+          // Notify other free nodes in case more pending frames exist
+          if (pendingCount > 0) {
+            await wsService.notifyNodesToCheckJobs();
+          }
+        }
+
+        res.json({
+          success: true,
+          action: 'permanent_failure',
+          retryAttempt: nextRetry,
+          maxRetries: MAX_FRAME_RETRIES,
+          message: `Frame ${frameNum} permanently failed after ${MAX_FRAME_RETRIES} attempts`
+        });
+      }
+
+    } catch (error) {
+      console.error('❌ reportFrameFailure error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({ error: error.message });
+      } else {
+        res.status(500).json({
+          error: 'Failed to record frame failure',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+  }
+
   // Get job distribution report
   static async getJobDistributionReport(req: Request, res: Response): Promise<void> {
     try {
@@ -1874,14 +2171,11 @@ export class NodeController {
         return;
       }
 
-      const { RegistrationToken } = await import('../models/RegistrationToken');
-      const { Node } = await import('../models/Node');
-      const { User } = await import('../models/User');
-      const notificationService = (await import('../services/NotificationService')).notificationService;
       const bcrypt = await import('bcryptjs');
       const crypto = await import('crypto');
-      const { HardwareValidationService } = await import('../services/HardwareValidationService');
       const { Application } = await import('../models/Application');
+      const { RegistrationToken } = await import('../models/RegistrationToken');
+      const notificationService = (await import('../services/NotificationService')).notificationService;
 
       // Find the token
       const tokenDoc = await RegistrationToken.findOne({ token: registrationToken });
@@ -1916,20 +2210,6 @@ export class NodeController {
           message: `Account node limit (${maxNodes}) reached.`,
         });
         return;
-      }
-
-      // Block duplicate hardware fingerprints across the whole system
-      if (hardwareFingerprint) {
-        const hwMatch = await Node.findOne({ hardwareFingerprint, isRevoked: { $ne: true } });
-        if (hwMatch) {
-          res.status(409).json({
-            success: false,
-            error: 'HARDWARE_ALREADY_REGISTERED',
-            message: 'This hardware is already registered. Revoke the existing node first.',
-            existingNodeId: hwMatch.nodeId,
-          });
-          return;
-        }
       }
 
       // ── Hardware Validation & Tagging ─────────────────────────────────────────
@@ -1994,6 +2274,34 @@ export class NodeController {
         // Non-fatal, continue with registration
       }
       // ────────────────────────────────────────────────────────────────────────
+
+      // ── Disk Space Validation ──────────────────────────────────────────
+      const storageFreeGB = hardware?.storageFreeGB;
+      if (storageFreeGB !== undefined) {
+        const diskCheck = HardwareValidationService.checkFreeDisk(Number(storageFreeGB));
+        if (!diskCheck.allowed) {
+          res.status(403).json({
+            success: false,
+            error: 'INSUFFICIENT_DISK_SPACE',
+            message: diskCheck.message
+          });
+          return;
+        }
+        if (diskCheck.warn) {
+          // Create a warning notification for the user
+          try {
+            await notificationService.createNotification(
+              userId,
+              'system',
+              'Low Disk Space Warning',
+              diskCheck.message
+            );
+          } catch (e) {
+            console.error('Failed to send disk warning notification:', e);
+          }
+        }
+      }
+      // ──────────────────────────────────────────────────────────────────
 
       // Generate nodeId + nodeSecret
       const nodeId = `node-${crypto.randomBytes(5).toString('hex')}-${Date.now().toString(36)}`;
@@ -2071,7 +2379,7 @@ export class NodeController {
         await notificationService.createNotification(
           userId,
           'node_registered',
-          '� Final Approval Complete: Node Registered',
+          '🤝 Final Approval Complete: Node Registered',
           `Congratulations! Your hardware meets the requirements. "${nodeName}" has been successfully connected and verified.`,
           { nodeId, nodeName }
         );
@@ -2080,7 +2388,7 @@ export class NodeController {
         if (wsService && wsService.emitToUser) {
           wsService.emitToUser(userId.toString(), 'notification', {
             type: 'node_registered',
-            title: '� Final Approval Complete: Node Registered',
+            title: '🤝 Final Approval Complete: Node Registered',
             message: `Congratulations! Your hardware meets the requirements. "${nodeName}" has been successfully connected and verified.`,
             nodeId,
             nodeName,
@@ -2129,7 +2437,6 @@ export class NodeController {
         return;
       }
 
-      const { Node } = await import('../models/Node');
       const notificationService = (await import('../services/NotificationService')).notificationService;
 
       const node = await Node.findOne({ nodeId });

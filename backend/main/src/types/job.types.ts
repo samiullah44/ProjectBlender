@@ -20,6 +20,7 @@ export interface IFrameAssignment {
     creditsEarned?: number;
     s3Key?: string;
     errorMessage?: string;
+    retryCount?: number;  // tracks Blender crash retries (max 3 before permanent failure)
 }
 
 export interface IJobSettings {

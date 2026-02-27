@@ -2,6 +2,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { JobController } from '../../controllers/jobs';
+import { NodeController } from '../../controllers/node';
 import { JobService } from '../../services/JobService';
 import { S3Service } from '../../services/S3Service';
 import { authenticate, authorize } from '../../middleware/auth';
@@ -128,10 +129,7 @@ router.post('/:jobId/complete-frame',
     jobController.completeFrame.bind(jobController)
 );
 
-router.post('/:jobId/fail-frame', (req, res) => {
-    // Implement fail frame logic
-    res.json({ success: true, message: 'Frame failure recorded' });
-});
+router.post('/:jobId/fail-frame', validateNodeSecret, NodeController.reportFrameFailure);
 
 router.post('/:jobId/select-frames',
     authenticate,

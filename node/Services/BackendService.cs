@@ -301,10 +301,46 @@ var hardwareDetector = new HardwareDetector(
                 }
             }, stoppingToken);
 
+            // Initial cleanup
+            CleanupOldJobFolders();
+
             await Task.WhenAll(wsTask, fallbackPollTask);
 
             // Clean up cached files on shutdown
             await CleanupCacheAsync();
+        }
+
+        private void CleanupOldJobFolders()
+        {
+            try
+            {
+                var jobsDir = Path.Combine(Path.GetTempPath(), "BlendFarm", "Jobs");
+                if (!Directory.Exists(jobsDir)) return;
+
+                _logger.LogInformation("🧹 Cleaning up old job folders...");
+                var directories = Directory.GetDirectories(jobsDir);
+                foreach (var dir in directories)
+                {
+                    try
+                    {
+                        var dirInfo = new DirectoryInfo(dir);
+                        // Delete if older than 24 hours
+                        if (DateTime.UtcNow - dirInfo.LastWriteTimeUtc > TimeSpan.FromHours(24))
+                        {
+                            Directory.Delete(dir, true);
+                            _logger.LogDebug($"🗑️  Deleted old job directory: {dirInfo.Name}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug($"Could not delete job directory {dir}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Job cleanup failed: {ex.Message}");
+            }
         }
 
         private async Task CleanupCacheAsync()
@@ -831,18 +867,18 @@ var hardwareDetector = new HardwareDetector(
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
                 
-                // CRITICAL: Handle Revocation
-                if (errorContent.Contains("NODE_REVOKED"))
+                // CRITICAL: Handle Revocation or Insufficient Disk (both return 403)
+                if (response.StatusCode == HttpStatusCode.Forbidden || errorContent.Contains("NODE_REVOKED") || errorContent.Contains("INSUFFICIENT_DISK_SPACE"))
                 {
                     _logger.LogCritical("══════════════════════════════════════════════════════════");
-                    _logger.LogCritical("🚫 NODE PERMANENTLY REVOKED");
-                    _logger.LogCritical("   The backend has revoked this node's identity.");
-                    _logger.LogCritical("   Reason: Hardware no longer meets minimum requirements.");
-                    _logger.LogCritical("   Action: Checking your BlendFarm dashboard for details.");
-                    _logger.LogCritical("   💰 Tip: Update or upgrade your system to earn more from the network!");
+                    _logger.LogCritical("🚫 NODE REGISTRATION REJECTED / REVOKED");
+                    _logger.LogCritical($"   Message: {errorContent}");
+                    _logger.LogCritical("   Reason: Your node does not meet minimum requirements or has been revoked.");
+                    _logger.LogCritical("   Action: Please check your BlendFarm dashboard for details.");
                     _logger.LogCritical("══════════════════════════════════════════════════════════");
                     
                     Console.WriteLine("\nThis node cannot continue operation and will now close.");
+                    Console.WriteLine("If it's storage related, please free up space and restart.");
                     Console.WriteLine("Press any key to exit...");
                     if (!Console.IsInputRedirected) Console.ReadKey();
                     Environment.Exit(1);
@@ -925,34 +961,46 @@ private async void SendHeartbeat(object? state)
                 gpuTemps.Add(gpu.Temperature);
         }
 
-        var heartbeatData = new
-        {
-            nodeId = _nodeId,
-            status = string.IsNullOrEmpty(_currentJobId) ? "idle" : "rendering",
-            timestamp = DateTime.UtcNow,
-            resources = new
+            var heartbeatData = new
             {
-                cpuPercent = cpuUsage,
-                cpuTemperature = 0, // Add if you implement
-                gpuPercent = gpuUsage,
-                gpuTemperatures = gpuTemps,
-                ramUsedMB = ramUsed,
-                ramTotalMB = _detectedHardware?.Ram.TotalMB ?? 0,
-                ramPercent = (int)((double)ramUsed / (_detectedHardware?.Ram.TotalMB ?? 1) * 100),
-                diskFreeMB = diskFree,
-                diskTotalMB = _detectedHardware?.Storage.TotalGB * 1024 ?? 0,
-                diskPercent = 100 - (int)((double)diskFree / (_detectedHardware?.Storage.TotalGB * 1024 ?? 1) * 100)
-            },
-            currentJob = GetCurrentJobId(),
-            progress = GetCurrentProgress(),
-            uptime = (int)(DateTime.UtcNow - Process.GetCurrentProcess().StartTime).TotalSeconds,
-            framesRendered = _detectedHardware?.Gpus.Sum(g => g.Utilization) ?? 0 // Placeholder
-        };
+                nodeId = _nodeId,
+                status = string.IsNullOrEmpty(_currentJobId) ? "idle" : "rendering",
+                timestamp = DateTime.UtcNow,
+                storageFreeGB = (double)diskFree / 1024.0,
+                resources = new
+                {
+                    cpuPercent = cpuUsage,
+                    cpuTemperature = 0, // Add if you implement
+                    gpuPercent = gpuUsage,
+                    gpuTemperatures = gpuTemps,
+                    ramUsedMB = ramUsed,
+                    ramTotalMB = _detectedHardware?.Ram.TotalMB ?? 0,
+                    ramPercent = (int)((double)ramUsed / (_detectedHardware?.Ram.TotalMB ?? 1) * 100),
+                    diskFreeMB = diskFree,
+                    diskTotalMB = _detectedHardware?.Storage.TotalGB * 1024 ?? 0,
+                    diskPercent = 100 - (int)((double)diskFree / (_detectedHardware?.Storage.TotalGB * 1024 ?? 1) * 100)
+                },
+                currentJob = GetCurrentJobId(),
+                progress = GetCurrentProgress(),
+                uptime = (int)(DateTime.UtcNow - Process.GetCurrentProcess().StartTime).TotalSeconds,
+                framesRendered = _detectedHardware?.Gpus.Sum(g => g.Utilization) ?? 0 // Placeholder
+            };
 
         var json = JsonConvert.SerializeObject(heartbeatData);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        await _httpClient.PostAsync($"/api/nodes/{_nodeId}/heartbeat", content);
+        var response = await _httpClient.PostAsync($"/api/nodes/{_nodeId}/heartbeat", content);
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            _logger.LogCritical($"🛑 HEARTBEAT REJECTED (Node Revoked?): {error}");
+            // Optional: Shut down or set flag. For now, let's log critical.
+        }
+        else if (!response.IsSuccessStatusCode)
+        {
+             var error = await response.Content.ReadAsStringAsync();
+             _logger.LogWarning($"💓 Heartbeat failed: {error}");
+        }
     }
     catch (Exception ex)
     {
@@ -1102,6 +1150,21 @@ private string CalculateNodeTier(HardwareInfo hw)
             // Clear previous frame upload URLs
             _frameUploadUrls.Clear();
 
+            // ── Pre-job Disk Space Check ──
+            var freeSpaceMB = GetFreeDiskSpaceMB();
+            var freeSpaceGB = freeSpaceMB / 1024.0;
+            if (freeSpaceGB < 50)
+            {
+                _logger.LogError($"❌ CRITICAL: Insufficient disk space ({freeSpaceGB:F1}GB < 50GB). Rejecting job.");
+                await ReportFailureAsync(assignment.JobId, 0, $"Insufficient disk space on node: {freeSpaceGB:F1}GB free.", null, cancellationToken);
+                ClearCurrentJob();
+                return;
+            }
+            else if (freeSpaceGB < 100)
+            {
+                _logger.LogWarning($"⚠️ WARNING: Low disk space ({freeSpaceGB:F1}GB). Rendering may be affected.");
+            }
+
             try
             {
                 _logger.LogInformation($"🎬 Starting job: {assignment.JobId} with {assignment.Frames?.Count ?? 0} frames");
@@ -1167,6 +1230,8 @@ private string CalculateNodeTier(HardwareInfo hw)
                 }
 
                 // Render each assigned frame
+                // ── Blender crash detection: retry each frame up to MAX_FRAME_ATTEMPTS times locally ──
+                const int MAX_FRAME_ATTEMPTS = 3;
                 for (int i = 0; i < assignment.Frames.Count; i++)
                 {
                     if (cancellationToken.IsCancellationRequested)
@@ -1181,30 +1246,65 @@ private string CalculateNodeTier(HardwareInfo hw)
                     var outputFileName = $"frame_{frame:D4}.{outputExtension}";
                     var outputPath = Path.Combine(jobDirectory, outputFileName);
 
-                    // IMPORTANT: Pass ALL settings from backend to PythonRunner
                     // Determine if this is an animation or image render
                     var isAnimation = assignment.Frames.Count > 1 || frame > 0;
-                    
-                    var success = await _pythonRunner.RunRenderAsync(
-                        blendFilePath: blendFilePath,
-                        frame: frame,
-                        outputPath: outputPath,
-                        samples: samples,
-                        engine: engine,
-                        device: device,
-                        resolutionX: resolutionX,
-                        resolutionY: resolutionY,
-                        outputFormat: outputFormat,
-                        denoiser: denoiser,
-                        useAnimationSettings: isAnimation,
-                        cancellationToken: cancellationToken);
 
-                    if (success && File.Exists(outputPath))
+                    // ── Per-frame retry loop (Blender crash guard) ────────────────────────
+                    bool frameSuccess = false;
+                    string frameError = string.Empty;
+
+                    for (int attempt = 1; attempt <= MAX_FRAME_ATTEMPTS; attempt++)
+                    {
+                        if (cancellationToken.IsCancellationRequested) break;
+
+                        // Delete stale output from a previous failed attempt
+                        try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { }
+
+                        if (attempt > 1)
+                        {
+                            var backoff = TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)); // 2s, 4s
+                            _logger.LogWarning($"🔄 Frame {frame}: Blender crash on attempt {attempt - 1}/{MAX_FRAME_ATTEMPTS}. " +
+                                               $"Waiting {backoff.TotalSeconds}s before retry...");
+                            await Task.Delay(backoff, cancellationToken);
+                        }
+
+                        _logger.LogInformation($"🎬 Frame {frame}: Blender attempt {attempt}/{MAX_FRAME_ATTEMPTS}");
+                        
+                        bool renderOk = await _pythonRunner.RunRenderAsync(
+                            blendFilePath: blendFilePath,
+                            frame: frame,
+                            outputPath: outputPath,
+                            samples: samples,
+                            engine: engine,
+                            device: device,
+                            resolutionX: resolutionX,
+                            resolutionY: resolutionY,
+                            outputFormat: outputFormat,
+                            denoiser: denoiser,
+                            useAnimationSettings: isAnimation,
+                            cancellationToken: cancellationToken);
+
+                        if (renderOk && File.Exists(outputPath))
+                        {
+                            frameSuccess = true;
+                            _logger.LogInformation($"✅ Frame {frame}: Blender finished successfully on attempt {attempt}");
+                            break; // exit retry loop
+                        }
+
+                        // Blender exited with non-zero or output file is missing → crash detected
+                        frameError = renderOk
+                            ? $"Output file missing after render (attempt {attempt})"
+                            : $"Blender non-zero exit code on attempt {attempt}";
+
+                        _logger.LogWarning($"💥 BLENDER_CRASH detected for frame {frame} (attempt {attempt}/{MAX_FRAME_ATTEMPTS}): {frameError}");
+                    }
+                    // ── End per-frame retry loop ──────────────────────────────────────────
+
+                    if (frameSuccess && File.Exists(outputPath))
                     {
                         // Get S3 upload URL for this frame
                         if (!_frameUploadUrls.TryGetValue(frame, out var uploadInfo))
                         {
-                            // If we don't have upload URL, request one from backend
                             _logger.LogWarning($"No upload URL for frame {frame}, requesting one...");
                             uploadInfo = await RequestUploadUrlAsync(assignment.JobId, frame, outputFormat, cancellationToken);
                         }
@@ -1216,13 +1316,11 @@ private string CalculateNodeTier(HardwareInfo hw)
                             continue;
                         }
 
-                        // Upload result directly to S3 with retry logic
                         _logger.LogInformation($"📤 Uploading frame {frame} directly to S3...");
                         var uploadResult = await UploadToS3Async(outputPath, uploadInfo.uploadUrl, uploadInfo.s3Key, cancellationToken);
                         
                         if (uploadResult)
                         {
-                            // Report completion to backend (without uploading file)
                             var fileInfo = new FileInfo(outputPath);
                             await ReportCompletionAsync(
                                 assignment.JobId, 
@@ -1235,7 +1333,6 @@ private string CalculateNodeTier(HardwareInfo hw)
                             
                             _logger.LogInformation($"✅ Frame {frame} completed and uploaded to S3");
                             
-                            // Clean up local file after successful upload
                             try
                             {
                                 File.Delete(outputPath);
@@ -1248,18 +1345,19 @@ private string CalculateNodeTier(HardwareInfo hw)
                         }
                         else
                         {
-                            // All retry attempts failed
                             await ReportFailureAsync(assignment.JobId, frame, "All upload attempts failed", uploadInfo.s3Key, cancellationToken);
                             _logger.LogError($"❌ Frame {frame} upload failed after all retry attempts");
-                            
-                            // Keep the file locally for debugging
                             _logger.LogInformation($"📁 Local file kept at: {outputPath}");
                         }
                     }
                     else
                     {
-                        await ReportFailureAsync(assignment.JobId, frame, "Render failed", null, cancellationToken);
-                        _logger.LogError($"❌ Frame {frame} render failed");
+                        // All local Blender attempts exhausted → tell backend to re-queue or permanently fail
+                        var crashMsg = string.IsNullOrEmpty(frameError)
+                            ? $"BLENDER_CRASH: Render failed after {MAX_FRAME_ATTEMPTS} attempts"
+                            : $"BLENDER_CRASH: {frameError}";
+                        _logger.LogError($"❌ Frame {frame}: {crashMsg} — reporting to backend");
+                        await ReportFailureAsync(assignment.JobId, frame, crashMsg, null, cancellationToken);
                     }
 
                     // Update progress
@@ -1280,6 +1378,7 @@ private string CalculateNodeTier(HardwareInfo hw)
                 
                 // CRITICAL: Force an immediate poll to fetch remaining frames for this job, or new jobs
                 _logger.LogInformation("🔄 Job batch finished, immediately polling for more work...");
+                CleanupOldJobFolders();
                 _ = PollForJobsAsync(cancellationToken);
             }
         }
