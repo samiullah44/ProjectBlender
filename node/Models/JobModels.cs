@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace BlendFarm.Node.Models
 {
@@ -9,34 +9,34 @@ namespace BlendFarm.Node.Models
         [JsonConstructor]
         public JobAssignment() { }
 
-        [JsonProperty("jobId")]
+        [JsonPropertyName("jobId")]
         public string? JobId { get; set; }
         
-        [JsonProperty("frames")]
+        [JsonPropertyName("frames")]
         public List<int>? Frames { get; set; }
         
-        [JsonProperty("blendFileUrl")]
+        [JsonPropertyName("blendFileUrl")]
         public string? BlendFileUrl { get; set; }
         
-        [JsonProperty("frameUploadUrls")]
+        [JsonPropertyName("frameUploadUrls")]
         public Dictionary<string, FrameUploadInfo>? FrameUploadUrls { get; set; }
         
-        [JsonProperty("settings")]
+        [JsonPropertyName("settings")]
         public RenderSettings? Settings { get; set; }
         
-        [JsonProperty("totalFrames")]
+        [JsonPropertyName("totalFrames")]
         public int? TotalFrames { get; set; }
         
-        [JsonProperty("assignedFramesCount")]
+        [JsonPropertyName("assignedFramesCount")]
         public int? AssignedFramesCount { get; set; }
 
-        [JsonProperty("selectedFrames")]
+        [JsonPropertyName("selectedFrames")]
         public List<int>? SelectedFrames { get; set; }
         
-        [JsonProperty("jobProgress")]
+        [JsonPropertyName("jobProgress")]
         public int? JobProgress { get; set; }
         
-        [JsonProperty("isResume")]
+        [JsonPropertyName("isResume")]
         public bool? IsResume { get; set; }
     }
 
@@ -45,10 +45,10 @@ namespace BlendFarm.Node.Models
         [JsonConstructor]
         public FrameUploadInfo() { }
 
-        [JsonProperty("uploadUrl")]
+        [JsonPropertyName("uploadUrl")]
         public string UploadUrl { get; set; }
         
-        [JsonProperty("s3Key")]
+        [JsonPropertyName("s3Key")]
         public string S3Key { get; set; }
     }
 
@@ -57,15 +57,34 @@ namespace BlendFarm.Node.Models
         [JsonConstructor]
         public RenderSettings() { }
 
+        [JsonPropertyName("engine")]
         public string? Engine { get; set; }
+        
+        [JsonPropertyName("device")]
         public string? Device { get; set; }
+        
+        [JsonPropertyName("samples")]
         public int Samples { get; set; }
+        
+        [JsonPropertyName("resolutionX")]
         public int ResolutionX { get; set; }
+        
+        [JsonPropertyName("resolutionY")]
         public int ResolutionY { get; set; }
+        
+        [JsonPropertyName("denoiser")]
         public string? Denoiser { get; set; }
+        
+        [JsonPropertyName("tileSize")]
         public int TileSize { get; set; }
+        
+        [JsonPropertyName("outputFormat")]
         public string? OutputFormat { get; set; } = "PNG";
+        
+        [JsonPropertyName("creditsPerFrame")]
         public int CreditsPerFrame { get; set; } = 1;
+        
+        [JsonPropertyName("blenderVersion")]
         public string? BlenderVersion { get; set; } = "4.5.0";
     }
 
@@ -74,13 +93,91 @@ namespace BlendFarm.Node.Models
         [JsonConstructor]
         public UploadUrlResponse() { }
 
-        [JsonProperty("success")]
+        [JsonPropertyName("success")]
         public bool Success { get; set; }
         
-        [JsonProperty("uploadUrl")]
+        [JsonPropertyName("uploadUrl")]
         public string UploadUrl { get; set; }
         
-        [JsonProperty("s3Key")]
+        [JsonPropertyName("s3Key")]
         public string S3Key { get; set; }
+    }
+
+    public class FrameCompletionReport
+    {
+        [JsonPropertyName("jobId")]
+        public string JobId { get; set; }
+        
+        [JsonPropertyName("frame")]
+        public int Frame { get; set; }
+        
+        [JsonPropertyName("renderTime")]
+        public int RenderTime { get; set; }
+        
+        [JsonPropertyName("s3Key")]
+        public string S3Key { get; set; }
+        
+        [JsonPropertyName("fileSize")]
+        public long FileSize { get; set; }
+        
+        [JsonPropertyName("nodeId")]
+        public string NodeId { get; set; }
+        
+        [JsonPropertyName("success")]
+        public bool Success { get; set; } = true;
+    }
+
+    public class FrameFailureReport
+    {
+        [JsonPropertyName("nodeId")]
+        public string NodeId { get; set; }
+        
+        [JsonPropertyName("jobId")]
+        public string JobId { get; set; }
+        
+        [JsonPropertyName("frame")]
+        public int Frame { get; set; }
+        
+        [JsonPropertyName("error")]
+        public string Error { get; set; }
+        
+        [JsonPropertyName("s3Key")]
+        public string? S3Key { get; set; }
+    }
+
+    public class RenderConfig
+    {
+        [JsonConstructor]
+        public RenderConfig() { }
+
+        [JsonPropertyName("frame")]
+        public int Frame { get; set; }
+
+        [JsonPropertyName("output")]
+        public string Output { get; set; }
+
+        [JsonPropertyName("samples")]
+        public int Samples { get; set; }
+
+        [JsonPropertyName("engine")]
+        public string Engine { get; set; }
+
+        [JsonPropertyName("device")]
+        public string Device { get; set; }
+
+        [JsonPropertyName("resolution_x")]
+        public int ResolutionX { get; set; }
+
+        [JsonPropertyName("resolution_y")]
+        public int ResolutionY { get; set; }
+
+        [JsonPropertyName("output_format")]
+        public string OutputFormat { get; set; }
+
+        [JsonPropertyName("denoiser")]
+        public string Denoiser { get; set; }
+
+        [JsonPropertyName("use_animation_settings")]
+        public bool UseAnimationSettings { get; set; }
     }
 }

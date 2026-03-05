@@ -9,6 +9,8 @@ using System.Net.Http;
 using System.IO.Compression;
 using Newtonsoft.Json;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
+using BlendFarm.Node.Models;
 
 namespace BlendFarm.Node.Services
 {
@@ -155,24 +157,24 @@ namespace BlendFarm.Node.Services
             // Create config file with proper settings from parameters
             var config = new[]
             {
-                new
+                new RenderConfig
                 {
-                    frame = frame,
-                    output = outputPath,
-                    samples = samples,
-                    engine = engine,
-                    device = device,
-                    resolution_x = resolutionX,
-                    resolution_y = resolutionY,
-                    output_format = outputFormat,
-                    denoiser = denoiser,
-                    use_animation_settings = useAnimationSettings
+                    Frame = frame,
+                    Output = outputPath,
+                    Samples = samples,
+                    Engine = engine,
+                    Device = device,
+                    ResolutionX = resolutionX,
+                    ResolutionY = resolutionY,
+                    OutputFormat = outputFormat,
+                    Denoiser = denoiser,
+                    UseAnimationSettings = useAnimationSettings
                 }
             };
             
             var tempConfig = Path.GetTempFileName();
             tempConfig = Path.ChangeExtension(tempConfig, ".json");
-            File.WriteAllText(tempConfig, JsonConvert.SerializeObject(config, Formatting.Indented));
+            File.WriteAllText(tempConfig, System.Text.Json.JsonSerializer.Serialize(config, typeof(RenderConfig[]), NodeJsonContext.Default));
             
             _logger.LogInformation($"📝 Created config file: {tempConfig}");
             _logger.LogDebug($"⚙️  Config: {File.ReadAllText(tempConfig)}");

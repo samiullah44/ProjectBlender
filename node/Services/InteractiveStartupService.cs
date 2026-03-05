@@ -7,10 +7,14 @@ namespace BlendFarm.Node.Services
     public class InteractiveStartupService
     {
         private readonly ConfigurationManagerService _configService;
+        private readonly AutoStartService _autoStartService;
 
-        public InteractiveStartupService(ConfigurationManagerService configService)
+        public InteractiveStartupService(
+            ConfigurationManagerService configService,
+            AutoStartService autoStartService)
         {
             _configService = configService;
+            _autoStartService = autoStartService;
         }
 
         public async Task<bool> RunStartupInteractiveFlowAsync()
@@ -89,11 +93,17 @@ namespace BlendFarm.Node.Services
 
                 // 6. Auto Start
                 p.AutoStart.Granted = PromptBoolean(
-                    "Auto Start (Windows Service)",
-                    "For maximum earning potential and stability, this node runs as a background Windows Service\n" +
-                    "and starts automatically on boot. It will gracefully wait in the background for jobs.",
+                    "Auto Start",
+                    "When enabled, the node will automatically open in a visible console window\n" +
+                    "every time you log in to Windows. No background service — you will always see it.",
                     true);
                 p.AutoStart.GrantedAtUtc = DateTime.UtcNow;
+
+                // Register (or skip) the auto-start in registry based on choice
+                if (p.AutoStart.Granted)
+                {
+                    await _autoStartService.RegisterAutoStartAsync();
+                }
 
                 // 7. Auto Update
                 p.AutoUpdate.Granted = PromptBoolean(

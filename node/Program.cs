@@ -185,17 +185,12 @@ namespace BlendFarm.Node
                         return blenderExe;
                 }
                 
-                // Search all blender.exe files and check versions
-                try
+                // Search all blender.exe files and prioritize target version
+                var foundExe = FindBlenderInDirectory(customDir, targetVersion);
+                if (!string.IsNullOrEmpty(foundExe) && await TestBlenderExecutableAsync(foundExe, targetVersion))
                 {
-                    var blenderExes = Directory.GetFiles(customDir, "blender.exe", SearchOption.AllDirectories);
-                    foreach (var exe in blenderExes)
-                    {
-                        if (await TestBlenderExecutableAsync(exe, targetVersion))
-                            return exe;
-                    }
+                    return foundExe;
                 }
-                catch { }
             }
             
             return null;
@@ -329,7 +324,7 @@ namespace BlendFarm.Node
                                 await ExtractZipWithProgressAsync(tempZip, downloadDir, logger);
                                 
                                 // Find blender.exe
-                                var blenderExe = FindBlenderInDirectory(downloadDir);
+                                var blenderExe = FindBlenderInDirectory(downloadDir, targetVersion);
                                 
                                 if (!string.IsNullOrEmpty(blenderExe) && await TestBlenderExecutableAsync(blenderExe, targetVersion))
                                 {
@@ -542,7 +537,7 @@ namespace BlendFarm.Node
             return null;
         }
         
-        private static string FindBlenderInDirectory(string directory)
+        private static string FindBlenderInDirectory(string directory, string targetVersion = null)
         {
             if (!Directory.Exists(directory))
                 return null;
@@ -556,6 +551,20 @@ namespace BlendFarm.Node
             try
             {
                 var files = Directory.GetFiles(directory, "blender.exe", SearchOption.AllDirectories);
+                if (files.Length == 0) return null;
+
+                if (!string.IsNullOrEmpty(targetVersion))
+                {
+                    // Prioritize path that contains the target version (e.g. "4.5.0")
+                    var bestMatch = files.FirstOrDefault(f => f.Contains(targetVersion));
+                    if (bestMatch != null) return bestMatch;
+                    
+                    // Fallback to major.minor (e.g. "4.5")
+                    var shortVersion = targetVersion.Split('.').Take(2).Aggregate((a, b) => $"{a}.{b}");
+                    bestMatch = files.FirstOrDefault(f => f.Contains(shortVersion));
+                    if (bestMatch != null) return bestMatch;
+                }
+
                 return files.FirstOrDefault();
             }
             catch
@@ -745,6 +754,14 @@ namespace BlendFarm.Node
         
         static async Task Main(string[] args)
         {
+            // If started by Windows AutoStart, the default directory is System32. 
+            // We must switch to the EXE directory so relative paths work.
+            if (Directory.GetCurrentDirectory().Contains("System32", StringComparison.OrdinalIgnoreCase))
+            {
+                var exeDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppDomain.CurrentDomain.BaseDirectory;
+                try { Directory.SetCurrentDirectory(exeDir); } catch { }
+            }
+
             Console.Title = $"BlendFarm Node v1.0 (Blender {_targetVersion})";
             
             // Check if we should run a test
@@ -998,9 +1015,20 @@ namespace BlendFarm.Node
             var configLogger = loggerFactory.CreateLogger<ConfigurationManagerService>();
             var configService = new ConfigurationManagerService(configLogger);
 
+            var autoStartLogger = loggerFactory.CreateLogger<AutoStartService>();
+            var autoStartService = new AutoStartService(autoStartLogger);
+
+            // Silent Path Refresh: Every time the node starts, if auto-start is enabled, 
+            // we refresh the registry key to point to the current location.
+            // This handles cases where the user moves the folder to a different drive.
+            if (configService.CurrentConfig.Permissions.AutoStart.Granted)
+            {
+                await autoStartService.RegisterAutoStartAsync();
+            }
+
             if (Environment.UserInteractive)
             {
-                var interactiveStartup = new InteractiveStartupService(configService);
+                var interactiveStartup = new InteractiveStartupService(configService, autoStartService);
                 bool proceed = await interactiveStartup.RunStartupInteractiveFlowAsync();
                 if (!proceed)
                 {
@@ -1080,6 +1108,9 @@ namespace BlendFarm.Node
         
         // Register identity service
         services.AddSingleton(identityService);
+
+        // Register AutoStart service
+        services.AddSingleton(autoStartService);
 
         // Register PythonRunnerService
         services.AddSingleton<PythonRunnerService>(provider => 

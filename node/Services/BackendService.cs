@@ -65,7 +65,7 @@ namespace BlendFarm.Node.Services
             _configuration = configuration;
             _identityService = identityService;
             _nodeId = configuration["NodeSettings:NodeId"] ?? Guid.NewGuid().ToString();
-            _backendUrl = configuration["Backend:Url"] ?? "http://192.168.100.228:3000";
+            _backendUrl = configuration["Backend:Url"] ?? "http://192.168.1.31:3000";
             _frameUploadUrls = new ConcurrentDictionary<int, (string, string)>();
             _blendFileCache = new ConcurrentDictionary<string, (string, DateTime)>();
              _computeScoreService = new ComputeScoreService(logger);
@@ -137,7 +137,7 @@ namespace BlendFarm.Node.Services
 var hardwareDetector = new HardwareDetector(
         _loggerFactory.CreateLogger<HardwareDetector>() 
     );
-    // Detect ALL hardware with network test
+    // Detect ALL hardware with network test (capped at 75s to avoid hangs)
     _logger.LogInformation("🔍 Detecting complete system specifications...");
     try
     {
@@ -672,7 +672,7 @@ var hardwareDetector = new HardwareDetector(
                 @"C:\Program Files\Blender Foundation\Blender\blender.exe",
                 @"C:\Program Files (x86)\Blender Foundation\Blender\blender.exe",
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Blender Foundation", "Blender", "blender.exe"),
-                Path.Combine(Directory.GetCurrentDirectory(), "Blender", "blender.exe"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Blender", "blender.exe"),
                 @"blender" // Try in PATH again
             };
             
@@ -1094,7 +1094,9 @@ private string CalculateNodeTier(HardwareInfo hw)
                     var responseJson = await assignmentResponse.Content.ReadAsStringAsync(cancellationToken);
                     _logger.LogInformation($"📥 Job assignment response: {responseJson}");
                     
-                    var assignment = JsonConvert.DeserializeObject<JobAssignment>(responseJson);
+                    var assignment = System.Text.Json.JsonSerializer.Deserialize(
+                        responseJson, 
+                        NodeJsonContext.Default.JobAssignment);
                     
                     if (assignment?.JobId != null && assignment.Frames?.Count > 0)
                     {
@@ -1413,6 +1415,18 @@ private string CalculateNodeTier(HardwareInfo hw)
                 var fileName = $"blendfile_{jobId}.blend";
                 var localPath = Path.Combine(cacheDir, fileName);
 
+                // Check disk cache to prevent redundant downloads across restarts
+                if (File.Exists(localPath))
+                {
+                    var fileInfo = new FileInfo(localPath);
+                    if (fileInfo.Length > 0)
+                    {
+                        _logger.LogInformation($"📂 Found existing cached blend file on disk for job {jobId}: {localPath}");
+                        _blendFileCache[jobId] = (localPath, fileInfo.CreationTimeUtc); // Add to memory cache
+                        return localPath;
+                    }
+                }
+
                 _logger.LogInformation($"📥 Downloading blend file from: {blendFileUrl}");
                 
                 // Download with retry logic
@@ -1664,8 +1678,10 @@ private string CalculateNodeTier(HardwareInfo hw)
                     
                     if (response.IsSuccessStatusCode)
                     {
-                        var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                        var result = JsonConvert.DeserializeObject<UploadUrlResponse>(json);
+                        var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+                        var result = System.Text.Json.JsonSerializer.Deserialize(
+                            responseJson, 
+                            NodeJsonContext.Default.UploadUrlResponse);
                         
                         if (result?.Success == true && !string.IsNullOrEmpty(result.UploadUrl) && !string.IsNullOrEmpty(result.S3Key))
                         {
@@ -1707,21 +1723,23 @@ private string CalculateNodeTier(HardwareInfo hw)
         {
             try
             {
-                var completionData = new
+                var completionData = new FrameCompletionReport
                 {
-                    jobId,
-                    frame,
-                    renderTime,
-                    s3Key,
-                    fileSize,
-                    nodeId = _nodeId,
-                    success = true
+                    JobId = jobId,
+                    Frame = frame,
+                    RenderTime = renderTime,
+                    S3Key = s3Key,
+                    FileSize = fileSize,
+                    NodeId = _nodeId,
+                    Success = true
                 };
 
-                var json = JsonConvert.SerializeObject(completionData);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await _httpClient.PostAsync(
+                var content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(completionData, NodeJsonContext.Default.FrameCompletionReport),
+                    Encoding.UTF8,
+                    "application/json"
+                );
+  var response = await _httpClient.PostAsync(
                     $"/api/nodes/complete-frame/{_nodeId}", 
                     content, 
                     cancellationToken);
@@ -1747,20 +1765,21 @@ private string CalculateNodeTier(HardwareInfo hw)
         {
             try
             {
-                var payload = new
+                var payload = new FrameFailureReport
                 {
-                    nodeId = _nodeId,
-                    jobId,
-                    frame,
-                    error = errorMessage,
-                    s3Key // Can be null
+                    NodeId = _nodeId,
+                    JobId = jobId,
+                    Frame = frame,
+                    Error = errorMessage,
+                    S3Key = s3Key
                 };
 
                 var content = new StringContent(
-                    System.Text.Json.JsonSerializer.Serialize(payload),
+                    System.Text.Json.JsonSerializer.Serialize(payload, NodeJsonContext.Default.FrameFailureReport),
                     System.Text.Encoding.UTF8,
                     "application/json"
-                );  var response = await _httpClient.PostAsync(
+                );
+  var response = await _httpClient.PostAsync(
                     $"/api/jobs/{jobId}/fail-frame", 
                     content, 
                     cancellationToken);

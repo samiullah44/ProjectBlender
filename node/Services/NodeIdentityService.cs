@@ -6,7 +6,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using BlendFarm.Node.Models;
 
@@ -192,7 +191,9 @@ namespace BlendFarm.Node.Services
                     };
                 }
 
-                var payloadJson = Newtonsoft.Json.JsonConvert.SerializeObject(payloadDict);
+                var payloadJson = System.Text.Json.JsonSerializer.Serialize(
+                    payloadDict, 
+                    NodeIdentitySerializerContext.Default.DictionaryStringObject);
                 var content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
 
 
