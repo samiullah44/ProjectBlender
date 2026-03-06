@@ -86,12 +86,12 @@ namespace BlendFarm.Node.Services
                 if (!string.IsNullOrEmpty(identity.FriendlyName) && string.IsNullOrEmpty(UserProvidedName))
                     UserProvidedName = identity.FriendlyName;
 
-                _logger?.LogInformation($"✅ Loaded node identity from {IdentityFileName}: {NodeId}");
+                _logger?.LogInformation($"[Identity] Loaded node identity from {IdentityFileName}: {NodeId}");
                 return true;
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning($"⚠️ Could not load identity file: {ex.Message}");
+                _logger?.LogWarning($"[Identity] Warning: Could not load identity file: {ex.Message}");
                 return false;
             }
         }
@@ -128,11 +128,11 @@ namespace BlendFarm.Node.Services
                     identity,
                     NodeIdentitySerializerContext.Default.NodeIdentityFile);
                 File.WriteAllText(_identityFilePath, jsonText);
-                _logger?.LogInformation($"💾 Node identity saved to {_identityFilePath}");
+                _logger?.LogInformation($"[Identity] Node identity saved to {_identityFilePath}");
             }
             catch (Exception ex)
             {
-                _logger?.LogError($"❌ Failed to save identity file: {ex.Message}");
+                _logger?.LogError($"[Identity] Error: Failed to save identity file: {ex.Message}");
             }
         }
 
@@ -150,7 +150,7 @@ namespace BlendFarm.Node.Services
         {
             try
             {
-                _logger?.LogInformation("🔑 Registering node with backend using registration token...");
+                _logger?.LogInformation("[Identity] Registering node with backend using registration token...");
 
                 // Map the raw HardwareInfo to the exact flat schema the backend's 
                 // register-with-token endpoint reads (hardware.ramGB, hardware.gpuVRAM, etc.)
@@ -215,7 +215,7 @@ namespace BlendFarm.Node.Services
                     } 
                     catch { }
                     
-                    _logger?.LogError($"❌ Registration Refused:");
+                    _logger?.LogError($"[Identity] Error: Registration Refused:");
                     _logger?.LogCritical($"{errorMsg}");
                     
                     // Stop the application from scrolling and immediately exiting
@@ -240,19 +240,19 @@ namespace BlendFarm.Node.Services
 
                 if (string.IsNullOrEmpty(NodeId) || string.IsNullOrEmpty(NodeSecret))
                 {
-                    _logger?.LogError("❌ Backend returned empty nodeId or nodeSecret.");
+                    _logger?.LogError("[Identity] Error: Backend returned empty nodeId or nodeSecret.");
                     return false;
                 }
 
                 SaveIdentity();
 
-                _logger?.LogInformation($"✅ Node successfully registered! ID: {NodeId}");
-                _logger?.LogInformation("🔐 nodeSecret saved. It will be used to authenticate future requests.");
+                _logger?.LogInformation($"[Identity] Node successfully registered! ID: {NodeId}");
+                _logger?.LogInformation("[Identity] nodeSecret saved. It will be used to authenticate future requests.");
                 return true;
             }
             catch (Exception ex)
             {
-                _logger?.LogError($"❌ RegisterWithTokenAsync failed: {ex.Message}");
+                _logger?.LogError($"[Identity] Error: RegisterWithTokenAsync failed: {ex.Message}");
                 return false;
             }
         }

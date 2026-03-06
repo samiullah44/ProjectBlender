@@ -33,12 +33,12 @@ namespace BlendFarm.Node.Services
             _baseJobDirectory = Path.Combine(Path.GetTempPath(), "BlendFarm", "Jobs");
             _baseCacheDirectory = Path.Combine(Path.GetTempPath(), "BlendFarm", "Cache");
 
-            _logger.LogInformation("🧹 Cleanup Service initialized.\n   Jobs: {JobsPath}\n   Cache: {CachePath}", _baseJobDirectory, _baseCacheDirectory);
+            _logger.LogInformation("[System] Cleanup Service initialized.\n   Jobs: {JobsPath}\n   Cache: {CachePath}", _baseJobDirectory, _baseCacheDirectory);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("🧹 Cleanup Service starting...");
+            _logger.LogInformation("[System] Cleanup Service starting...");
 
             // Wait a short bit on startup to allow NodeBackendService to complete registration/identity loading
             await Task.Delay(TimeSpan.FromSeconds(50), stoppingToken);
@@ -50,7 +50,7 @@ namespace BlendFarm.Node.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Initial cleanup cycle failed");
+                _logger.LogError(ex, "[System] Error: Initial cleanup cycle failed");
             }
 
             while (!stoppingToken.IsCancellationRequested)
@@ -64,7 +64,7 @@ namespace BlendFarm.Node.Services
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "❌ Error during cleanup cycle");
+                    _logger.LogError(ex, "[System] Error: Error during cleanup cycle");
                 }
             }
         }
@@ -73,17 +73,17 @@ namespace BlendFarm.Node.Services
         {
             if (!_identityService.IsRegistered)
             {
-                _logger.LogWarning("⚠️ Node is not yet registered with an identity. Skipping cleanup to avoid Unauthorized errors.");
+                _logger.LogWarning("[System] Warning: Node is not yet registered with an identity. Skipping cleanup to avoid Unauthorized errors.");
                 return;
             }
 
-            _logger.LogInformation("🧹 Starting scheduled cleanup cycle...");
+            _logger.LogInformation("[System] Starting scheduled cleanup cycle...");
 
             // Cleanup Jobs
             if (Directory.Exists(_baseJobDirectory))
             {
                 var jobDirectories = Directory.GetDirectories(_baseJobDirectory);
-                _logger.LogInformation("🔍 Checking {Count} job directories in {Path}...", jobDirectories.Length, _baseJobDirectory);
+                _logger.LogInformation("[System] Checking {Count} job directories in {Path}...", jobDirectories.Length, _baseJobDirectory);
 
                 foreach (var dir in jobDirectories)
                 {
@@ -95,7 +95,7 @@ namespace BlendFarm.Node.Services
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "⚠️ Failed to process job directory {Dir} for cleanup", dir);
+                        _logger.LogWarning(ex, "[System] Warning: Failed to process job directory {Dir} for cleanup", dir);
                     }
                 }
             }
@@ -104,7 +104,7 @@ namespace BlendFarm.Node.Services
             if (Directory.Exists(_baseCacheDirectory))
             {
                 var cachedFiles = Directory.GetFiles(_baseCacheDirectory, "blendfile_*.blend");
-                _logger.LogInformation("🔍 Checking {Count} cached blend files in {Path}...", cachedFiles.Length, _baseCacheDirectory);
+                _logger.LogInformation("[System] Checking {Count} cached blend files in {Path}...", cachedFiles.Length, _baseCacheDirectory);
 
                 foreach (var file in cachedFiles)
                 {
@@ -116,12 +116,12 @@ namespace BlendFarm.Node.Services
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "⚠️ Failed to process cached file {File} for cleanup", file);
+                        _logger.LogWarning(ex, "[System] Warning: Failed to process cached file {File} for cleanup", file);
                     }
                 }
             }
             
-            _logger.LogInformation("✅ Cleanup cycle complete.");
+            _logger.LogInformation("[System] Cleanup cycle complete.");
         }
 
         private async Task ProcessJobDirectoryAsync(string directoryPath, CancellationToken stoppingToken)
@@ -133,21 +133,21 @@ namespace BlendFarm.Node.Services
             // Strict policy: Only clean up if >= 2 hours old
             if (age.TotalHours < 2)
             {
-                _logger.LogInformation("⏭️ Skipping job folder {JobId}: too new ({Age:F1} hours old, threshold is 2.0)", jobId, age.TotalHours);
+                _logger.LogInformation("[System] Skipping job folder {JobId}: too new ({Age:F1} hours old, threshold is 2.0)", jobId, age.TotalHours);
                 return;
             }
 
-            _logger.LogInformation("🧪 Verifying status for 2h+ old job: {JobId}...", jobId);
+            _logger.LogInformation("[System] Verifying status for 2h+ old job: {JobId}...", jobId);
             bool isFinished = await IsJobFinishedAsync(jobId, stoppingToken);
 
             if (isFinished)
             {
-                _logger.LogInformation("🗑️ Deleting job folder: {JobId} (Age: {Age:F1} hours)", jobId, age.TotalHours);
+                _logger.LogInformation("[System] Deleting job folder: {JobId} (Age: {Age:F1} hours)", jobId, age.TotalHours);
                 try { Directory.Delete(directoryPath, true); } catch (Exception ex) { _logger.LogWarning("Failed to delete {Dir}: {Msg}", directoryPath, ex.Message); }
             }
             else
             {
-                _logger.LogInformation("⏳ Job {JobId} is still active on backend, keeping associated files.", jobId);
+                _logger.LogInformation("[System] Job {JobId} is still active on backend, keeping associated files.", jobId);
             }
         }
 
@@ -162,19 +162,19 @@ namespace BlendFarm.Node.Services
             // Strict policy: Only clean up if >= 2 hours old
             if (age.TotalHours < 2)
             {
-                _logger.LogInformation("⏭️ Skipping cached file {JobId}: too new ({Age:F1} hours old, threshold is 2.0)", jobId, age.TotalHours);
+                _logger.LogInformation("[System] Skipping cached file {JobId}: too new ({Age:F1} hours old, threshold is 2.0)", jobId, age.TotalHours);
                 return;
             }
 
-            _logger.LogInformation("🧪 Verifying status for 2h+ old cache: {JobId}...", jobId);
+            _logger.LogInformation("[System] Verifying status for 2h+ old cache: {JobId}...", jobId);
             if (await IsJobFinishedAsync(jobId, stoppingToken))
             {
-                _logger.LogInformation("🗑️ Deleting cached blend file: {JobId} (Age: {Age:F1} hours)", jobId, age.TotalHours);
+                _logger.LogInformation("[System] Deleting cached blend file: {JobId} (Age: {Age:F1} hours)", jobId, age.TotalHours);
                 try { File.Delete(filePath); } catch (Exception ex) { _logger.LogWarning("Failed to delete {File}: {Msg}", filePath, ex.Message); }
             }
             else
             {
-                _logger.LogInformation("⏳ Job {JobId} for cached file is still active, keeping.", jobId);
+                _logger.LogInformation("[System] Job {JobId} for cached file is still active, keeping.", jobId);
             }
         }
 
@@ -189,7 +189,7 @@ namespace BlendFarm.Node.Services
                 // Double check identity before request
                 if (!_identityService.IsRegistered)
                 {
-                    _logger.LogWarning("⚠️ Cannot check job {JobId} status: Node identity lost or not loaded.", jobId);
+                    _logger.LogWarning("[System] Warning: Cannot check job {JobId} status: Node identity lost or not loaded.", jobId);
                     return false;
                 }
 
@@ -200,19 +200,19 @@ namespace BlendFarm.Node.Services
                 
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
-                    _logger.LogDebug("🔍 Job {JobId} not found on backend. Marking as finished.", jobId);
+                    _logger.LogDebug("[System] Job {JobId} not found on backend. Marking as finished.", jobId);
                     return true;
                 }
 
                 if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 {
-                    _logger.LogWarning("🚫 Backend rejected node credentials (401 Unauthorized) for job {JobId}. Check if node_identity.json is valid.", jobId);
+                    _logger.LogWarning("[System] Warning: Backend rejected node credentials (401 Unauthorized) for job {JobId}. Check if node_identity.json is valid.", jobId);
                     return false;
                 }
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("⚠️ Backend status check failed for job {JobId} (Status: {Code})", jobId, response.StatusCode);
+                    _logger.LogWarning("[System] Warning: Backend status check failed for job {JobId} (Status: {Code})", jobId, response.StatusCode);
                     return false;
                 }
 
@@ -226,14 +226,14 @@ namespace BlendFarm.Node.Services
                 
                 if (isFinished)
                 {
-                    _logger.LogInformation("✅ Job {JobId} is confirmed finished (Status: {Status})", jobId, result.Status);
+                    _logger.LogInformation("[System] Job {JobId} is confirmed finished (Status: {Status})", jobId, result.Status);
                 }
                 
                 return isFinished;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "⚠️ Error checking status for job {JobId}", jobId);
+                _logger.LogWarning(ex, "[System] Warning: Error checking status for job {JobId}", jobId);
                 return false;
             }
         }

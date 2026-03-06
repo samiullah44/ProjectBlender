@@ -27,7 +27,7 @@ namespace BlendFarm.Node.Services
             _blenderPath = "blender";
             
             Directory.CreateDirectory(_scriptsDirectory);
-            _logger.LogInformation($"📁 Scripts directory: {_scriptsDirectory}");
+            _logger.LogInformation($"[System] Scripts directory: {_scriptsDirectory}");
         }
         
         /// <summary>
@@ -46,7 +46,7 @@ namespace BlendFarm.Node.Services
             if (!string.IsNullOrEmpty(blenderPath) && (File.Exists(blenderPath) || blenderPath == "blender"))
             {
                 _blenderPath = blenderPath;
-                _logger.LogInformation($"🎬 Blender path updated to: {blenderPath}");
+                _logger.LogInformation($"[System] Blender path updated to: {blenderPath}");
             }
         }
         
@@ -57,8 +57,8 @@ namespace BlendFarm.Node.Services
             _blenderPath = blenderPath;
             
             Directory.CreateDirectory(_scriptsDirectory);
-            _logger.LogInformation($"📁 Scripts directory: {_scriptsDirectory}");
-            _logger.LogInformation($"🎬 Using Blender at: {_blenderPath}");
+            _logger.LogInformation($"[System] Scripts directory: {_scriptsDirectory}");
+            _logger.LogInformation($"[System] Using Blender at: {_blenderPath}");
         }
         
         /// <summary>
@@ -80,30 +80,30 @@ namespace BlendFarm.Node.Services
         {
             try
             {
-                _logger.LogInformation($"🎬 Starting render: {Path.GetFileName(blendFilePath)} Frame {frame}");
-                _logger.LogInformation($"⚙️  Settings: {samples} samples, {engine}, {device}, {resolutionX}x{resolutionY}, Format: {outputFormat}");
-                _logger.LogInformation($"📽️  Mode: {(useAnimationSettings ? "Animation" : "Single Frame")}");
+                _logger.LogInformation($"[Render] Starting render: {Path.GetFileName(blendFilePath)} Frame {frame}");
+                _logger.LogInformation($"[Render] Settings: {samples} samples, {engine}, {device}, {resolutionX}x{resolutionY}, Format: {outputFormat}");
+                _logger.LogInformation($"[Render] Mode: {(useAnimationSettings ? "Animation" : "Single Frame")}");
                 
                 // Get or install Blender if needed
                 var blenderExe = await GetOrInstallBlenderAsync();
                 if (string.IsNullOrEmpty(blenderExe))
                 {
-                    _logger.LogError("❌ Failed to get Blender installation");
+                    _logger.LogError("[System] Error: Failed to get Blender installation");
                     return false;
                 }
                 
-                _logger.LogInformation($"🎬 Using Blender: {blenderExe}");
+                _logger.LogInformation($"[System] Using Blender: {blenderExe}");
                 
                 // Get absolute output path
                 var absoluteOutputPath = GetAbsoluteOutputPath(outputPath);
-                _logger.LogInformation($"📁 Output will be saved to: {absoluteOutputPath}");
+                _logger.LogInformation($"[Render] Output will be saved to: {absoluteOutputPath}");
                 
                 // Check if output directory exists
                 var outputDir = Path.GetDirectoryName(absoluteOutputPath);
                 if (!Directory.Exists(outputDir))
                 {
                     Directory.CreateDirectory(outputDir);
-                    _logger.LogInformation($"📁 Created output directory: {outputDir}");
+                    _logger.LogInformation($"[System] Created output directory: {outputDir}");
                 }
                 
                 // Create Python script dynamically
@@ -176,15 +176,15 @@ namespace BlendFarm.Node.Services
             tempConfig = Path.ChangeExtension(tempConfig, ".json");
             File.WriteAllText(tempConfig, System.Text.Json.JsonSerializer.Serialize(config, typeof(RenderConfig[]), NodeJsonContext.Default));
             
-            _logger.LogInformation($"📝 Created config file: {tempConfig}");
-            _logger.LogDebug($"⚙️  Config: {File.ReadAllText(tempConfig)}");
+            _logger.LogInformation($"[System] Created config file: {tempConfig}");
+            _logger.LogDebug($"[System] Config: {File.ReadAllText(tempConfig)}");
             
             try
             {
                 // Use correct Blender command line format
                 var arguments = $"-b \"{blendFile}\" -P \"{pythonScript}\" -- \"{tempConfig}\"";
                 
-                _logger.LogInformation($"🚀 Command: {blenderExe} {arguments}");
+                _logger.LogInformation($"[System] Command: {blenderExe} {arguments}");
                 
                 var process = new Process
                 {
@@ -216,20 +216,20 @@ process.Exited += (sender, e) =>
                     if (!string.IsNullOrEmpty(e.Data))
                     {
                         outputBuilder.AppendLine(e.Data);
-                        _logger.LogDebug($"🎬 Output: {e.Data}");
+                        _logger.LogDebug($"[Render] Output: {e.Data}");
                         
                         // Check for specific messages
                         if (e.Data.Contains("ERROR") || e.Data.Contains("Error:"))
                         {
-                            _logger.LogWarning($"🔴 Potential Error in Blender: {e.Data}");
+                            _logger.LogWarning($"[Render] Potential Error in Blender: {e.Data}");
                         }
                         else if (e.Data.Contains("SUCCESS") || e.Data.Contains("Saved:"))
                         {
-                            _logger.LogInformation($"✅ {e.Data}");
+                            _logger.LogInformation($"[Render] {e.Data}");
                         }
                         else if (e.Data.Contains("Sample") || e.Data.Contains("Rendering") || e.Data.Contains("Time:"))
                         {
-                            _logger.LogInformation($"⏳ {e.Data}");
+                            _logger.LogInformation($"[Render] {e.Data}");
                         }
                     }
                 };
@@ -239,7 +239,7 @@ process.Exited += (sender, e) =>
                     if (!string.IsNullOrEmpty(e.Data))
                     {
                         errorBuilder.AppendLine(e.Data);
-                        _logger.LogDebug($"🎬 Blender stderr: {e.Data}");
+                        _logger.LogDebug($"[Render] Blender stderr: {e.Data}");
                     }
                 };
                 
@@ -272,7 +272,7 @@ process.Exited += (sender, e) =>
                 timeoutSeconds = (int)(timeoutSeconds * Math.Max(1.0, resolutionFactor * 0.5));
                 
                 var timeout = TimeSpan.FromSeconds(timeoutSeconds);
-                _logger.LogInformation($"⏱️  Timeout set to: {timeout.TotalSeconds} seconds (samples: {samples}, resolution: {resolutionX}x{resolutionY})");
+                _logger.LogInformation($"[System] Timeout set to: {timeout.TotalSeconds} seconds (samples: {samples}, resolution: {resolutionX}x{resolutionY})");
                 
                 try
                 {
@@ -289,7 +289,7 @@ process.Exited += (sender, e) =>
                     
                     if (completedTask == timeoutTask)
                     {
-                        _logger.LogError($"⚠️  Render timeout after {timeout.TotalSeconds} seconds");
+                        _logger.LogError($"[Render] Error: Render timeout after {timeout.TotalSeconds} seconds");
                         
                         if (!process.HasExited)
                         {
@@ -313,24 +313,24 @@ process.Exited += (sender, e) =>
                     // Give time for all output to be captured
                     await Task.Delay(500);
                     
-                    _logger.LogInformation($"📊 Blender process exited with code: {exitCode}");
+                    _logger.LogInformation($"[Render] Blender process exited with code: {exitCode}");
                     
                     // CRITICAL: We prioritize ExitCode 0 and File Existence. 
                     // Blender/Python prints SUCCESS only if it really worked.
                     if (exitCode == 0)
                     {
-                        _logger.LogInformation($"✅ Blender render process reported success.");
+                        _logger.LogInformation($"[Render] Blender render process reported success.");
                         
                         // Check output file
                         if (File.Exists(outputPath))
                         {
                             var fileInfo = new FileInfo(outputPath);
-                            _logger.LogInformation($"📊 Output file verified: {fileInfo.FullName} ({fileInfo.Length / 1024} KB)");
+                            _logger.LogInformation($"[System] Output file verified: {fileInfo.FullName} ({fileInfo.Length / 1024} KB)");
                             return true;
                         }
                         else
                         {
-                            _logger.LogWarning($"⚠️  Blender exited with 0 but file not found at: {outputPath}");
+                            _logger.LogWarning($"[System] Warning: Blender exited with 0 but file not found at: {outputPath}");
                             
                             // Check for any output file in output directory
                             var outputDir = Path.GetDirectoryName(outputPath);
@@ -355,26 +355,26 @@ process.Exited += (sender, e) =>
                                     if (outputFiles.Length > 0)
                                     {
                                         var foundFile = outputFiles[0];
-                                        _logger.LogInformation($"📊 Found alternative output file: {foundFile}");
+                                        _logger.LogInformation($"[System] Found alternative output file: {foundFile}");
                                         
                                         // If it's not already the expected name, copy it
                                         if (!foundFile.Equals(outputPath, StringComparison.OrdinalIgnoreCase))
                                         {
                                             File.Copy(foundFile, outputPath, true);
-                                            _logger.LogInformation($"📋 Copied to expected location: {outputPath}");
+                                            _logger.LogInformation($"[System] Copied to expected location: {outputPath}");
                                         }
                                         return true;
                                     }
                                 }
                             }
                             
-                            _logger.LogError($"❌ Output file not found after Blender exit.");
+                            _logger.LogError($"[System] Error: Output file not found after Blender exit.");
                             return false;
                         }
                     }
                     else
                     {
-                        _logger.LogError($"❌ Blender failed with non-zero exit code: {exitCode}");
+                        _logger.LogError($"[Render] Error: Blender failed with non-zero exit code: {exitCode}");
                         
                         // Log captured output for debugging
                         if (outputBuilder.Length > 0)
@@ -693,7 +693,7 @@ except Exception as e:
 ";
     
             await File.WriteAllTextAsync(scriptPath, pythonScript);
-            _logger.LogInformation($"📝 Created/Updated Python script: {scriptPath}");
+            _logger.LogInformation($"[System] Created/Updated Python script: {scriptPath}");
             
             return scriptPath;
         }
@@ -708,18 +708,18 @@ except Exception as e:
             {
                 if (File.Exists(_blenderPath))
                 {
-                    _logger.LogInformation($"✅ Using provided Blender path: {_blenderPath}");
+                    _logger.LogInformation($"[System] Using provided Blender path: {_blenderPath}");
                     return _blenderPath;
                 }
             }
             
-            _logger.LogInformation("🔍 Looking for Blender installation...");
+            _logger.LogInformation("[System] Looking for Blender installation...");
             
             // 2. Check current directory for Blender installation
             var currentDirBlender = FindBlenderInCurrentDirectory();
             if (!string.IsNullOrEmpty(currentDirBlender))
             {
-                _logger.LogInformation($"✅ Found Blender in current directory: {currentDirBlender}");
+                _logger.LogInformation($"[System] Found Blender in current directory: {currentDirBlender}");
                 return currentDirBlender;
             }
             
@@ -727,7 +727,7 @@ except Exception as e:
             var pathBlender = await FindBlenderInPathAsync();
             if (!string.IsNullOrEmpty(pathBlender))
             {
-                _logger.LogInformation($"✅ Found Blender in PATH: {pathBlender}");
+                _logger.LogInformation($"[System] Found Blender in PATH: {pathBlender}");
                 return pathBlender;
             }
             
@@ -737,7 +737,7 @@ except Exception as e:
                 var installedBlender = FindInstalledBlenderInRegistry();
                 if (!string.IsNullOrEmpty(installedBlender))
                 {
-                    _logger.LogInformation($"✅ Found Blender via Registry: {installedBlender}");
+                    _logger.LogInformation($"[System] Found Blender via Registry: {installedBlender}");
                     return installedBlender;
                 }
             }
@@ -746,12 +746,12 @@ except Exception as e:
             var commonBlender = FindBlenderInCommonLocations();
             if (!string.IsNullOrEmpty(commonBlender))
             {
-                _logger.LogInformation($"✅ Found Blender in common location: {commonBlender}");
+                _logger.LogInformation($"[System] Found Blender in common location: {commonBlender}");
                 return commonBlender;
             }
             
             // 6. Download to current directory
-            _logger.LogWarning("⚠️  Blender not found. Downloading to current directory...");
+            _logger.LogWarning("[System] Warning: Blender not found. Downloading to current directory...");
             return await DownloadBlenderToCurrentDirectoryAsync();
         }
         
@@ -950,7 +950,7 @@ except Exception as e:
             var existingBlender = FindBlenderInDirectory(downloadDir);
             if (!string.IsNullOrEmpty(existingBlender) && TestBlenderExecutable(existingBlender))
             {
-                _logger.LogInformation($"✅ Found existing Blender installation: {existingBlender}");
+                _logger.LogInformation($"[System] Found existing Blender installation: {existingBlender}");
                 return existingBlender;
             }
             
@@ -959,23 +959,70 @@ except Exception as e:
             
             try
             {
-                _logger.LogInformation($"📥 Downloading Blender {version}...");
+                _logger.LogInformation($"[System] Downloading Blender {version}...");
                 
                 using (var httpClient = new HttpClient())
                 {
                     httpClient.Timeout = TimeSpan.FromMinutes(15);
-                    using (var stream = await httpClient.GetStreamAsync(downloadUrl))
-                    using (var fileStream = new FileStream(tempZip, FileMode.Create))
+                    using (var response = await httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
                     {
-                        await stream.CopyToAsync(fileStream);
+                        response.EnsureSuccessStatusCode();
+                        var totalBytes = response.Content.Headers.ContentLength ?? -1L;
+                        using (var stream = await response.Content.ReadAsStreamAsync())
+                        using (var fileStream = new FileStream(tempZip, FileMode.Create))
+                        {
+                            if (totalBytes > 0)
+                            {
+                                Console.WriteLine($"Blender Size: {totalBytes / 1024 / 1024.0:F2} MB");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Blender Size: Unknown (streaming download)");
+                            }
+                            
+                            var buffer = new byte[8192];
+                            long totalRead = 0;
+                            int bytesRead;
+                            var lastProgressUpdate = DateTime.Now;
+                            var progressUpdateInterval = TimeSpan.FromSeconds(0.5);
+                            
+                            while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                            {
+                                await fileStream.WriteAsync(buffer, 0, bytesRead);
+                                totalRead += bytesRead;
+                                
+                                if (DateTime.Now - lastProgressUpdate >= progressUpdateInterval)
+                                {
+                                    if (totalBytes > 0)
+                                    {
+                                        var progress = (double)totalRead / totalBytes * 100;
+                                        Console.Write($"\rDownloading Blender : [{progress:F1}% / 100%] ({totalRead / 1024 / 1024.0:F2} MB downloaded)   ");
+                                    }
+                                    else
+                                    {
+                                        Console.Write($"\rDownloading Blender : ({totalRead / 1024 / 1024.0:F2} MB downloaded)   ");
+                                    }
+                                    lastProgressUpdate = DateTime.Now;
+                                }
+                            }
+                            Console.WriteLine();
+                        }
                     }
                 }
                 
                 Directory.CreateDirectory(downloadDir);
                 
-                _logger.LogInformation($"📦 Extracting Blender...");
+                _logger.LogInformation($"[System] Extracting Blender...");
+                Console.Write("Extracting...   ");
                 
+                int extractedCount = 0;
+                using (var archive = ZipFile.OpenRead(tempZip))
+                {
+                    extractedCount = archive.Entries.Count;
+                }
                 ZipFile.ExtractToDirectory(tempZip, downloadDir, overwriteFiles: true);
+                Console.WriteLine($"\rExtracted {extractedCount} files        ");
+
                 
                 File.Delete(tempZip);
                 
@@ -983,17 +1030,17 @@ except Exception as e:
                 
                 if (!string.IsNullOrEmpty(blenderExe))
                 {
-                    _logger.LogInformation($"✅ Blender {version} installed to: {blenderExe}");
+                    _logger.LogInformation($"[System] Blender {version} installed to: {blenderExe}");
                     return blenderExe;
                 }
                 else
                 {
-                    _logger.LogError($"❌ Could not find blender.exe after extraction");
+                    _logger.LogError($"[System] Error: Could not find blender.exe after extraction");
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"❌ Failed to download/install Blender: {ex.Message}");
+                _logger.LogError($"[System] Error: Failed to download/install Blender: {ex.Message}");
             }
             
             return null;

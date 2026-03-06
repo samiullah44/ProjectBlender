@@ -56,28 +56,49 @@ namespace BlendFarm.Node.Benchmark
                 using var contentStream = await response.Content.ReadAsStreamAsync();
                 using var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
                 
+                if (totalBytes > 0)
+                {
+                    Console.WriteLine($"File Size: {totalBytes / 1024 / 1024.0:F2} MB");
+                }
+                
                 var buffer = new byte[8192];
                 long totalRead = 0;
                 int bytesRead;
                 var lastProgress = DateTime.Now;
+                var progressUpdateInterval = TimeSpan.FromSeconds(0.5);
                 
                 while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                 {
                     await fileStream.WriteAsync(buffer, 0, bytesRead);
                     totalRead += bytesRead;
                     
-                    if (totalBytes > 0 && (DateTime.Now - lastProgress).TotalSeconds > 1)
+                    if (DateTime.Now - lastProgress >= progressUpdateInterval)
                     {
-                        var progress = (double)totalRead / totalBytes * 100;
-                        _logger.LogDebug($"Download progress: {progress:F1}%");
+                        if (totalBytes > 0)
+                        {
+                            var progress = (double)totalRead / totalBytes * 100;
+                            Console.Write($"\rDownloading : [{progress:F1}% / 100%] ({totalRead / 1024 / 1024.0:F2} MB downloaded)   ");
+                        }
+                        else
+                        {
+                            Console.Write($"\rDownloading : ({totalRead / 1024 / 1024.0:F2} MB downloaded)   ");
+                        }
                         lastProgress = DateTime.Now;
                     }
                 }
+                Console.WriteLine();
 
                 _logger.LogInformation("✅ Download complete. Extracting...");
 
                 // Extract
+                Console.Write("Extracting...   ");
+                int extractedCount = 0;
+                using (var archive = ZipFile.OpenRead(zipPath))
+                {
+                    extractedCount = archive.Entries.Count;
+                }
                 ZipFile.ExtractToDirectory(zipPath, _config.BenchmarkDir, true);
+                Console.WriteLine($"\rExtracted {extractedCount} files        ");
                 File.Delete(zipPath);
 
                 // Find the executable after extraction

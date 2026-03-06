@@ -1,0 +1,22 @@
+[TEST] Testing Blender 4.5.0 + Python Integration...
+--------------------------------------------------
+[TEST] Found: test_scene.blend
+[TEST] Found: Scripts/render.py
+
+[System] Looking for Blender 4.5.0 installation...
+[TEST] Error: Test failed with exception: An error occurred while writing to logger(s). (Could not load type 'Spectre.Console.ConsoleExtensions' from assembly 'Spectre.Console, Version=0.0.0.0, Culture=neutral, PublicKeyToken=170fe27f8af98a30'.)
+Stack trace:    at Microsoft.Extensions.Logging.Logger.ThrowLoggingError(List`1 exceptions)
+   at Microsoft.Extensions.Logging.Logger.Log[TState](LogLevel logLevel, EventId eventId, TState state, Exception exception, Func`3 formatter)
+   at Microsoft.Extensions.Logging.LoggerExtensions.Log(ILogger logger, LogLevel logLevel, EventId eventId, Exception exception, String message, Object[] args)
+   at Microsoft.Extensions.Logging.LoggerExtensions.Log(ILogger logger, LogLevel logLevel, String message, Object[] args)
+   at Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(ILogger logger, String message, Object[] args)
+   at BlendFarm.Node.BlenderFinder.FindBlenderAsync(ILogger logger, String targetVersion) in C:\Users\Jafar Hussain\Desktop\newfolder\renderNodes\node\Program.cs:line 24
+   at BlendFarm.Node.Program.GetOrInstallSpecificBlenderAsync(String targetVersion) in C:\Users\Jafar Hussain\Desktop\newfolder\renderNodes\node\Program.cs:line 904
+   at BlendFarm.Node.Program.RunBlenderTestAsync(String targetVersion) in C:\Users\Jafar Hussain\Desktop\newfolder\renderNodes\node\Program.cs:line 808
+
+Press any key to exit...
+Unhandled exception. System.InvalidOperationException: Cannot read keys when either application does not have a console or when console input has been redirected. Try Console.Read.
+   at System.ConsolePal.ReadKey(Boolean intercept)
+   at BlendFarm.Node.Program.RunBlenderTestAsync(String targetVersion) in C:\Users\Jafar Hussain\Desktop\newfolder\renderNodes\node\Program.cs:line 887
+   at BlendFarm.Node.Program.Main(String[] args) in C:\Users\Jafar Hussain\Desktop\newfolder\renderNodes\node\Program.cs:line 763
+   at BlendFarm.Node.Program.<Main>(String[] args)

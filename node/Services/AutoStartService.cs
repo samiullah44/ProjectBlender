@@ -26,17 +26,17 @@ namespace BlendFarm.Node.Services
                 
                 if (string.IsNullOrEmpty(exePath))
                 {
-                    _logger.LogWarning("❌ Cannot register auto-start: Process path is null.");
+                    _logger.LogWarning("[System] Warning: Cannot register auto-start: Process path is null.");
                     return false;
                 }
 
-                _logger.LogInformation($"⏳ Registering auto-start for: {exePath}");
+                _logger.LogInformation($"[System] Registering auto-start for: {exePath}");
 
                 using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath, true))
                 {
                     if (key == null)
                     {
-                        _logger.LogError("❌ Registry key path not found.");
+                        _logger.LogError("[System] Error: Registry key path not found.");
                         return false;
                     }
 
@@ -44,12 +44,12 @@ namespace BlendFarm.Node.Services
                     key.SetValue(AppName, $"\"{exePath}\"");
                 }
 
-                _logger.LogInformation("✅ Auto-start registered successfully in Registry.");
+                _logger.LogInformation("[System] Auto-start registered successfully in Registry.");
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"❌ Failed to register auto-start in registry: {ex.Message}");
+                _logger.LogError($"[System] Error: Failed to register auto-start in registry: {ex.Message}");
                 return false;
             }
         }
@@ -65,12 +65,12 @@ namespace BlendFarm.Node.Services
                         key.DeleteValue(AppName, false);
                     }
                 }
-                _logger.LogInformation("🗑️ Auto-start unregistered from Registry.");
+                _logger.LogInformation("[System] Auto-start unregistered from Registry.");
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"❌ Failed to unregister auto-start: {ex.Message}");
+                _logger.LogError($"[System] Error: Failed to unregister auto-start: {ex.Message}");
                 return false;
             }
         }

@@ -20,23 +20,23 @@ namespace BlendFarm.Node
         
         public static async Task<string> FindBlenderAsync(ILogger logger, string targetVersion)
         {
-            logger.LogInformation($"🔍 Searching for Blender {targetVersion} installation...");
+            logger.LogInformation($"[System] Searching for Blender {targetVersion} installation...");
             
             // 1. First check manually if the SPECIFIC VERSION of Blender is in PATH
-            logger.LogInformation("Checking if requested Blender version is in PATH...");
+            logger.LogInformation("[System] Checking if requested Blender version is in PATH...");
             var blenderInPath = await CheckSpecificBlenderVersionInPathAsync(targetVersion);
             if (!string.IsNullOrEmpty(blenderInPath))
             {
-                logger.LogInformation($"✅ Blender {targetVersion} found in PATH: {blenderInPath}");
+                logger.LogInformation($"[System]   -> Blender {targetVersion} found in PATH: {blenderInPath}");
                 return blenderInPath;
             }
             
             // 2. Check common installation directories for SPECIFIC VERSION
-            logger.LogInformation("Checking common installation directories for specific version...");
+            logger.LogInformation("[System] Checking common installation directories for specific version...");
             var installedBlender = FindSpecificVersionInstalledBlender(targetVersion);
             if (!string.IsNullOrEmpty(installedBlender))
             {
-                logger.LogInformation($"✅ Found installed Blender {targetVersion}: {installedBlender}");
+                logger.LogInformation($"[System]   -> Found installed Blender {targetVersion}: {installedBlender}");
                 return installedBlender;
             }
             
@@ -44,12 +44,12 @@ namespace BlendFarm.Node
             var customPathBlender = await CheckCustomInstallationForVersionAsync(targetVersion);
             if (!string.IsNullOrEmpty(customPathBlender))
             {
-                logger.LogInformation($"✅ Found Blender {targetVersion} in custom location: {customPathBlender}");
+                logger.LogInformation($"[System]   -> Found Blender {targetVersion} in custom location: {customPathBlender}");
                 return customPathBlender;
             }
             
             // 4. Download SPECIFIC VERSION to current directory
-            logger.LogWarning($"⚠️  Blender {targetVersion} not found. Downloading to current directory...");
+            logger.LogWarning($"[System] Warning: Blender {targetVersion} not found. Downloading to current directory...");
             return await DownloadBlenderToCurrentDirectoryAsync(logger, targetVersion);
         }
         
@@ -208,7 +208,7 @@ namespace BlendFarm.Node
                 var existingBlender = Path.Combine(versionDir, "blender.exe");
                 if (File.Exists(existingBlender) && await TestBlenderExecutableAsync(existingBlender, targetVersion))
                 {
-                    logger.LogInformation($"✅ Using existing Blender {targetVersion} installation: {existingBlender}");
+                    logger.LogInformation($"[System]   -> Using existing Blender {targetVersion} installation: {existingBlender}");
                     return existingBlender;
                 }
             }
@@ -241,7 +241,7 @@ namespace BlendFarm.Node
             {
                 try
                 {
-                    logger.LogInformation($"📥 Trying URL: {downloadUrl}");
+                    logger.LogInformation($"[Download] Trying URL: {downloadUrl}");
                     
                     using (var client = new HttpClient())
                     {
@@ -257,23 +257,22 @@ namespace BlendFarm.Node
                                 var buffer = new byte[8192];
                                 var isMoreToRead = true;
                                 
-                                logger.LogInformation($"✅ Downloading Blender {targetVersion} from: {downloadUrl}");
-                                
+                                logger.LogInformation($"[Download] Downloading Blender {targetVersion} from: {downloadUrl}");
                                 using (var stream = await response.Content.ReadAsStreamAsync())
                                 using (var fs = new FileStream(tempZip, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
                                 {
                                     // Show initial progress
                                     if (totalBytes > 0)
                                     {
-                                        logger.LogInformation($"📦 File size: {FormatBytes(totalBytes)}");
+                                        Console.WriteLine($"Blender Size: {FormatBytes(totalBytes)}");
                                     }
                                     else
                                     {
-                                        logger.LogInformation($"📦 File size: Unknown (streaming download)");
+                                        Console.WriteLine($"Blender Size: Unknown (streaming download)");
                                     }
                                     
                                     var lastProgressUpdate = DateTime.Now;
-                                    var progressUpdateInterval = TimeSpan.FromSeconds(1);
+                                    var progressUpdateInterval = TimeSpan.FromSeconds(0.5);
                                     
                                     while (isMoreToRead)
                                     {
@@ -288,34 +287,28 @@ namespace BlendFarm.Node
                                             totalRead += read;
                                             
                                             // Show progress if we know total size
-                                            if (totalBytes > 0)
+                                            if (DateTime.Now - lastProgressUpdate >= progressUpdateInterval)
                                             {
-                                                var progress = (double)totalRead / totalBytes * 100;
-                                                
-                                                // Only update progress every second to avoid spam
-                                                if (DateTime.Now - lastProgressUpdate >= progressUpdateInterval)
+                                                if (totalBytes > 0)
                                                 {
-                                                    logger.LogInformation($"⏬ Download progress: {progress:F1}% ({FormatBytes(totalRead)} / {FormatBytes(totalBytes)})");
-                                                    lastProgressUpdate = DateTime.Now;
+                                                    var progress = (double)totalRead / totalBytes * 100;
+                                                    Console.Write($"\rDownloading Blender : [{progress:F1}% / 100%] ({FormatBytes(totalRead)} downloaded)   ");
                                                 }
-                                            }
-                                            else
-                                            {
-                                                // Show bytes downloaded if total size unknown
-                                                if (DateTime.Now - lastProgressUpdate >= progressUpdateInterval)
+                                                else
                                                 {
-                                                    logger.LogInformation($"⏬ Downloaded: {FormatBytes(totalRead)}");
-                                                    lastProgressUpdate = DateTime.Now;
+                                                    Console.Write($"\rDownloading Blender : ({FormatBytes(totalRead)} downloaded)   ");
                                                 }
+                                                lastProgressUpdate = DateTime.Now;
                                             }
                                         }
                                     }
                                     
+                                    Console.WriteLine();
                                     // Show final download complete message
-                                    logger.LogInformation($"✅ Download complete: {FormatBytes(totalRead)}");
+                                    logger.LogInformation($"[Download] Download complete: {FormatBytes(totalRead)}");
                                 }
                                 
-                                logger.LogInformation("📦 Extracting Blender...");
+                                logger.LogInformation("[System] Extracting Blender...");
                                 
                                 // Ensure directory exists
                                 Directory.CreateDirectory(downloadDir);
@@ -328,19 +321,19 @@ namespace BlendFarm.Node
                                 
                                 if (!string.IsNullOrEmpty(blenderExe) && await TestBlenderExecutableAsync(blenderExe, targetVersion))
                                 {
-                                    logger.LogInformation($"✅ Blender {targetVersion} installed to: {blenderExe}");
+                                    logger.LogInformation($"[System]   -> Blender {targetVersion} installed to: {blenderExe}");
                                     return blenderExe;
                                 }
                                 else if (!string.IsNullOrEmpty(blenderExe))
                                 {
                                     // Found Blender but wrong version
                                     var version = await GetBlenderVersionAsync(blenderExe);
-                                    logger.LogWarning($"⚠️  Found Blender {version}, but looking for {targetVersion}");
+                                    logger.LogWarning($"[System] Warning: Found Blender {version}, but looking for {targetVersion}");
                                     // Continue to try next URL
                                 }
                                 else
                                 {
-                                    logger.LogWarning($"⚠️  Blender extracted but blender.exe not found");
+                                    logger.LogWarning($"[System] Warning: Blender extracted but blender.exe not found");
                                 }
                             }
                             else
@@ -366,7 +359,7 @@ namespace BlendFarm.Node
             }
             
             // If all URLs failed, try a manual approach
-            logger.LogError("❌ All download URLs failed. Trying alternative approach...");
+            logger.LogError("[Download] Error: All download URLs failed. Trying alternative approach...");
             return await DownloadBlenderManualFallbackAsync(logger, downloadDir, targetVersion);
         }
         
@@ -378,21 +371,11 @@ namespace BlendFarm.Node
                 using (var archive = ZipFile.OpenRead(zipPath))
                 {
                     var totalEntries = archive.Entries.Count;
-                    var processedEntries = 0;
                     
-                    logger.LogInformation($"📦 Extracting {totalEntries} files...");
+                    Console.Write("Extracting...   ");
                     
                     foreach (var entry in archive.Entries)
                     {
-                        processedEntries++;
-                        var progress = (double)processedEntries / totalEntries * 100;
-                        
-                        // Update progress every 10 files or 10% progress
-                        if (processedEntries % 10 == 0 || processedEntries == totalEntries)
-                        {
-                            logger.LogInformation($"📂 Extraction progress: {progress:F1}% ({processedEntries}/{totalEntries}) - {entry.FullName}");
-                        }
-                        
                         try
                         {
                             var destinationPath = Path.Combine(extractPath, entry.FullName);
@@ -416,7 +399,8 @@ namespace BlendFarm.Node
                         }
                     }
                     
-                    logger.LogInformation($"✅ Extraction complete: {totalEntries} files extracted");
+                    Console.WriteLine($"\rExtracted {totalEntries} files        ");
+                    logger.LogInformation($"[System]   -> Extraction complete: {totalEntries} files extracted");
                 }
             }
             catch (Exception ex)
@@ -447,7 +431,7 @@ namespace BlendFarm.Node
             try
             {
                 // Try using PowerShell to download
-                logger.LogInformation("🔄 Trying PowerShell download...");
+                logger.LogInformation("[Download] Trying PowerShell download...");
                 
                 var psPrefix = (Version.TryParse(targetVersion, out var psFallbackVer) && psFallbackVer.Major < 3)
                     ? targetVersion.Substring(0, 4)
@@ -496,13 +480,13 @@ namespace BlendFarm.Node
                     {
                         if (await TestBlenderExecutableAsync(blenderExe, targetVersion))
                         {
-                            logger.LogInformation($"✅ Blender {targetVersion} downloaded via PowerShell: {blenderExe}");
+                            logger.LogInformation($"[System] Blender {targetVersion} downloaded via PowerShell: {blenderExe}");
                             return blenderExe;
                         }
                         else
                         {
                             var version = await GetBlenderVersionAsync(blenderExe);
-                            logger.LogWarning($"Downloaded Blender {version}, but wanted {targetVersion}");
+                            logger.LogWarning($"[System] Downloaded Blender {version}, but wanted {targetVersion}");
                         }
                     }
                 }
@@ -514,9 +498,9 @@ namespace BlendFarm.Node
             
             // Last resort: Manual instructions
             logger.LogError($@"
-❌ Failed to download Blender {targetVersion} automatically.
+[Download] Error: Failed to download Blender {targetVersion} automatically.
 
-📋 MANUAL INSTALLATION REQUIRED:
+[MANUAL INSTALLATION REQUIRED]
 
 1. Please download Blender {targetVersion} manually from:
    https://www.blender.org/download/
@@ -777,8 +761,8 @@ namespace BlendFarm.Node
         
         static async Task RunBlenderTestAsync(string targetVersion = "4.5.0")
         {
-            Console.WriteLine($"🧪 Testing Blender {targetVersion} + Python Integration...");
-            Console.WriteLine(new string('═', 50));
+            Console.WriteLine($"[TEST] Testing Blender {targetVersion} + Python Integration...");
+            Console.WriteLine(new string('-', 50));
             
             try
             {
@@ -786,7 +770,7 @@ namespace BlendFarm.Node
                 var testBlendFile = "test_scene.blend";
                 if (!File.Exists(testBlendFile))
                 {
-                    Console.WriteLine("❌ test_scene.blend not found!");
+                    Console.WriteLine("[TEST] Error: test_scene.blend not found!");
                     Console.WriteLine("   Creating a simple test file...");
                     
                     // Create a minimal test blend file using Blender
@@ -794,45 +778,45 @@ namespace BlendFarm.Node
                     
                     if (!File.Exists(testBlendFile))
                     {
-                        Console.WriteLine("⚠️  Please place a .blend file in this directory");
+                        Console.WriteLine("[TEST] Warning: Please place a .blend file in this directory");
                         Console.WriteLine("   Or run: blender -b -o //test_scene.blend -F BLEND -f 1");
                         return;
                     }
                 }
                 
-                Console.WriteLine($"✅ Found: {testBlendFile}");
+                Console.WriteLine($"[TEST] Found: {testBlendFile}");
                 
                 // Step 2: Check if Python scripts exist
                 if (!File.Exists("Scripts/render.py"))
                 {
-                    Console.WriteLine("❌ Scripts/render.py not found!");
+                    Console.WriteLine("[TEST] Error: Scripts/render.py not found!");
                     return;
                 }
                 
-                Console.WriteLine("✅ Found: Scripts/render.py");
+                Console.WriteLine("[TEST] Found: Scripts/render.py");
                 
                 // Step 3: Get or install SPECIFIC VERSION of Blender
                 _blenderPath = await GetOrInstallSpecificBlenderAsync(targetVersion);
                 if (string.IsNullOrEmpty(_blenderPath))
                 {
-                    Console.WriteLine($"❌ Failed to get Blender {targetVersion}!");
+                    Console.WriteLine($"[TEST] Error: Failed to get Blender {targetVersion}!");
                     return;
                 }
                 
                 // Verify version
                 var actualVersion = await GetBlenderVersionAsync(_blenderPath);
-                Console.WriteLine($"✅ Blender {actualVersion} found at: {_blenderPath}");
+                Console.WriteLine($"[TEST] Blender {actualVersion} found at: {_blenderPath}");
                 
                 if (actualVersion != targetVersion)
                 {
-                    Console.WriteLine($"⚠️  Warning: Found Blender {actualVersion}, but wanted {targetVersion}");
+                    Console.WriteLine($"[TEST] Warning: Found Blender {actualVersion}, but wanted {targetVersion}");
                 }
                 
                 // Step 4: Check .blend file compatibility with installed Blender version
                 var blendFileCompatible = await CheckBlendFileCompatibilityAsync(testBlendFile, _blenderPath);
                 if (!blendFileCompatible)
                 {
-                    Console.WriteLine("⚠️  .blend file may not be compatible with installed Blender version");
+                    Console.WriteLine("[TEST] Warning: .blend file may not be compatible with installed Blender version");
                     Console.WriteLine("   Consider creating a new .blend file with this Blender version");
                 }
                 
@@ -846,11 +830,11 @@ namespace BlendFarm.Node
                 var logger = loggerFactory.CreateLogger<PythonRunnerService>();
                 var runner = new PythonRunnerService(logger, _blenderPath);
                 
-                Console.WriteLine("\n🎬 Starting render test...");
-                Console.WriteLine(new string('═', 50));
+                Console.WriteLine("\n[TEST] Starting render test...");
+                Console.WriteLine(new string('-', 50));
                 
                 var outputFile = Path.Combine(Directory.GetCurrentDirectory(), $"test_output_{DateTime.Now:yyyyMMdd_HHmmss}.png");
-                Console.WriteLine($"📁 Output will be at: {outputFile}");
+                Console.WriteLine($"[TEST] Output will be at: {outputFile}");
                 
                 var success = await runner.RunRenderAsync(
                     blendFilePath: testBlendFile,
@@ -858,19 +842,19 @@ namespace BlendFarm.Node
                     outputPath: outputFile
                 );
                 
-                Console.WriteLine(new string('═', 50));
+                Console.WriteLine(new string('-', 50));
                 
                 if (success)
                 {
-                    Console.WriteLine($"✅ TEST PASSED! Output saved to: {outputFile}");
+                    Console.WriteLine($"[TEST] PASSED! Output saved to: {outputFile}");
                     
                     if (File.Exists(outputFile))
                     {
                         var fileInfo = new FileInfo(outputFile);
-                        Console.WriteLine($"📊 File size: {fileInfo.Length / 1024} KB");
+                        Console.WriteLine($"[TEST] File size: {fileInfo.Length / 1024} KB");
                     }
                     
-                    Console.WriteLine($"\n🎉 Your C# + Python node with Blender {actualVersion} is working!");
+                    Console.WriteLine($"\n[TEST] Your C# + Python node with Blender {actualVersion} is working!");
                     Console.WriteLine("Next steps:");
                     Console.WriteLine("1. Run without 'test' argument to start the full service");
                     Console.WriteLine("2. Add more jobs to JobQueueService");
@@ -878,15 +862,15 @@ namespace BlendFarm.Node
                 }
                 else
                 {
-                    Console.WriteLine("❌ TEST FAILED - Check logs above");
-                    Console.WriteLine("\n🔧 Troubleshooting:");
+                    Console.WriteLine("[TEST] FAILED - Check logs above");
+                    Console.WriteLine("\n[Troubleshooting]:");
                     Console.WriteLine($"1. Check if Blender can run manually:");
                     Console.WriteLine($"   \"{_blenderPath}\" --version");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"💥 Test failed with exception: {ex.Message}");
+                Console.WriteLine($"[TEST] Error: Test failed with exception: {ex.Message}");
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
             }
             
@@ -896,7 +880,7 @@ namespace BlendFarm.Node
         
         static async Task<string> GetOrInstallSpecificBlenderAsync(string targetVersion)
         {
-            Console.WriteLine($"\n🔍 Looking for Blender {targetVersion} installation...");
+            Console.WriteLine($"\n[System] Looking for Blender {targetVersion} installation...");
             
             using var loggerFactory = LoggerFactory.Create(builder =>
             {
@@ -1002,7 +986,7 @@ namespace BlendFarm.Node
         
         static async Task RunAsServiceAsync()
         {
-            Console.WriteLine($"🚀 Starting BlendFarm Node as Service (Blender default 4.5.0)...");
+            Console.WriteLine($"[System] Starting BlendFarm Node as Service (Blender default 4.5.0)...");
             
             using var loggerFactory = LoggerFactory.Create(builder =>
             {
@@ -1041,18 +1025,18 @@ namespace BlendFarm.Node
             _blenderPath = await BlenderFinder.FindBlenderAsync(logger, defaultTargetVersion);
             if (string.IsNullOrEmpty(_blenderPath))
             {
-                Console.WriteLine($"❌ Failed to find or install Blender {defaultTargetVersion}. Service cannot start.");
+                Console.WriteLine($"[System] Error: Failed to find or install Blender {defaultTargetVersion}. Service cannot start.");
                 Console.WriteLine("Press any key to exit...");
                 Console.ReadKey();
                 return;
             }
             
             var actualVersion = await GetBlenderVersionAsync(_blenderPath);
-            Console.WriteLine($"🎬 Using Blender {actualVersion}: {_blenderPath}");
+            Console.WriteLine($"[System] Using Blender {actualVersion}: {_blenderPath}");
             
             if (actualVersion != defaultTargetVersion)
             {
-                Console.WriteLine($"⚠️  Note: Using Blender {actualVersion} instead of requested {defaultTargetVersion}");
+                Console.WriteLine($"[System] Warning: Using Blender {actualVersion} instead of requested {defaultTargetVersion}");
             }
             
             // Check if Scripts directory exists
@@ -1060,7 +1044,7 @@ namespace BlendFarm.Node
             if (!Directory.Exists(scriptsDir))
             {
                 Directory.CreateDirectory(scriptsDir);
-                Console.WriteLine($"📁 Created Scripts directory: {scriptsDir}");
+                Console.WriteLine($"[System] Created Scripts directory: {scriptsDir}");
                 
                 // Create a simple render script
                 File.WriteAllText(Path.Combine(scriptsDir, "render.py"), 
@@ -1083,13 +1067,13 @@ namespace BlendFarm.Node
 
             if (currentFriendlyName == "node_auto")
             {
-                Console.Write("\n🏷️  Enter a friendly name for this node (e.g. 'David-node') or leave empty for auto: ");
+                Console.Write("\n[Config] Enter a friendly name for this node (e.g. 'David-node') or leave empty for auto: ");
                 string inputName = Console.ReadLine();
                 if (!string.IsNullOrWhiteSpace(inputName))
                 {
                     finalFriendlyName = inputName.Trim();
                     SaveFriendlyName(finalFriendlyName);
-                    Console.WriteLine($"✅ Friendly name '{finalFriendlyName}' saved to appsettings.json");
+                    Console.WriteLine($"[Config] Friendly name '{finalFriendlyName}' saved to appsettings.json");
                 }
             }
 
@@ -1137,9 +1121,9 @@ namespace BlendFarm.Node
     .UseConsoleLifetime()
     .Build();
 
-            Console.WriteLine("📋 Press Ctrl+C to stop the node");
-            Console.WriteLine($"🔧 Version: 1.0 | Blender: {actualVersion} | .NET 10.0.102");
-            Console.WriteLine(new string('═', 50));
+            Console.WriteLine("[System] Press Ctrl+C to stop the node");
+            Console.WriteLine($"[System] Version: 1.0 | Blender: {actualVersion} | .NET 10.0.102");
+            Console.WriteLine(new string('-', 50));
             
             await host.RunAsync();
         }
@@ -1164,7 +1148,7 @@ namespace BlendFarm.Node
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"⚠️ Failed to save friendly name to appsettings.json: {ex.Message}");
+                Console.WriteLine($"[Config] Error: Failed to save friendly name to appsettings.json: {ex.Message}");
             }
         }
 
@@ -1175,7 +1159,7 @@ namespace BlendFarm.Node
 
             try
             {
-                Console.WriteLine("📄 appsettings.json not found. Generating default configuration...");
+                Console.WriteLine("[Config] appsettings.json not found. Generating default configuration...");
                 var defaultConfig = new
                 {
                     Logging = new
@@ -1214,11 +1198,11 @@ namespace BlendFarm.Node
                     .Replace("System_Net_Http_HttpClient", "System.Net.Http.HttpClient");
 
                 File.WriteAllText(appSettingsPath, json);
-                Console.WriteLine($"✅ Generated: {appSettingsPath}");
+                Console.WriteLine($"[Config] Generated: {appSettingsPath}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"⚠️ Failed to generate default appsettings.json: {ex.Message}");
+                Console.WriteLine($"[Config] Error: Failed to generate default appsettings.json: {ex.Message}");
             }
         }
         
