@@ -47,6 +47,10 @@ namespace BlendFarm.Node.Services
         private BenchmarkResult _benchmarkResult;
         private ComputeScore _computeScore;
         private HardwareInfo _detectedHardware;
+
+        // CancellationTokenSource for the currently running render job.
+        // Heartbeat sets this to cancel when the backend sends STOP_JOB.
+        private CancellationTokenSource? _renderCts;
         
         // File cache for downloaded blend files
         private readonly ConcurrentDictionary<string, (string filePath, DateTime downloadedAt)> _blendFileCache;
@@ -996,10 +1000,32 @@ private async void SendHeartbeat(object? state)
             _logger.LogCritical($"🛑 HEARTBEAT REJECTED (Node Revoked?): {error}");
             // Optional: Shut down or set flag. For now, let's log critical.
         }
-        else if (!response.IsSuccessStatusCode)
+        else if (response.IsSuccessStatusCode)
         {
-             var error = await response.Content.ReadAsStringAsync();
-             _logger.LogWarning($"💓 Heartbeat failed: {error}");
+            // FIX (Ghost Rendering): read the response body to check for server commands.
+            try
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                if (!string.IsNullOrWhiteSpace(body))
+                {
+                    var parsed = JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
+                    if (parsed != null && parsed.TryGetValue("command", out var cmd) && cmd?.ToString() == "STOP_JOB")
+                    {
+                        _logger.LogWarning($"🛑 Server sent STOP_JOB — cancelling active render for job {_currentJobId}");
+                        // Cancel the render CTS so Blender and the frame loop both exit.
+                        _renderCts?.Cancel();
+                    }
+                }
+            }
+            catch (Exception parseEx)
+            {
+                _logger.LogDebug($"Heartbeat response parse warning: {parseEx.Message}");
+            }
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            _logger.LogWarning($"💓 Heartbeat failed: {error}");
         }
     }
     catch (Exception ex)
@@ -1147,7 +1173,15 @@ private string CalculateNodeTier(HardwareInfo hw)
                 _currentJobId = assignment.JobId;
                 _currentProgress = 0;
                 _jobStartTime = DateTime.UtcNow;
+
+                // FIX (Ghost Rendering): Create a fresh CTS for this render so that
+                // SendHeartbeat can cancel it the moment the server sends STOP_JOB.
+                _renderCts?.Dispose();
+                _renderCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             }
+
+            // Use the render-specific token for all Blender work below.
+            var renderToken = _renderCts!.Token;
 
             // Clear previous frame upload URLs
             _frameUploadUrls.Clear();
@@ -1186,11 +1220,11 @@ private string CalculateNodeTier(HardwareInfo hw)
                 }
 
                 // Download blend file (using direct S3 URL) - with caching
-                var blendFilePath = await DownloadBlendFileAsync(assignment.BlendFileUrl, assignment.JobId, cancellationToken);
+                var blendFilePath = await DownloadBlendFileAsync(assignment.BlendFileUrl, assignment.JobId, renderToken);
                 if (string.IsNullOrEmpty(blendFilePath))
                 {
                     _logger.LogError($"❌ Failed to download blend file for job {assignment.JobId}");
-                    await ReportFailureAsync(assignment.JobId, 0, "Failed to download blend file", null, cancellationToken);
+                    await ReportFailureAsync(assignment.JobId, 0, "Failed to download blend file", null, renderToken);
                     return;
                 }
                 
@@ -1236,8 +1270,12 @@ private string CalculateNodeTier(HardwareInfo hw)
                 const int MAX_FRAME_ATTEMPTS = 3;
                 for (int i = 0; i < assignment.Frames.Count; i++)
                 {
-                    if (cancellationToken.IsCancellationRequested)
+                    // Check the render-specific token (also catches STOP_JOB cancellation)
+                    if (renderToken.IsCancellationRequested)
+                    {
+                        _logger.LogWarning($"🛑 Job {assignment.JobId} cancelled mid-render — stopping frame loop.");
                         break;
+                    }
 
                     var frame = assignment.Frames[i];
                     _logger.LogInformation($"🎞️  Rendering frame {frame} ({i + 1}/{assignment.Frames.Count})");
@@ -1267,9 +1305,10 @@ private string CalculateNodeTier(HardwareInfo hw)
                             var backoff = TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)); // 2s, 4s
                             _logger.LogWarning($"🔄 Frame {frame}: Blender crash on attempt {attempt - 1}/{MAX_FRAME_ATTEMPTS}. " +
                                                $"Waiting {backoff.TotalSeconds}s before retry...");
-                            await Task.Delay(backoff, cancellationToken);
+                            await Task.Delay(backoff, renderToken);
                         }
 
+                        if (renderToken.IsCancellationRequested) break;
                         _logger.LogInformation($"🎬 Frame {frame}: Blender attempt {attempt}/{MAX_FRAME_ATTEMPTS}");
                         
                         bool renderOk = await _pythonRunner.RunRenderAsync(
@@ -1284,7 +1323,7 @@ private string CalculateNodeTier(HardwareInfo hw)
                             outputFormat: outputFormat,
                             denoiser: denoiser,
                             useAnimationSettings: isAnimation,
-                            cancellationToken: cancellationToken);
+                            cancellationToken: renderToken);  // use render-specific token
 
                         if (renderOk && File.Exists(outputPath))
                         {
@@ -1375,6 +1414,8 @@ private string CalculateNodeTier(HardwareInfo hw)
             }
             finally
             {
+                // Dispose the render CTS
+                lock (_jobLock) { _renderCts?.Dispose(); _renderCts = null; }
                 ClearCurrentJob();
                 _frameUploadUrls.Clear();
                 

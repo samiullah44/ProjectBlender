@@ -30,7 +30,7 @@
 //     ].filter(Boolean);
 
 //     if (!origin) return callback(null, true);
-    
+
 //     const isAllowed = allowedOrigins.some(allowed => {
 //       if (typeof allowed === 'string') {
 //         return origin === allowed;
@@ -82,7 +82,7 @@
 // // Health check endpoint
 // app.get('/health', (req, res) => {
 //   const wsService = req.app.get('wsService') as WebSocketService;
-  
+
 //   res.json({
 //     status: 'ok',
 //     timestamp: new Date().toISOString(),

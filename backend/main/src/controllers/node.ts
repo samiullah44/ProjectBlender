@@ -133,7 +133,8 @@ export class NodeController {
       const assignedFrames = assignedNodesMap?.get(nodeId) || [];
 
       if (assignedFrames.length > 0) {
-        // Update frame assignments status to failed
+        // FIX (Lost Node): Mark assignment records as 'failed' for history,
+        // but put the frames back into 'pending' so they are retried automatically.
         for (const frame of assignedFrames) {
           const assignment = job.frameAssignments.find(
             (a: IFrameAssignment) => a.frame === frame && a.nodeId === nodeId && a.status === 'assigned'
@@ -142,6 +143,7 @@ export class NodeController {
           if (assignment) {
             assignment.status = 'failed';
             assignment.completedAt = new Date();
+            assignment.errorMessage = 'Node went offline mid-render';
           }
 
           // Remove from assigned frames
@@ -150,14 +152,15 @@ export class NodeController {
             job.frames.assigned.splice(assignedIndex, 1);
           }
 
-          // Add to failed frames if not already there
-          if (!job.frames.failed.includes(frame)) {
-            job.frames.failed.push(frame);
+          // Put back into PENDING (not failed) so assignJob picks them up for retry
+          if (!job.frames.rendered.includes(frame) && !job.frames.pending.includes(frame)) {
+            job.frames.pending.push(frame);
           }
         }
 
-        // Remove node from assigned nodes
+        // Remove node from assigned nodes map and persist the change reliably
         assignedNodesMap?.delete(nodeId);
+        job.markModified('assignedNodes');
 
         // Update status if needed
         // Update status if needed
@@ -858,11 +861,26 @@ export class NodeController {
         });
       }
 
+      // FIX (Ghost Rendering): tell the node to stop immediately if its current
+      // job was cancelled, completed, or failed while the node was mid-render.
+      // The node client checks for this command field and aborts gracefully.
+      let command: string | undefined;
+      if (heartbeatData.currentJob) {
+        const activeJob = await Job.findOne({ jobId: heartbeatData.currentJob })
+          .select('status')
+          .lean();
+        if (activeJob && ['cancelled', 'completed', 'failed'].includes(activeJob.status)) {
+          command = 'STOP_JOB';
+          console.log(`🛑 Sending STOP_JOB to node ${nodeId} — job ${heartbeatData.currentJob} is ${activeJob.status}`);
+        }
+      }
+
       res.json({
         success: true,
         message: 'Heartbeat received',
         timestamp: now.toISOString(),
-        nextHeartbeatIn: 30000
+        nextHeartbeatIn: 30000,
+        ...(command ? { command } : {})
       });
 
     } catch (error) {
@@ -927,7 +945,8 @@ export class NodeController {
         const job = await Job.findOne({ jobId: node.currentJob });
         if (job && (job.status === 'processing' || job.status === 'pending')) {
           const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
-          const assignedFrames = assignedNodesMap?.get(nodeId) || [];
+          const nodeIdKey = String(nodeId);
+          const assignedFrames = assignedNodesMap?.get(nodeIdKey) || [];
 
           // Check which frames are still pending and not yet completed
           const pendingAssignedFrames: number[] = [];
@@ -1432,6 +1451,23 @@ export class NodeController {
         job.frames.assigned.splice(assignedIndex, 1);
       }
 
+      // ✅ FIX: Also remove from assignedNodes map to prevent stale tracking
+      const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
+      const nodeIdKey = String(nodeId); // Safely cast to string
+      const nodeFrames = assignedNodesMap?.get(nodeIdKey) || [];
+      const frameIdx = nodeFrames.indexOf(frame);
+      if (frameIdx !== -1) {
+        nodeFrames.splice(frameIdx, 1);
+      }
+
+      // If node has no more frames for this job, cleanup the map entry
+      if (nodeFrames.length === 0) {
+        assignedNodesMap?.delete(nodeIdKey);
+      }
+
+      // Tell Mongoose that the Map has changed
+      job.markModified('assignedNodes');
+
       // Update progress
       const totalFrames = job.frames.total;
       const renderedFrames = job.frames.rendered.length;
@@ -1499,6 +1535,8 @@ export class NodeController {
         await node.save();
       }
 
+      // Extra safety: ensure Mongoose sees all changes to the Map
+      job.markModified('assignedNodes');
       await job.save();
 
       console.log(`✅ Frame ${frame} completed for job ${jobId} by node ${nodeId} (Progress: ${job.progress}%)`);
@@ -1521,18 +1559,15 @@ export class NodeController {
         // If the job is not yet done, trigger poll for remaining/retryable frames
         if (job.status !== 'completed' && job.status !== 'failed') {
           // Always ask the completing node to check for more work
-          wsService.sendToNode(nodeId, { type: 'request_job_poll' });
+          wsService.sendToNode(String(nodeId), { type: 'request_job_poll' });
 
-          // If there are failed frames still waiting to be retried and no in-flight assignments,
-          // broadcast to ALL online nodes so any available node can pick them up immediately
+          // FIX (Polling Storm): instead of broadcasting to every single node on every
+          // failed frame (which causes O(nodes × frames) DB queries), we only fire a
+          // single global notify when ALL in-flight frames are done and failed frames
+          // still need workers. The offline-node checker handles the periodic sweep.
           if (stillFailed > 0 && stillInFlight === 0) {
-            console.log(`🔄 ${stillFailed} failed frame(s) need retry — broadcasting poll to all online nodes`);
-            const onlineNodes = await Node.find({ status: { $in: ['online', 'busy'] } }, { nodeId: 1 });
-            for (const n of onlineNodes) {
-              if (n.nodeId !== nodeId) {  // completing node already polled above
-                wsService.sendToNode(n.nodeId, { type: 'request_job_poll' });
-              }
-            }
+            console.log(`🔄 ${stillFailed} failed frame(s) ready for retry — notifying available nodes`);
+            await wsService.notifyNodesToCheckJobs();
           }
         }
       }
@@ -1614,11 +1649,14 @@ export class NodeController {
 
         // Remove from node's assignedNodes map
         const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
-        const nodeFrames = assignedNodesMap?.get(nodeId) ?? [];
+        const nodeIdKey = String(nodeId); // Safely cast to string
+        const nodeFrames = assignedNodesMap?.get(nodeIdKey) ?? [];
         const frameIdx = nodeFrames.indexOf(frameNum);
         if (frameIdx !== -1) nodeFrames.splice(frameIdx, 1);
-        if (nodeFrames.length === 0) assignedNodesMap?.delete(nodeId);
+        if (nodeFrames.length === 0) assignedNodesMap?.delete(nodeIdKey);
 
+        // Tell Mongoose that the Map has changed
+        job.markModified('assignedNodes');
         job.updatedAt = new Date();
         await job.save();
 
@@ -1662,10 +1700,14 @@ export class NodeController {
 
         // Remove from node's assignedNodes map
         const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
-        const nodeFrames = assignedNodesMap?.get(nodeId) ?? [];
+        const nodeIdKey = String(nodeId); // Safely cast to string
+        const nodeFrames = assignedNodesMap?.get(nodeIdKey) ?? [];
         const fidx = nodeFrames.indexOf(frameNum);
         if (fidx !== -1) nodeFrames.splice(fidx, 1);
-        if (nodeFrames.length === 0) assignedNodesMap?.delete(nodeId);
+        if (nodeFrames.length === 0) assignedNodesMap?.delete(nodeIdKey);
+
+        // Tell Mongoose that the Map has changed
+        job.markModified('assignedNodes');
 
         // Recalculate job status
         const totalFramesToRender = job.frames.selected?.length > 0 ? job.frames.selected.length : job.frames.total;
