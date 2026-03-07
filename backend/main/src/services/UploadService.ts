@@ -3,6 +3,7 @@ import { Job } from '../models/Job';
 import { S3Service } from './S3Service';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeBlenderVersion } from '../utils/blenderVersionMapper';
+import { enqueueJobFrames } from './FrameQueueService';
 
 export class UploadService {
   private s3Service: S3Service;
@@ -91,6 +92,13 @@ export class UploadService {
       });
 
       await job.save();
+
+      // Enqueue frames to BullMQ for atomic distribution
+      try {
+        await enqueueJobFrames(jobId, selectedFrames, job.settings.engine, job.settings.device);
+      } catch (queueErr) {
+        console.error(`⚠️  Failed to enqueue multipart frames for job ${jobId} into BullMQ:`, queueErr);
+      }
 
       console.log(`🎬 New ${type} job created via multipart upload: ${jobId}`);
       console.log(`📁 Blend file uploaded to S3: ${key}`);

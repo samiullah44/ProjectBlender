@@ -88,6 +88,8 @@ export interface INode {
   revokedReason?: string;
   createdAt: Date;
   updatedAt: Date;
+  /** BullMQ job IDs currently held as active by this node. Populated by assignJob, cleared by frameCompleted/reportFrameFailure. */
+  activeBullJobIds?: { id: string; queueName: string; lockToken: string }[];
 }
 
 const nodeSchema = new mongoose.Schema<INode>({
@@ -185,7 +187,16 @@ const nodeSchema = new mongoose.Schema<INode>({
   revokedAt: Date,
   revokedReason: String,
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  // BullMQ frame tracking — stores active BullMQ job IDs while node is rendering
+  activeBullJobIds: {
+    type: [{
+      id: { type: String, required: true },
+      queueName: { type: String, required: true },
+      lockToken: { type: String, required: true }
+    }],
+    default: []
+  }
 });
 
 // Pre-save validation: Ensure user has node_provider role

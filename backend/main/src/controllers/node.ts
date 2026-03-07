@@ -10,6 +10,7 @@ import { S3Service } from '../services/S3Service';
 import { AuthRequest } from '../middleware/auth';
 import os from 'os';
 import { wsService } from '../app';
+import { dequeueFramesForNode, nackFrame, requeueFramesFromOfflineNode, ackFrame, getQueueName } from '../services/FrameQueueService';
 
 const s3Service = new S3Service();
 
@@ -129,6 +130,11 @@ export class NodeController {
       const job = await Job.findOne({ jobId });
       if (!job) return;
 
+      const node = await Node.findOne({ nodeId });
+      if (node && node.activeBullJobIds && node.activeBullJobIds.length > 0) {
+        await requeueFramesFromOfflineNode(node.activeBullJobIds, nodeId);
+      }
+
       const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
       const assignedFrames = assignedNodesMap?.get(nodeId) || [];
 
@@ -197,6 +203,7 @@ export class NodeController {
         { nodeId },
         {
           $unset: { currentJob: 1, currentProgress: 1 },
+          $set: { activeBullJobIds: [] },
           updatedAt: new Date(),
           status: 'offline'
         }
@@ -1008,173 +1015,135 @@ export class NodeController {
         await node.save();
       }
 
-      // Find available jobs
-      const jobs = await Job.find({
-        $or: [
-          { status: 'pending' },
-          {
-            status: 'processing',
-            $expr: { $lt: [{ $size: '$frames.rendered' }, '$frames.total'] }
-          }
-        ]
-      }).sort({ createdAt: 1 });
+      // 1. Determine local queue topics based on node hardware capabilities
+      const queueNames: string[] = [];
+      const engines = node.capabilities.supportedEngines || [];
+      const hasGpus = node.capabilities.supportedGPUs && node.capabilities.supportedGPUs.length > 0;
 
-      if (jobs.length === 0) {
+      for (const engine of engines) {
+        const eng = engine.toUpperCase();
+        if (hasGpus) queueNames.push(getQueueName(eng, 'GPU'));
+        queueNames.push(getQueueName(eng, 'CPU'));
+      }
+
+      if (queueNames.length === 0) {
         res.json({ jobId: null });
         return;
       }
 
-      // Get all online nodes for load balancing
+      // 2. Fetch load-balancing metrics to calculate optimal assignment size
       const cutoffTime = new Date(now.getTime() - HEARTBEAT_TIMEOUT_MS);
       const onlineNodes = await Node.find({
         lastHeartbeat: { $gte: cutoffTime },
         status: { $in: ['online', 'busy'] }
       });
 
-      // Calculate node performance scores
       const nodePerformances = onlineNodes.map(n => NodeController.calculateNodePerformance(n, now));
+      const currentNodePerf = nodePerformances.find(p => p.nodeId === nodeId);
 
-      for (const job of jobs) {
-        // Skip if job is already completed or failed
-        if (job.status === 'completed' || job.status === 'failed') {
-          continue;
-        }
+      if (!currentNodePerf) {
+        res.json({ jobId: null });
+        return;
+      }
 
-        const settings = job.settings;
-        const capabilities = node.capabilities;
+      // Max frames per batch based on hardware score (between 1 and 20)
+      const maxFramesToRequest = Math.max(1, Math.min(20, Math.ceil(currentNodePerf.hardwareScore * 1.5)));
 
-        // Compatibility checks
-        const engineSupported = capabilities.supportedEngines.includes(settings.engine);
-        const deviceSupported = settings.device === 'CPU' ||
-          (settings.device === 'GPU' && capabilities.supportedGPUs.length > 0);
-        const resolutionSupported = settings.resolutionX <= capabilities.maxResolutionX &&
-          settings.resolutionY <= capabilities.maxResolutionY;
-        const samplesSupported = settings.samples <= capabilities.maxSamples;
+      // 3. Atomically pop frames from BullMQ/Redis (replaces heavy MongoDB job $expr scan)
+      const dequeuedAll = await dequeueFramesForNode(nodeId, queueNames, maxFramesToRequest);
 
-        if (!engineSupported || !deviceSupported || !resolutionSupported || !samplesSupported) {
-          continue;
-        }
+      if (dequeuedAll.length === 0) {
+        res.json({ jobId: null });
+        return;
+      }
 
-        // Get frames that need to be rendered (considering selected frames)
-        // IMPORTANT: Include failed frames so they can be retried (node may have disconnected)
-        const pendingFrames: number[] = [];
-        const failedFrames: number[] = [];  // track which ones were previously failed
-        const framesToCheck = job.frames.selected && job.frames.selected.length > 0
-          ? job.frames.selected
-          : Array.from({ length: job.frames.end - job.frames.start + 1 },
-            (_, i) => job.frames.start + i);
+      // 4. Node client only accepts ONE jobId at a time.
+      // Filter out frames from secondary jobs and return them to the queue immediately.
+      const targetJobId = dequeuedAll[0]!.jobId;
+      const assignedBullFrames = dequeuedAll.filter(f => f.jobId === targetJobId);
+      const rejectedBullFrames = dequeuedAll.filter(f => f.jobId !== targetJobId);
 
-        for (const frame of framesToCheck) {
-          if (!job.frames.rendered.includes(frame) &&
-            !job.frames.assigned.includes(frame)) {
-            pendingFrames.push(frame);
-            if (job.frames.failed.includes(frame)) {
-              failedFrames.push(frame); // mark so we can remove from failed on assignment
-            }
+      if (rejectedBullFrames.length > 0) {
+        await Promise.all(rejectedBullFrames.map(f =>
+          nackFrame(f.bullJobId, f.lockToken, 'Node requested frames but was grouped into another job, returning', f.queueName)
+        ));
+      }
+
+      // 5. Fetch the ONE target Job from MongoDB to track progress & stats
+      const job = await Job.findOne({ jobId: targetJobId });
+      if (!job || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+        await Promise.all(assignedBullFrames.map(f =>
+          nackFrame(f.bullJobId, f.lockToken, 'Job is no longer active in MongoDB', f.queueName)
+        ));
+        res.json({ jobId: null });
+        return;
+      }
+
+      // Build array of extracted frame indices
+      const assignedFrames = assignedBullFrames.map(f => f.frame);
+
+      // 6. Mark frames as in-progress inside MongoDB (for Dashboard fidelity)
+      // Remove them from frames.pending and frames.failed since they are assigned again
+
+      // Generate S3 upload URLs for each frame
+      const frameUploadUrls: Record<number, { uploadUrl: string, s3Key: string }> = {};
+      for (const frame of assignedFrames) {
+        const { uploadUrl, s3Key } = await s3Service.generateFrameUploadUrl(job.jobId, frame);
+        frameUploadUrls[frame] = { uploadUrl, s3Key };
+      }
+
+      // Use atomic operations to prevent duplicates
+      // Also pull retried frames out of frames.failed so they can be tracked properly again
+      const updateOp: any = {
+        $set: {
+          status: 'processing',
+          updatedAt: now,
+          [`assignedNodes.${nodeId}`]: assignedFrames
+        },
+        $addToSet: {
+          'frames.assigned': { $each: assignedFrames }
+        },
+        $push: {
+          frameAssignments: {
+            $each: assignedFrames.map(frame => ({
+              frame,
+              nodeId,
+              status: 'assigned',
+              assignedAt: now,
+              creditsEarned: job.settings.creditsPerFrame || DEFAULT_CREDITS_PER_FRAME
+            }))
           }
         }
+      };
 
-        if (pendingFrames.length === 0) {
-          // Check if all frames are rendered
-          const totalFramesToRender = job.frames.selected && job.frames.selected.length > 0
-            ? job.frames.selected.length
-            : job.frames.total;
+      // Remove any of the newly-assigned frames from the failed list (retry)
+      const failedFrames = job.frames.failed || [];
+      const reassignedFailedFrames = assignedFrames.filter(f => failedFrames.includes(f));
+      if (reassignedFailedFrames.length > 0) {
+        updateOp.$pull = { 'frames.failed': { $in: reassignedFailedFrames } };
+        console.log(`🔄 Retrying ${reassignedFailedFrames.length} previously-failed frame(s): [${reassignedFailedFrames.join(', ')}]`);
+      }
 
-          if (job.frames.rendered.length === totalFramesToRender) {
-            job.status = 'completed';
-            job.completedAt = now;
-            job.progress = 100;
-            await job.save();
-            console.log(`✅ Job ${job.jobId} completed automatically (all frames rendered)`);
+      // Remove newly assigned frames from pending/failed tracking arrays
+      assignedFrames.forEach(frame => {
+        const pendingIdx = job.frames.pending.indexOf(frame);
+        if (pendingIdx !== -1) job.frames.pending.splice(pendingIdx, 1);
 
-            // Broadcast job completion
-            const wsService = NodeController.getWsService(req);
-            if (wsService) {
-              await wsService.broadcastJobUpdate(job.jobId);
-            }
-          }
-          continue;
-        }
+        const failedIdx = job.frames.failed.indexOf(frame);
+        if (failedIdx !== -1) job.frames.failed.splice(failedIdx, 1);
+      });
 
-        // Get current node's performance
-        const currentNodePerf = nodePerformances.find(p => p.nodeId === nodeId);
-        if (!currentNodePerf) {
-          continue;
-        }
+      // Execute atomic update
+      const result = await Job.findOneAndUpdate(
+        { jobId: targetJobId },
+        updateOp,
+        { new: true }
+      );
 
-        // Calculate how many frames this node should get based on performance
-        const framesToAssign = NodeController.calculateOptimalFrameAssignment(
-          currentNodePerf,
-          nodePerformances,
-          pendingFrames.length,
-          job
-        );
+      if (result) {
+        const blendFileUrl = await s3Service.generateBlendFileDownloadUrl(job.blendFileKey);
 
-        if (framesToAssign === 0) {
-          continue;
-        }
-
-        // Select frames strategically (not just from beginning)
-        const assignedFrames = NodeController.selectFramesForNode(pendingFrames, framesToAssign, job);
-
-        // Generate S3 upload URLs for each frame
-        const frameUploadUrls: Record<number, { uploadUrl: string, s3Key: string }> = {};
-        for (const frame of assignedFrames) {
-          const { uploadUrl, s3Key } = await s3Service.generateFrameUploadUrl(job.jobId, frame);
-          frameUploadUrls[frame] = { uploadUrl, s3Key };
-        }
-
-        // Use atomic operations to prevent duplicates
-        // Also pull retried frames out of frames.failed so they can be tracked properly again
-        const updateOp: any = {
-          $set: {
-            status: 'processing',
-            updatedAt: now,
-            [`assignedNodes.${nodeId}`]: assignedFrames
-          },
-          $addToSet: {
-            'frames.assigned': { $each: assignedFrames }
-          },
-          $push: {
-            frameAssignments: {
-              $each: assignedFrames.map(frame => ({
-                frame,
-                nodeId,
-                status: 'assigned',
-                assignedAt: now,
-                creditsEarned: job.settings.creditsPerFrame || DEFAULT_CREDITS_PER_FRAME
-              }))
-            }
-          }
-        };
-
-        // Remove any of the newly-assigned frames from the failed list (retry)
-        const reassignedFailedFrames = assignedFrames.filter(f => failedFrames.includes(f));
-        if (reassignedFailedFrames.length > 0) {
-          updateOp.$pull = { 'frames.failed': { $in: reassignedFailedFrames } };
-          console.log(`🔄 Retrying ${reassignedFailedFrames.length} previously-failed frame(s): [${reassignedFailedFrames.join(', ')}]`);
-        }
-
-        const result = await Job.findOneAndUpdate(
-          {
-            jobId: job.jobId,
-            'frames.assigned': { $nin: assignedFrames }
-          },
-          updateOp,
-          {
-            new: true,
-            timestamps: false
-          }
-        );
-
-        if (!result) {
-          continue;
-        }
-
-        // Generate fresh blend file URL
-        const blendFileUrl = await s3Service.generateBlendFileDownloadUrl(result.blendFileKey);
-
-        // Update node status
+        // Update node status & save active BullMQ jobs
         await Node.updateOne(
           { nodeId },
           {
@@ -1182,6 +1151,11 @@ export class NodeController {
               currentJob: result.jobId,
               status: 'busy',
               updatedAt: now
+            },
+            $addToSet: {
+              activeBullJobIds: {
+                $each: assignedBullFrames.map(f => ({ id: f.bullJobId, queueName: f.queueName, lockToken: f.lockToken }))
+              }
             }
           }
         );
@@ -1248,20 +1222,18 @@ export class NodeController {
         return;
       }
 
-      // No frames available for assignment
+      // If we fall through and didn't return, something failed. NACK the frames.
+      await Promise.all(assignedBullFrames.map(f =>
+        nackFrame(f.bullJobId, f.lockToken, 'MongoDB job assignment transaction failed', f.queueName)
+      ));
       res.json({ jobId: null });
 
     } catch (error) {
       console.error('❌ Job assignment error:', error);
       if (error instanceof AppError) {
-        res.status(error.statusCode || 500).json({
-          error: error.message
-        });
+        res.status(error.statusCode || 500).json({ error: error.message });
       } else {
-        res.status(500).json({
-          error: 'Failed to assign job',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        });
+        res.status(500).json({ error: 'Failed to assign job', details: error instanceof Error ? error.message : 'Unknown error' });
       }
     }
   }
@@ -1542,6 +1514,23 @@ export class NodeController {
       console.log(`✅ Frame ${frame} completed for job ${jobId} by node ${nodeId} (Progress: ${job.progress}%)`);
       console.log(`📁 Frame stored at: ${s3Key}`);
 
+      // 1. ACK the frame in BullMQ
+      const expectedBullJobId = `${jobId}-${frame}`;
+      const bullJobTarget = node?.activeBullJobIds?.find(bj => bj.id === expectedBullJobId);
+
+      if (bullJobTarget) {
+        // The lock token is simply `nodeId` as established in dequeueFramesForNode
+        await ackFrame(bullJobTarget.id, bullJobTarget.lockToken, bullJobTarget.queueName);
+
+        // 2. Remove from node's active list
+        await Node.updateOne(
+          { nodeId },
+          { $pull: { activeBullJobIds: { id: expectedBullJobId } } }
+        );
+      } else {
+        console.warn(`⚠️ Could not find active BullMQ job ${expectedBullJobId} on node ${nodeId} for ACK`);
+      }
+
       // Broadcast frame completion via WebSocket
       const wsService = NodeController.getWsService(req);
       if (wsService) {
@@ -1617,6 +1606,22 @@ export class NodeController {
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
+      }
+
+      // 1. NACK the frame in BullMQ
+      const expectedBullJobId = `${jobId}-${frameNum}`;
+      const node = await Node.findOne({ nodeId });
+      const bullJobTarget = node?.activeBullJobIds?.find(bj => bj.id === expectedBullJobId);
+
+      if (bullJobTarget) {
+        // lockToken is bullJobTarget.lockToken
+        await nackFrame(bullJobTarget.id, bullJobTarget.lockToken, errorMessage || 'Frame failed naturally', bullJobTarget.queueName);
+        await Node.updateOne(
+          { nodeId },
+          { $pull: { activeBullJobIds: { id: expectedBullJobId } } }
+        );
+      } else {
+        console.warn(`⚠️ Could not find active BullMQ job ${expectedBullJobId} on node ${nodeId} for NACK`);
       }
 
       // ── Find or create the frameAssignment record ──────────────────────────
@@ -2205,8 +2210,10 @@ export class NodeController {
    */
   static async registerWithToken(req: Request, res: Response): Promise<void> {
     try {
-      const { registrationToken, name, hardware, os, capabilities, performance,
-        ipAddress, publicIp, hostname, hardwareFingerprint, hardwareVerifiedAt } = req.body;
+      const {
+        registrationToken, name, hardware, os, capabilities, performance,
+        ipAddress, publicIp, hostname, hardwareFingerprint, hardwareVerifiedAt
+      } = req.body;
 
       if (!registrationToken) {
         res.status(400).json({ success: false, error: 'registrationToken is required' });

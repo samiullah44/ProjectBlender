@@ -280,16 +280,12 @@ export class WebSocketService {
     try {
       const resources = message.resources || {};
 
-      const node = await Node.findOne({ nodeId });
-      const newStatus = (node && node.currentJob) ? 'busy' : 'online';
-
       await Node.updateOne(
         { nodeId },
         {
           $set: {
             lastHeartbeat: now,
             updatedAt: now,
-            status: newStatus,
             'lastResources': { ...resources, timestamp: now }
           },
           $push: {
@@ -304,10 +300,28 @@ export class WebSocketService {
       console.error(`Failed to update node ${nodeId} heartbeat:`, err);
     }
 
+    // FIX (Ghost Rendering): tell the WS-connected node to stop immediately if its current
+    // job was cancelled, completed, or failed.
+    let command: string | undefined;
+    if (message.currentJob) {
+      const activeJob = await Job.findOne({ jobId: message.currentJob })
+        .select('status')
+        .lean() as any;
+      if (activeJob && ['cancelled', 'completed', 'failed'].includes(activeJob.status)) {
+        command = 'STOP_JOB';
+        console.log(`🛑 Sending STOP_JOB to WS node ${nodeId} — job ${message.currentJob} is ${activeJob.status}`);
+      }
+    }
+
     console.log(`💓 WS Heartbeat from ${nodeId}`);
 
     // Acknowledge back to node
-    this.send(client, { type: 'ack', nodeId, timestamp: Date.now() });
+    this.send(client, {
+      type: 'ack',
+      nodeId,
+      timestamp: Date.now(),
+      ...(command ? { command } : {})
+    });
 
     // Broadcast heartbeat to dashboard subscribers
     this.broadcastSystemUpdate({
@@ -410,7 +424,7 @@ export class WebSocketService {
         }
         this.userClients.get(message.userId)!.add(client);
       }
-      
+
       if (message.nodeId) {
         client.nodeId = message.nodeId;
       }

@@ -9,6 +9,10 @@ import { WebSocketService } from './services/WebSocketService';
 import { env } from "./config/env"
 import { S3Service } from './services/S3Service';
 import { JobService } from './services/JobService';
+import { initializeQueues, getQueueStats } from './services/FrameQueueService';
+
+// Initialize BullMQ topic queues at startup
+initializeQueues();
 
 // Import routes
 import jobRoutes from './routes/api/jobs';
@@ -90,6 +94,16 @@ app.get('/health', (req, res) => {
       activeSubscriptions: wsService.getSubscriptionCount()
     }
   });
+});
+
+// Queue stats endpoint
+app.get('/api/queue/stats', async (req, res) => {
+  try {
+    const stats = await getQueueStats();
+    res.json(stats);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to fetch queue stats', details: err.message });
+  }
 });
 
 export { app, server, wsService };

@@ -19,6 +19,7 @@ import {
 } from '../types/job.types';
 import { AppError } from '../middleware/error';
 import { normalizeBlenderVersion } from '../utils/blenderVersionMapper';
+import { enqueueJobFrames, removeJobFrames } from './FrameQueueService';
 
 export class JobService {
     private s3Service: S3Service;
@@ -127,6 +128,17 @@ export class JobService {
             });
 
             await job.save();
+
+            // Enqueue all selected frames into BullMQ for atomic distribution to nodes.
+            // This replaces the MongoDB frames.pending array as the source-of-truth
+            // for which frames are available to be picked up.
+            try {
+                await enqueueJobFrames(jobId, selectedFrames, job.settings.engine, job.settings.device);
+            } catch (queueErr) {
+                // Queue failure is non-fatal for job creation — nodes can still
+                // fall back to the MongoDB frames.pending array if Redis is down.
+                console.error(`⚠️  Failed to enqueue frames for job ${jobId} into BullMQ:`, queueErr);
+            }
 
             // Deduct credits if not admin
             if (user.role !== 'admin') {
@@ -413,7 +425,6 @@ export class JobService {
             'description',
             'tags',
             'priority',
-            'frames.selected',
             'settings'
         ];
 
@@ -463,6 +474,22 @@ export class JobService {
         job.status = 'cancelled';
         job.cancelledAt = new Date();
         await job.save();
+
+        // Remove queued (not yet active) frames from BullMQ immediately.
+        // Frames currently being rendered are stopped via the STOP_JOB heartbeat command.
+        try {
+            const framesToRemove = job.frames.selected?.length > 0
+                ? job.frames.selected
+                : Array.from({ length: job.frames.end - job.frames.start + 1 }, (_, i) => job.frames.start + i);
+            const unrenderedFrames = framesToRemove.filter(
+                (f: number) => !job.frames.rendered.includes(f)
+            );
+            if (unrenderedFrames.length > 0) {
+                await removeJobFrames(jobId, unrenderedFrames, job.settings.engine, job.settings.device);
+            }
+        } catch (queueErr) {
+            console.warn(`⚠️  Failed to remove BullMQ frames for cancelled job ${jobId}:`, queueErr);
+        }
 
         // Refund credits if job was in progress
         if (wasProcessing) {
