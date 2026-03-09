@@ -193,7 +193,7 @@ const nodeSchema = new mongoose.Schema<INode>({
     type: [{
       id: { type: String, required: true },
       queueName: { type: String, required: true },
-      lockToken: { type: String, required: true }
+      lockToken: { type: String }
     }],
     default: []
   }

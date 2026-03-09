@@ -22,8 +22,7 @@ import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 
 // Hero images array
-const HERO_IMAGES = ["/hero.jpg", "/hero1.jpg"
-]
+const HERO_IMAGES = ["/hero1.jpg", "/hero.jpg"]
 
 const FEATURE_IMAGE_1 = "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=1080&q=80"
 // const FEATURE_IMAGE_2 = "https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&w=1080&q=80"
@@ -82,7 +81,7 @@ const HomePage: React.FC = () => {
           <AnimatePresence mode="wait">
             <motion.div
               key={currentImageIndex}
-              initial={{ opacity: 0, scale: 1.1 }}
+              initial={isLoaded ? { opacity: 0, scale: 1.1 } : false}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1 }}
               transition={{ duration: 1.2, ease: "easeInOut" }}
@@ -94,6 +93,8 @@ const HomePage: React.FC = () => {
                 src={HERO_IMAGES[currentImageIndex]}
                 alt="3D Rendering Visualization"
                 className="w-full h-full object-cover"
+                fetchPriority={currentImageIndex === 0 ? "high" : "auto"}
+                loading={currentImageIndex === 0 ? "eager" : "lazy"}
               />
             </motion.div>
           </AnimatePresence>
@@ -150,7 +151,7 @@ const HomePage: React.FC = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            transition={{ duration: 0.5 }}
             className="max-w-6xl mx-auto"
           >
 
@@ -158,14 +159,14 @@ const HomePage: React.FC = () => {
               <motion.h1
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.6 }}
+                transition={{ duration: 0.5 }}
                 className="text-5xl md:text-7xl lg:text-8xl font-black mb-6 leading-[0.9] tracking-tight"
               >
                 RENDER
                 <motion.span
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.8, delay: 0.8 }}
+                  transition={{ duration: 0.5 }}
                   className="block text-gray-100 font-extrabold tracking-wide"
                 >
                   WITHOUT LIMITS

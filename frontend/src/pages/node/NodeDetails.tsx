@@ -302,7 +302,7 @@ export const NodeDetails: React.FC = () => {
                                 <CardContent>
                                     <div className="flex justify-between items-end mb-2">
                                         <div>
-                                            <p className="text-white text-lg font-medium">Job {node.currentJob.substring(0, 8)}...</p>
+                                            <p className="text-white text-lg font-medium">Job {typeof node.currentJob === 'string' ? node.currentJob.substring(0, 8) : node.currentJob?.jobId?.substring(0, 8)}...</p>
                                             <p className="text-gray-400 text-sm">Rendering Frame</p>
                                         </div>
                                         <div className="text-right">

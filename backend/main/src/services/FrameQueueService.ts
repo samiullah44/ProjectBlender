@@ -174,8 +174,12 @@ export async function dequeueFramesForNode(
         const remaining = count - results.length;
         for (let i = 0; i < remaining; i++) {
             try {
+                // IMPORTANT: getNextJob with a token is a manual move-to-active operation
                 const bullJob = await w.getNextJob(lockToken);
-                if (!bullJob) break; // this queue is empty, move to next queue
+
+                if (!bullJob) {
+                    break; // this queue is empty, move to next queue
+                }
 
                 results.push({
                     bullJobId: bullJob.id!,

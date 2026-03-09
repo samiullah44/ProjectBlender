@@ -1,7 +1,9 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand,  CreateMultipartUploadCommand,
+import {
+  S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, CreateMultipartUploadCommand,
   UploadPartCommand,
   CompleteMultipartUploadCommand,
-  AbortMultipartUploadCommand } from '@aws-sdk/client-s3';
+  AbortMultipartUploadCommand
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from "../config/env";
 
@@ -22,6 +24,9 @@ export class S3Service {
       }
     });
   }
+
+  // Cache signed URLs to drastically reduce latency for API list views
+  private urlCache = new Map<string, { url: string; expiresAt: number }>();
 
   /**
    * Upload a blend file to S3 in uploads folder
@@ -51,12 +56,32 @@ export class S3Service {
    * Generate a pre-signed URL for downloading blend file
    */
   async generateBlendFileDownloadUrl(fileKey: string, expiresIn: number = 3600): Promise<string> {
+    const cacheKey = `download_${fileKey}`;
+    const cached = this.urlCache.get(cacheKey);
+    // Add 5 min buffer so we do not return a URL that's about to expire
+    if (cached && cached.expiresAt > Date.now() + 300000) {
+      return cached.url;
+    }
+
     const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: fileKey
     });
 
-    return await getSignedUrl(this.s3Client, command, { expiresIn });
+    const url = await getSignedUrl(this.s3Client, command, { expiresIn });
+    this.urlCache.set(cacheKey, { url, expiresAt: Date.now() + (expiresIn * 1000) });
+
+    // Auto-cleanup cache occasionally to prevent memory leaks if it grows too large
+    if (this.urlCache.size > 1000) {
+      const now = Date.now();
+      for (const [key, value] of this.urlCache.entries()) {
+        if (value.expiresAt <= now) {
+          this.urlCache.delete(key);
+        }
+      }
+    }
+
+    return url;
   }
 
   /**
@@ -158,10 +183,10 @@ export class S3Service {
       publicUrlBase: `https://${this.bucketName}.s3.${this.region}.amazonaws.com/`
     };
   }
-   async initiateMultipartUpload(filename: string, parts: number): Promise<{ 
-    key: string; 
-    uploadId: string; 
-    presignedUrls: { partNumber: number; url: string }[] 
+  async initiateMultipartUpload(filename: string, parts: number): Promise<{
+    key: string;
+    uploadId: string;
+    presignedUrls: { partNumber: number; url: string }[]
   }> {
     const key = `uploads/${Date.now()}-${filename}`;
 

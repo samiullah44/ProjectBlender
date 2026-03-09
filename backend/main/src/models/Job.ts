@@ -220,6 +220,11 @@ const JobSchema = new Schema<IJob>({
   toObject: { virtuals: true }
 });
 
+// Compound indexes for faster dashboard sorting and filtering
+JobSchema.index({ userId: 1, createdAt: -1 });
+JobSchema.index({ status: 1, createdAt: -1 });
+JobSchema.index({ projectId: 1, createdAt: -1 });
+
 // Virtual for calculating pending frames
 JobSchema.virtual('pendingFrames').get(function () {
   return this.frames.total - this.frames.rendered.length - this.frames.failed.length;

@@ -5,36 +5,38 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'react-hot-toast'
 
-// Public Pages
-import HomePage from '@/pages/public/Home'
+import { Loader2 } from 'lucide-react'
+
+// Layouts and Core Components (Keep static)
 import Navbar from '@/components/layout/NavBar'
-import LoginPage from '@/pages/public/Login'
-import RegisterPage from '@/pages/public/Register'
-import OAuthCallback from '@/pages/public/OAuthCallback'
-import VerifyEmailPage from '@/pages/public/VerifyEmail'
-import NotificationsPage from '@/pages/public/Notifications'
 import ScrollToTop from '@/components/layout/ScrollToTop'
-
-// Client Pages
-import ClientDashboard from '@/pages/client/Dashboard'
-import CreateJob from '@/pages/client/CreateJob'
-import JobDetails from '@/pages/client/JobDetails' // Add this import
-import ApplyNodeProvider from '@/pages/client/ApplyNodeProvider'
-// import ClientSettings from '@/pages/client/Settings'
-
-// Node Pages
-import NodeDashboard from '@/pages/node/Dashboard'
-import NodeDetails from '@/pages/node/NodeDetails'
-
-// Admin Pages
-import AdminDashboard from '@/pages/admin/Dashboard'
-import AdminJobs from '@/pages/admin/Jobs'
-import AdminJobDetails from '@/pages/admin/JobDetails'
-import AdminApplications from '@/pages/admin/Applications'
-import AdminNodes from '@/pages/admin/Nodes'
-
-// Protected Route Component
 import { ProtectedRoute } from '@/components/layout/ProtectedLayout'
+
+// Lazy loaded Public Pages
+const HomePage = React.lazy(() => import('@/pages/public/Home'))
+const LoginPage = React.lazy(() => import('@/pages/public/Login'))
+const RegisterPage = React.lazy(() => import('@/pages/public/Register'))
+const OAuthCallback = React.lazy(() => import('@/pages/public/OAuthCallback'))
+const VerifyEmailPage = React.lazy(() => import('@/pages/public/VerifyEmail'))
+const NotificationsPage = React.lazy(() => import('@/pages/public/Notifications'))
+
+// Lazy loaded Client Pages
+const ClientDashboard = React.lazy(() => import('@/pages/client/Dashboard'))
+const CreateJob = React.lazy(() => import('@/pages/client/CreateJob'))
+const JobDetails = React.lazy(() => import('@/pages/client/JobDetails'))
+const ApplyNodeProvider = React.lazy(() => import('@/pages/client/ApplyNodeProvider'))
+
+// Lazy loaded Node Pages
+const NodeDashboard = React.lazy(() => import('@/pages/node/Dashboard'))
+const NodeDetails = React.lazy(() => import('@/pages/node/NodeDetails'))
+
+// Lazy loaded Admin Pages
+const AdminDashboard = React.lazy(() => import('@/pages/admin/Dashboard'))
+const AdminJobs = React.lazy(() => import('@/pages/admin/Jobs'))
+const AdminJobDetails = React.lazy(() => import('@/pages/admin/JobDetails'))
+const AdminApplications = React.lazy(() => import('@/pages/admin/Applications'))
+const AdminNodes = React.lazy(() => import('@/pages/admin/Nodes'))
+
 import { useAuthStore } from '@/stores/authStore'
 
 // Styles
@@ -66,13 +68,22 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
   return <>{children}</>
 }
 
+// Loading Fallback Component
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+  </div>
+)
+
 // Main Layout component with Navbar
 const MainLayout = () => {
   return (
     <div className="min-h-screen bg-gray-950">
       <Navbar />
       <main className="mx-auto">
-        <Outlet />
+        <React.Suspense fallback={<PageLoader />}>
+          <Outlet />
+        </React.Suspense>
       </main>
     </div>
   )
@@ -82,7 +93,9 @@ const MainLayout = () => {
 const AuthLayout = () => {
   return (
     <div className="min-h-screen bg-gray-950">
-      <Outlet />
+      <React.Suspense fallback={<PageLoader />}>
+        <Outlet />
+      </React.Suspense>
     </div>
   )
 }

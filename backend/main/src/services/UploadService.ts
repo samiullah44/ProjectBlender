@@ -1,9 +1,11 @@
 // services/UploadService.ts
 import { Job } from '../models/Job';
+import { User } from '../models/User';
 import { S3Service } from './S3Service';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeBlenderVersion } from '../utils/blenderVersionMapper';
 import { enqueueJobFrames } from './FrameQueueService';
+import { wsService } from '../app';
 
 export class UploadService {
   private s3Service: S3Service;
@@ -62,6 +64,9 @@ export class UploadService {
       const jobId = `job-${Date.now()}-${uuidv4().substr(0, 8)}`;
 
       // 4. Create job in database
+      const engine = (jobSettings?.engine || 'CYCLES').toUpperCase();
+      const device = (jobSettings?.device || 'GPU').toUpperCase();
+
       const job = new Job({
         jobId,
         projectId,
@@ -72,6 +77,8 @@ export class UploadService {
         type,
         settings: {
           ...jobSettings,
+          engine,
+          device,
           blenderVersion: normalizeBlenderVersion(jobSettings?.blenderVersion || '4.5.0')
         },
         frames: {
@@ -81,7 +88,8 @@ export class UploadService {
           selected: selectedFrames,
           rendered: [],
           failed: [],
-          assigned: []
+          assigned: [],
+          pending: selectedFrames
         },
         assignedNodes: new Map(),
         status: 'pending',
@@ -93,11 +101,30 @@ export class UploadService {
 
       await job.save();
 
+      // Update user stats
+      await User.findByIdAndUpdate(userId, {
+        $inc: { 'stats.jobsCreated': 1 }
+      });
+
       // Enqueue frames to BullMQ for atomic distribution
       try {
-        await enqueueJobFrames(jobId, selectedFrames, job.settings.engine, job.settings.device);
+        await enqueueJobFrames(jobId, selectedFrames, engine, device);
       } catch (queueErr) {
         console.error(`⚠️  Failed to enqueue multipart frames for job ${jobId} into BullMQ:`, queueErr);
+      }
+
+      // Proactively notify nodes
+      if (wsService) {
+        wsService.broadcastSystemUpdate({
+          type: 'job_created',
+          data: {
+            jobId: job.jobId,
+            userId: job.userId,
+            type: job.type,
+            totalFrames: job.frames.total
+          }
+        });
+        wsService.notifyNodesToCheckJobs();
       }
 
       console.log(`🎬 New ${type} job created via multipart upload: ${jobId}`);

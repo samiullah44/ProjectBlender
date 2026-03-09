@@ -188,50 +188,87 @@ const DashboardTab: React.FC<{
 
 const AllJobsTab: React.FC<{
   jobs: Job[],
+  pagination: { total: number, page: number, limit: number, pages: number },
+  listJobs: (params: any) => Promise<any>,
   navigate: any,
   getJobProgress: (job: Job) => number,
   getRenderedFrames: (job: Job) => number
 }> = ({
   jobs,
+  pagination,
+  listJobs,
   navigate,
   getJobProgress,
   getRenderedFrames
 }) => {
     const [filter, setFilter] = useState<string>('all')
     const [searchQuery, setSearchQuery] = useState('')
+    const [localLoading, setLocalLoading] = useState(false)
 
-    const filteredJobs = useMemo(() => {
-      let result = jobs
-
-      // Apply status filter
-      if (filter !== 'all') {
-        result = result.filter(job => job.status === filter)
+    // Fetch jobs when filters or search change (reset to page 1)
+    useEffect(() => {
+      const fetchJobs = async () => {
+        setLocalLoading(true)
+        await listJobs({
+          status: filter === 'all' ? undefined : filter,
+          search: searchQuery || undefined,
+          page: 1, // Reset to page 1 on filter/search change
+          limit: pagination.limit
+        })
+        setLocalLoading(false)
       }
 
-      // Apply search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        result = result.filter(job =>
-          job.blendFileName?.toLowerCase().includes(query) ||
-          job.jobId?.toLowerCase().includes(query) ||
-          job.type?.toLowerCase().includes(query)
-        )
+      const timer = setTimeout(() => {
+        if (filter !== 'all' || searchQuery) {
+          fetchJobs()
+        }
+      }, 300)
+
+      return () => clearTimeout(timer)
+    }, [filter, searchQuery]) // Only depend on filter/search for the "reset to 1" effect
+
+    // Fetch jobs when page changes
+    useEffect(() => {
+      const fetchJobs = async () => {
+        setLocalLoading(true)
+        await listJobs({
+          status: filter === 'all' ? undefined : filter,
+          search: searchQuery || undefined,
+          page: pagination.page,
+          limit: pagination.limit
+        })
+        setLocalLoading(false)
       }
 
-      return result.sort((a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-    }, [jobs, filter, searchQuery])
+      // Avoid double fetch on initial mount or when page is already correctly set by the filter effect
+      if (pagination.page !== 1 || (filter === 'all' && !searchQuery)) {
+        fetchJobs()
+      }
+    }, [pagination.page])
+
+    const handlePageChange = (newPage: number) => {
+      if (newPage < 1 || newPage > pagination.pages) return
+      listJobs({
+        status: filter === 'all' ? undefined : filter,
+        search: searchQuery || undefined,
+        page: newPage,
+        limit: pagination.limit
+      })
+    }
+
+    const filteredJobs = jobs // Now handled by server-side listJobs
 
     const statusCounts = useMemo(() => {
       return {
-        all: jobs.length,
+        all: pagination.total,
+        // These counts are now just for the current view or would need a separate API call for full totals per status
+        // For simplicity, we use the total and labels.
         completed: jobs.filter(j => j.status === 'completed').length,
         processing: jobs.filter(j => j.status === 'processing').length,
         pending: jobs.filter(j => j.status === 'pending').length,
         failed: jobs.filter(j => j.status === 'failed').length
       }
-    }, [jobs])
+    }, [jobs, pagination.total])
 
     return (
       <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
@@ -291,68 +328,132 @@ const AllJobsTab: React.FC<{
           </div>
 
           {filteredJobs.length > 0 ? (
-            <div className="space-y-3 max-h-[500px] overflow-y-auto">
-              {filteredJobs.map((job) => {
-                const progress = getJobProgress(job)
-                const renderedFrames = getRenderedFrames(job)
-                const totalFrames = job.frames?.total || 0
+            <>
+              <div className={`space-y-3 max-h-[500px] overflow-y-auto ${localLoading ? 'opacity-50' : ''}`}>
+                {filteredJobs.map((job) => {
+                  const progress = getJobProgress(job)
+                  const renderedFrames = getRenderedFrames(job)
+                  const totalFrames = job.frames?.total || 0
 
-                return (
-                  <div
-                    key={job.jobId}
-                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-white/5 transition-all duration-300 cursor-pointer group"
-                    onClick={() => navigate(`/client/jobs/${job.jobId}`)}
-                  >
-                    <div className={`p-2 rounded-full transition-transform duration-300 group-hover:scale-110 ${job.status === 'completed' ? 'bg-emerald-500/20' :
-                      job.status === 'processing' ? 'bg-blue-500/20' :
-                        job.status === 'failed' ? 'bg-red-500/20' :
-                          'bg-amber-500/20'
-                      }`}>
-                      {job.status === 'completed' ? (
-                        <CheckCircle className="w-4 h-4 text-emerald-400" />
-                      ) : job.status === 'processing' ? (
-                        <RefreshCw className="w-4 h-4 text-blue-400" />
-                      ) : job.status === 'failed' ? (
-                        <AlertCircle className="w-4 h-4 text-red-400" />
-                      ) : (
-                        <Clock className="w-4 h-4 text-amber-400" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate mb-1">{job.blendFileName}</div>
-                      <div className="text-sm text-gray-400 flex items-center gap-2 flex-wrap">
-                        <Badge className={`px-2 py-0.5 text-xs ${job.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
-                          job.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
-                            job.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                              'bg-amber-500/20 text-amber-400'
-                          }`}>
-                          {job.status}
-                        </Badge>
-                        <span>•</span>
-                        <span>{job.type}</span>
-                        <span>•</span>
-                        <span>{totalFrames} frames</span>
-                        {job.status === 'processing' && (
-                          <>
-                            <span>•</span>
-                            <span>{progress}%</span>
-                          </>
+                  return (
+                    <div
+                      key={job.jobId}
+                      className="flex items-center gap-4 p-3 rounded-lg hover:bg-white/5 transition-all duration-300 cursor-pointer group"
+                      onClick={() => navigate(`/client/jobs/${job.jobId}`)}
+                    >
+                      <div className={`p-2 rounded-full transition-transform duration-300 group-hover:scale-110 ${job.status === 'completed' ? 'bg-emerald-500/20' :
+                        job.status === 'processing' ? 'bg-blue-500/20' :
+                          job.status === 'failed' ? 'bg-red-500/20' :
+                            'bg-amber-500/20'
+                        }`}>
+                        {job.status === 'completed' ? (
+                          <CheckCircle className="w-4 h-4 text-emerald-400" />
+                        ) : job.status === 'processing' ? (
+                          <RefreshCw className="w-4 h-4 text-blue-400" />
+                        ) : job.status === 'failed' ? (
+                          <AlertCircle className="w-4 h-4 text-red-400" />
+                        ) : (
+                          <Clock className="w-4 h-4 text-amber-400" />
                         )}
                       </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate mb-1">{job.blendFileName}</div>
+                        <div className="text-sm text-gray-400 flex items-center gap-2 flex-wrap">
+                          <Badge className={`px-2 py-0.5 text-xs ${job.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                            job.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
+                              job.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                                'bg-amber-500/20 text-amber-400'
+                            }`}>
+                            {job.status}
+                          </Badge>
+                          <span>•</span>
+                          <span>{job.type}</span>
+                          <span>•</span>
+                          <span>{totalFrames} frames</span>
+                          {job.status === 'processing' && (
+                            <>
+                              <span>•</span>
+                              <span>{progress}%</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {new Date(job.createdAt).toLocaleDateString()}
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     </div>
-                    <div className="text-xs text-gray-400">
-                      {new Date(job.createdAt).toLocaleDateString()}
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  )
+                })}
+              </div>
+
+              {/* Pagination Controls */}
+              {pagination.pages > 1 && (
+                <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/10">
+                  <div className="text-sm text-gray-400">
+                    Showing <span className="text-white">{(pagination.page - 1) * pagination.limit + 1}</span> to{' '}
+                    <span className="text-white">
+                      {Math.min(pagination.page * pagination.limit, pagination.total)}
+                    </span>{' '}
+                    of <span className="text-white">{pagination.total}</span> jobs
                   </div>
-                )
-              })}
-            </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(pagination.page - 1)}
+                      disabled={pagination.page <= 1 || localLoading}
+                      className="border-white/20"
+                    >
+                      Previous
+                    </Button>
+                    <div className="flex items-center gap-1 mx-2">
+                      {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                        // Simple pagination logic for first 5 pages or current surroundings
+                        let pageNum = i + 1;
+                        if (pagination.pages > 5 && pagination.page > 3) {
+                          pageNum = pagination.page - 2 + i;
+                          if (pageNum > pagination.pages) pageNum = pagination.pages - (4 - i);
+                        }
+                        if (pageNum <= 0) return null;
+                        if (pageNum > pagination.pages) return null;
+
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={pagination.page === pageNum ? 'default' : 'ghost'}
+                            size="sm"
+                            onClick={() => handlePageChange(pageNum)}
+                            disabled={localLoading}
+                            className="w-8 h-8 p-0"
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(pagination.page + 1)}
+                      disabled={pagination.page >= pagination.pages || localLoading}
+                      className="border-white/20"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="text-center py-12 text-gray-400">
-              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No jobs found matching your criteria</p>
-              {searchQuery && (
+              {localLoading ? (
+                <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin opacity-50" />
+              ) : (
+                <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              )}
+              <p>{localLoading ? 'Loading jobs...' : 'No jobs found matching your criteria'}</p>
+              {searchQuery && !localLoading && (
                 <Button
                   variant="outline"
                   className="mt-4 border-white/20 hover:bg-white/5"
@@ -404,8 +505,21 @@ const ActiveJobsSection: React.FC<{ activeJobs: any[], navigate: any, isLoading:
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+          <div className="space-y-4">
+            {/* Skeleton Loaders */}
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="p-4 rounded-lg bg-white/5 border border-white/10 animate-pulse">
+                <div className="flex justify-between mb-3">
+                  <div className="h-4 bg-white/10 rounded w-1/3"></div>
+                  <div className="h-4 bg-white/10 rounded w-8"></div>
+                </div>
+                <div className="h-2 bg-white/10 rounded w-full mb-3"></div>
+                <div className="flex gap-4">
+                  <div className="h-3 bg-white/10 rounded w-16"></div>
+                  <div className="h-3 bg-white/10 rounded w-16"></div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : activeJobs.length > 0 ? (
           <div className="space-y-4">
@@ -593,6 +707,8 @@ const ClientDashboard: React.FC = () => {
     error,
     getDashboardStats,
     refreshJobs,
+    listJobs,
+    pagination,
     webSocketConnected
   } = jobStore()
 
@@ -630,20 +746,20 @@ const ClientDashboard: React.FC = () => {
     }, 0)
 
     return {
-      totalJobs: jobs.length,
-      activeJobs: activeJobs.length,
-      completedJobs: completedJobs.length,
-      failedJobs: failedJobs.length,
-      completedToday: completedJobs.filter(j => {
+      totalJobs: realTimeStats?.totalJobs || systemStats?.totalJobs || pagination.total || jobs.length,
+      activeJobs: realTimeStats?.activeJobs || systemStats?.activeJobs || activeJobs.length,
+      completedJobs: realTimeStats?.completedJobs || systemStats?.completedJobs || completedJobs.length,
+      failedJobs: realTimeStats?.failedJobs || systemStats?.failedJobs || failedJobs.length,
+      completedToday: realTimeStats?.completedToday || systemStats?.completedToday || completedJobs.filter(j => {
         const jobDate = new Date(j.updatedAt || j.createdAt)
         return jobDate >= today
       }).length,
-      framesRenderedToday,
-      totalFramesRendered,
-      estimatedRenderTime,
-      creditsUsed
+      framesRenderedToday: realTimeStats?.framesRenderedToday || systemStats?.framesRenderedToday || framesRenderedToday,
+      totalFramesRendered: realTimeStats?.totalFramesRendered || systemStats?.totalFramesRendered || totalFramesRendered,
+      estimatedRenderTime: realTimeStats?.totalRenderTime || systemStats?.totalRenderTime || estimatedRenderTime,
+      creditsUsed: realTimeStats?.totalCreditsUsed || systemStats?.totalCreditsUsed || creditsUsed
     }
-  }, [jobs])
+  }, [jobs, systemStats, realTimeStats, pagination.total])
 
   const subscribeToActiveJobs = useCallback(() => {
     const activeJobIds = jobs
@@ -697,6 +813,13 @@ const ClientDashboard: React.FC = () => {
       unsubscribeSystem()
     }
   }, [])
+
+  // Ensure dashboard shows latest jobs when switching back
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      refreshJobs()
+    }
+  }, [activeTab])
 
   useEffect(() => {
     if (websocketService.isConnected()) {
@@ -819,16 +942,11 @@ const ClientDashboard: React.FC = () => {
   }, [activeJobs])
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
+    <div
       className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-black text-white"
     >
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div
         className="border-b border-white/10"
       >
         <div className="container mx-auto px-4 py-8">
@@ -869,7 +987,7 @@ const ClientDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-      </motion.div >
+      </div>
 
       <div className="container mx-auto px-4 py-8">
         {/* Error Display */}
@@ -952,7 +1070,7 @@ const ClientDashboard: React.FC = () => {
             </TabsTrigger>
             <TabsTrigger value="all-jobs" className="flex items-center gap-2">
               <FileText className="w-4 h-4" />
-              All Jobs ({jobs.length})
+              All Jobs ({pagination.total})
             </TabsTrigger>
           </TabsList>
 
@@ -1150,6 +1268,8 @@ const ClientDashboard: React.FC = () => {
           <TabsContent value="all-jobs">
             <AllJobsTab
               jobs={jobs}
+              pagination={pagination}
+              listJobs={listJobs}
               navigate={navigate}
               getJobProgress={getJobProgress}
               getRenderedFrames={getRenderedFrames}
@@ -1157,7 +1277,7 @@ const ClientDashboard: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </motion.div >
+    </div>
   )
 }
 

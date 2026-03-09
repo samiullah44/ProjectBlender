@@ -3,6 +3,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { Job } from '../models/Job';
 import { Node } from '../models/Node';
 import { Server } from 'http';
+import { getQueueStats } from './FrameQueueService';
 
 interface Client {
   ws: WebSocket;
@@ -24,9 +25,6 @@ export class WebSocketService {
   constructor(server: Server) {
     this.wss = new WebSocketServer({ server });
     this.initialize();
-
-    // Periodically notify idle nodes to poll for jobs (every 30s to match legacy REST polling)
-    setInterval(() => this.notifyNodesToCheckJobs(), 30000);
   }
 
   private initialize() {
@@ -280,6 +278,19 @@ export class WebSocketService {
     try {
       const resources = message.resources || {};
 
+      // Status auto-recovery: if node is 'busy' but job is inactive, reset it
+      const node = await Node.findOne({ nodeId });
+      if (node && node.status === 'busy' && node.currentJob) {
+        const activeJob = await Job.findOne({ jobId: node.currentJob }).select('status').lean() as any;
+        if (!activeJob || ['cancelled', 'completed', 'failed'].includes(activeJob.status)) {
+          console.log(`🔄 Heartbeat Recovery: Node ${nodeId} was stuck in 'busy' for ${activeJob?.status || 'missing'} job, resetting to 'online'`);
+          await Node.updateOne(
+            { nodeId },
+            { $set: { status: 'online', currentJob: undefined, currentProgress: undefined } }
+          );
+        }
+      }
+
       await Node.updateOne(
         { nodeId },
         {
@@ -375,16 +386,27 @@ export class WebSocketService {
   public async notifyNodesToCheckJobs(): Promise<void> {
     let notified = 0;
     try {
-      // Find all online nodes (not busy) from the database
-      const freeNodes = await Node.find({
-        nodeId: { $in: Array.from(this.nodeClients.keys()) },
-        status: 'online'
-      }).select('nodeId');
+      // SMART CHECK: Only bother nodes if there are actually frames waiting in BullMQ
+      const stats = await getQueueStats();
+      if (stats.waiting === 0) {
+        // No waiting jobs, no need to notify
+        return;
+      }
 
-      const freeNodeIds = new Set(freeNodes.map(n => n.nodeId));
+      // Find all online nodes (not busy) from the database
+      const onlineNodes = await Node.find({
+        nodeId: { $in: Array.from(this.nodeClients.keys()) }
+      }).select('nodeId status');
+
+      const freeNodes = onlineNodes.filter(n => n.status === 'online');
+      const busyNodes = onlineNodes.filter(n => n.status === 'busy');
+
+      if (onlineNodes.length === 0) {
+        console.log(`⚠️  Job Notification: No WS-connected nodes found in database tracking.`);
+      }
 
       for (const [nodeId, client] of this.nodeClients) {
-        if (freeNodeIds.has(nodeId) && client.ws.readyState === WebSocket.OPEN) {
+        if (freeNodes.some(n => n.nodeId === nodeId) && client.ws.readyState === WebSocket.OPEN) {
           try {
             client.ws.send(JSON.stringify({ type: 'request_job_poll', timestamp: Date.now() }));
             notified++;
@@ -393,8 +415,11 @@ export class WebSocketService {
           }
         }
       }
+
       if (notified > 0) {
-        console.log(`📢 Notified ${notified} free connected node(s) to poll for jobs`);
+        console.log(`📢 Notified ${notified} free connected node(s) to poll for jobs (${stats.waiting} frames waiting)`);
+      } else if (onlineNodes.length > 0) {
+        console.log(`ℹ️  Job Notification: Found ${onlineNodes.length} connected nodes, but ${freeNodes.length} are online and ${busyNodes.length} are busy. No one was notified.`);
       }
     } catch (err) {
       console.error('Error during notifyNodesToCheckJobs status query:', err);

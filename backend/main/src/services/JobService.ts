@@ -349,10 +349,23 @@ export class JobService {
             const skip = (page - 1) * limit;
             const sort: any = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
 
+            // Field projection to exclude heavy arrays
+            const projection = {
+                frameAssignments: 0,
+                assignedNodes: 0,
+                'frames.rendered': 0,
+                'frames.failed': 0,
+                'frames.assigned': 0,
+                'frames.selected': 0,
+                'frames.pending': 0,
+                // Keep outputUrls only if specifically needed, but usually list views don't need all 1000 URLs
+                // outputUrls: 0 
+            };
+
             const [jobs, total] = await Promise.all([
-                Job.find(query)
-                    .populate('user', 'username name email role')
-                    .populate('approvedBy', 'username name')
+                Job.find(query, projection)
+                    .populate('user', 'username email role') // optimized population
+                    .populate('approvedBy', 'username') // optimized population
                     .sort(sort)
                     .skip(skip)
                     .limit(limit)
@@ -360,7 +373,7 @@ export class JobService {
                     .catch(err => {
                         console.error('Population error in listJobs:', err);
                         // Fallback to unpopulated jobs if population fails due to bad data
-                        return Job.find(query)
+                        return Job.find(query, projection)
                             .sort(sort)
                             .skip(skip)
                             .limit(limit)

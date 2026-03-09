@@ -83,6 +83,12 @@ interface JobStore {
   uploadStage: string
   error: string | null
   webSocketConnected: boolean
+  pagination: {
+    total: number
+    page: number
+    limit: number
+    pages: number
+  }
 
 
   // Actions
@@ -152,6 +158,12 @@ const jobStore = create<JobStore>((set, get) => ({
   uploadStage: 'idle',
   error: null,
   webSocketConnected: false,
+  pagination: {
+    total: 0,
+    page: 1,
+    limit: 15,
+    pages: 0
+  },
 
   createJob: async (formData: FormData) => {
     try {
@@ -421,9 +433,13 @@ const jobStore = create<JobStore>((set, get) => ({
       set({ isLoading: true, error: null })
 
       const response = await axiosInstance.get('/jobs', { params })
+      const { jobs = [], pagination } = response.data
 
-      const jobs = response.data.jobs || []
-      set({ jobs, isLoading: false })
+      set(state => ({
+        jobs,
+        pagination: pagination || state.pagination,
+        isLoading: false
+      }))
       return response.data
     } catch (error: any) {
       console.error('Error listing jobs:', error)
@@ -590,17 +606,44 @@ const jobStore = create<JobStore>((set, get) => ({
   },
 
   addJob: (job: Job) => {
-    set(state => ({
-      jobs: [job, ...state.jobs],
-      currentJob: job
-    }))
+    set(state => {
+      // If we're on page 1, we can prepend it
+      if (state.pagination.page === 1) {
+        const newJobs = [job, ...state.jobs].slice(0, state.pagination.limit || 15)
+        return {
+          jobs: newJobs,
+          currentJob: job,
+          pagination: {
+            ...state.pagination,
+            total: (state.pagination.total || 0) + 1
+          }
+        }
+      }
+      // If not on page 1, still update current job and total, but don't mess with list 
+      // (it will be refreshed when they go to page 1)
+      return {
+        currentJob: job,
+        pagination: {
+          ...state.pagination,
+          total: (state.pagination.total || 0) + 1
+        }
+      }
+    })
   },
 
   removeJob: (jobId: string) => {
+    const { pagination, listJobs } = get()
     set(state => ({
       jobs: state.jobs.filter(job => job.jobId !== jobId),
-      currentJob: state.currentJob?.jobId === jobId ? null : state.currentJob
+      currentJob: state.currentJob?.jobId === jobId ? null : state.currentJob,
+      pagination: {
+        ...state.pagination,
+        total: Math.max(0, (state.pagination.total || 0) - 1)
+      }
     }))
+
+    // Refresh the current page to fill the gap from the next page
+    listJobs({ page: pagination.page, limit: pagination.limit })
   },
 
   setWebSocketConnected: (connected: boolean) => {
@@ -616,7 +659,11 @@ const jobStore = create<JobStore>((set, get) => ({
   }),
 
   refreshJobs: async () => {
-    await get().listJobs({ limit: 50, page: 1 })
+    const { pagination } = get()
+    await get().listJobs({
+      limit: pagination.limit || 15,
+      page: pagination.page || 1
+    })
   },
 
   clearError: () => set({ error: null }),
