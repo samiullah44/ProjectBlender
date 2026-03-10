@@ -131,6 +131,9 @@ const JobSchema = new Schema<IJob>({
     type: String,
     required: true
   },
+  name: {
+    type: String
+  },
   type: {
     type: String,
     enum: ['image', 'animation'],

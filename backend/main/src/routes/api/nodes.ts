@@ -69,6 +69,7 @@ router.get(
 );
 
 router.get('/:nodeId', authenticate, NodeController.getNode);
+router.get('/:nodeId/history', authenticate, NodeController.getNodeHistory);
 
 // Job distribution reporting
 router.get('/job-distribution/:jobId', NodeController.getJobDistributionReport);

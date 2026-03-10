@@ -30,6 +30,7 @@ export const NodeDetails: React.FC = () => {
     const { nodeId } = useParams<{ nodeId: string }>()
     const navigate = useNavigate()
     const [node, setNode] = useState<any>(null)
+    const [jobHistory, setJobHistory] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -51,15 +52,31 @@ export const NodeDetails: React.FC = () => {
         }
     }
 
+    const fetchNodeHistory = async () => {
+        try {
+            const res = await axiosInstance.get(`/nodes/${nodeId}/history`)
+            if (res.data.success && res.data.history) {
+                setJobHistory(res.data.history)
+            }
+        } catch (error) {
+            console.error('Fetch node history error:', error)
+        }
+    }
+
     useEffect(() => {
         fetchNode()
+        fetchNodeHistory()
 
-        const interval = setInterval(() => fetchNode(), 15000)
+        const interval = setInterval(() => {
+            fetchNode()
+            fetchNodeHistory()
+        }, 15000)
 
         // Subscribe to system events for instant updates (like node going offline/online)
         const unsubscribeSystem = websocketService.subscribeToSystem((data) => {
             if (data.type === 'node_status_change' && data.nodeId === nodeId) {
                 fetchNode()
+                fetchNodeHistory()
             }
         })
 
@@ -314,6 +331,95 @@ export const NodeDetails: React.FC = () => {
                             </Card>
                         </motion.div>
                     )}
+
+                    {/* Historical Jobs List */}
+                    <Card className="bg-gray-900/40 border-gray-800">
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <History className="w-5 h-5 text-emerald-400" />
+                                    Job Processing History
+                                </CardTitle>
+                                <CardDescription>Previously completed or failed renders by this node</CardDescription>
+                            </div>
+                            <Badge variant="outline" className="border-gray-700 bg-gray-800/50">
+                                {jobHistory.length} Jobs
+                            </Badge>
+                        </CardHeader>
+                        <CardContent>
+                            {jobHistory.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500 bg-black/20 rounded-lg border border-gray-800/50">
+                                    <History className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                                    <p>Node hasn't rendered any jobs yet.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                    {jobHistory.map((job) => (
+                                        <div key={job.jobId} className="p-4 rounded-xl bg-gray-800/20 border border-gray-800 relative group transition-colors hover:border-gray-700">
+                                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-3">
+                                                <div>
+                                                    <h4 className="text-white font-medium flex items-center gap-2">
+                                                        {job.name}
+                                                        <span className="text-xs text-gray-500 font-mono hidden sm:inline-block">({job.jobId.slice(0, 8)})</span>
+                                                    </h4>
+                                                    <p className="text-xs text-gray-400 mt-1 flex items-center gap-3">
+                                                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(job.createdAt).toLocaleDateString()}</span>
+                                                        <span className={cn(
+                                                            "px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider",
+                                                            job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' :
+                                                                job.status === 'failed' ? 'bg-red-500/10 text-red-400' :
+                                                                    'bg-amber-500/10 text-amber-400'
+                                                        )}>
+                                                            {job.status}
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                                <div className="text-right flex items-center sm:block justify-between">
+                                                    <span className="text-xs text-gray-500 block sm:mb-1">Node Earnings</span>
+                                                    <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                        +{job.nodeContribution.creditsEarned} CR
+                                                    </Badge>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-gray-800/50">
+                                                <div>
+                                                    <p className="text-xs text-gray-500 mb-1">Total Job Frames</p>
+                                                    <p className="text-sm text-gray-300 font-mono">{job.totalJobFrames}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 mb-1">Frames Picked Up</p>
+                                                    <p className="text-sm text-blue-400 font-mono">{job.nodeContribution.totalFramesInvolved}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 mb-1">Frames Success</p>
+                                                    <p className="text-sm text-emerald-400 font-mono">{job.nodeContribution.renderedFrames.length}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 mb-1">Frames Failed</p>
+                                                    <p className="text-sm text-red-400 font-mono">{job.nodeContribution.failedFrames.length}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Expand to show specific frames */}
+                                            {job.nodeContribution.renderedFrames.length > 0 && (
+                                                <div className="mt-3 pt-3 border-t border-gray-800/30">
+                                                    <p className="text-xs text-gray-500 mb-2">Frames Successfully Rendered By This Node:</p>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {job.nodeContribution.renderedFrames.map((frame: number) => (
+                                                            <span key={frame} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-900 text-gray-400 border border-gray-800">
+                                                                #{frame}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
 
                 </div>
             </div>

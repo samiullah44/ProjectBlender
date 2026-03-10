@@ -76,6 +76,7 @@ export interface IJob {
     blendFileKey: string;
     blendFileUrl: string;
     blendFileName: string;
+    name?: string;
     type: 'image' | 'animation';
 
     settings: IJobSettings;

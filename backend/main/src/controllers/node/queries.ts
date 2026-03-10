@@ -283,3 +283,76 @@ export const getNodeStatistics = async (req: Request, res: Response): Promise<vo
     });
   }
 }
+
+// Get historical jobs for a specific node
+export const getNodeHistory = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { nodeId } = req.params;
+
+    // Verify the node exists
+    const node = await Node.findOne({ nodeId });
+    if (!node) {
+      throw new AppError('Node not found', 404);
+    }
+
+    // Find all jobs where this node has assigned or rendered frames
+    const jobs = await Job.find({ "frameAssignments.nodeId": nodeId })
+      .sort({ createdAt: -1 })
+      .lean(); // Use lean for faster subsequent processing
+
+    // Format the response to highlight what THIS node did
+    const history = jobs.map(job => {
+      // Find assignments specific to this node
+      const nodeAssignments = job.frameAssignments.filter(
+        (a: any) => a.nodeId === nodeId
+      );
+
+      const renderedFrames = nodeAssignments
+        .filter((a: any) => a.status === 'rendered')
+        .map((a: any) => ({ frameNumber: a.frame, credits: a.creditsEarned || 0 }));
+
+      const assignedFrames = nodeAssignments
+        .filter((a: any) => a.status === 'assigned')
+        .map((a: any) => a.frame);
+
+      const failedFrames = nodeAssignments
+        .filter((a: any) => a.status === 'failed')
+        .map((a: any) => a.frame);
+
+      const totalCreditsEarned = renderedFrames.reduce((sum, a) => sum + a.credits, 0);
+
+      return {
+        jobId: job.jobId,
+        name: (job as any).name || job.blendFileName,
+        status: job.status,
+        createdAt: job.createdAt,
+        totalJobFrames: job.frames.total,
+        nodeContribution: {
+          renderedFrames: renderedFrames.map(f => f.frameNumber),
+          assignedFrames,
+          failedFrames,
+          totalFramesInvolved: nodeAssignments.length,
+          creditsEarned: totalCreditsEarned
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      history
+    });
+
+  } catch (error) {
+    console.error('❌ Get node history error:', error);
+    if (error instanceof AppError) {
+      res.status(error.statusCode || 500).json({
+        error: error.message
+      });
+    } else {
+      res.status(500).json({
+        error: 'Failed to get node history',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+}

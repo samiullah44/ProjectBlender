@@ -3,11 +3,11 @@ import { startOfflineNodeChecker, stopOfflineNodeChecker, checkAndUpdateOfflineN
 import { registerNode, generateToken, registerWithToken, revokeNode, listTokens } from './node/registration';
 import { heartbeat } from './node/heartbeat';
 import { assignJob, calculateNodePerformance, calculateOptimalFrameAssignment, selectFramesForNode, frameCompleted, reportFrameFailure, getJobDistributionReport } from './node/jobs';
-import { getAllNodes, getNode, getNodeStatistics } from './node/queries';
+import { getAllNodes, getNode, getNodeStatistics, getNodeHistory } from './node/queries';
 
 export class NodeController {
   private static getWsService = getWsService;
-  
+
   static startOfflineNodeChecker = startOfflineNodeChecker;
   static stopOfflineNodeChecker = stopOfflineNodeChecker;
   // Make private ones public/static to avoid ts errors if they are needed, or just keep them private
@@ -32,5 +32,6 @@ export class NodeController {
 
   static getAllNodes = getAllNodes;
   static getNode = getNode;
+  static getNodeHistory = getNodeHistory;
   static getNodeStatistics = getNodeStatistics;
 }
