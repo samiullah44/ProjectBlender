@@ -165,6 +165,10 @@ async function checkRedisConnection() {
 
 (async () => {
   try {
+    // Initialize BullMQ queues
+    const { initializeQueues } = require('./services/FrameQueueService');
+    initializeQueues();
+
     // Connect to MongoDB
     await connectDatabase();
 

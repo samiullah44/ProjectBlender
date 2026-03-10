@@ -727,22 +727,13 @@ const ClientDashboard: React.FC = () => {
     const activeJobs = jobs.filter(j => j.status === 'processing' || j.status === 'pending')
     const failedJobs = jobs.filter(j => j.status === 'failed')
 
-    const framesRenderedToday = completedJobs.reduce((total, job) => {
+    // Local fallback for today's stats (still useful for immediate feedback)
+    const framesRenderedTodayLocal = completedJobs.reduce((total, job) => {
       const jobDate = new Date(job.updatedAt || job.createdAt)
       if (jobDate >= today) {
         return total + (job.outputUrls?.length || job.frames?.rendered?.length || 0)
       }
       return total
-    }, 0)
-
-    const totalFramesRendered = completedJobs.reduce((total, job) => {
-      return total + (job.outputUrls?.length || job.frames?.rendered?.length || 0)
-    }, 0)
-
-    const estimatedRenderTime = totalFramesRendered * 120
-    const creditsUsed = completedJobs.reduce((sum, job) => {
-      const frames = job.outputUrls?.length || job.frames?.rendered?.length || 0
-      return sum + (frames * 0.5)
     }, 0)
 
     return {
@@ -754,10 +745,10 @@ const ClientDashboard: React.FC = () => {
         const jobDate = new Date(j.updatedAt || j.createdAt)
         return jobDate >= today
       }).length,
-      framesRenderedToday: realTimeStats?.framesRenderedToday || systemStats?.framesRenderedToday || framesRenderedToday,
-      totalFramesRendered: realTimeStats?.totalFramesRendered || systemStats?.totalFramesRendered || totalFramesRendered,
-      estimatedRenderTime: realTimeStats?.totalRenderTime || systemStats?.totalRenderTime || estimatedRenderTime,
-      creditsUsed: realTimeStats?.totalCreditsUsed || systemStats?.totalCreditsUsed || creditsUsed
+      framesRenderedToday: realTimeStats?.framesRenderedToday || systemStats?.framesRenderedToday || framesRenderedTodayLocal,
+      totalFramesRendered: realTimeStats?.totalFramesRendered || systemStats?.totalFramesRendered || 0, // Should come from API
+      estimatedRenderTime: realTimeStats?.totalRenderTime || systemStats?.totalRenderTime || (systemStats?.totalFramesRendered || 0) * 120,
+      creditsUsed: realTimeStats?.totalCreditsUsed || systemStats?.totalCreditsUsed || (systemStats?.totalFramesRendered || 0) * 0.5
     }
   }, [jobs, systemStats, realTimeStats, pagination.total])
 

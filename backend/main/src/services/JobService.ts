@@ -601,61 +601,67 @@ export class JobService {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
-        const stats = await Job.aggregate([
-            { $match: matchStage },
-            {
-                $facet: {
-                    statusCounts: [
-                        {
-                            $group: {
-                                _id: '$status',
-                                count: { $sum: 1 }
-                            }
-                        }
-                    ],
-                    totals: [
-                        {
-                            $group: {
-                                _id: null,
-                                totalJobs: { $sum: 1 },
-                                totalRenderTime: { $sum: { $ifNull: ['$renderTime', 0] } },
-                                totalCreditsUsed: { $sum: { $ifNull: ['$totalCreditsDistributed', 0] } },
-                                estimatedTotalCost: { $sum: { $ifNull: ['$estimatedCost', 0] } },
-                                actualTotalCost: { $sum: { $ifNull: ['$actualCost', 0] } },
-                                totalFramesRendered: {
-                                    $sum: { $size: { $ifNull: ['$frames.rendered', []] } }
+        const [statsResult, userData] = await Promise.all([
+            Job.aggregate([
+                { $match: matchStage },
+                {
+                    $facet: {
+                        statusCounts: [
+                            {
+                                $group: {
+                                    _id: '$status',
+                                    count: { $sum: 1 }
                                 }
                             }
-                        }
-                    ],
-                    todayStats: [
-                        {
-                            $match: {
-                                createdAt: { $gte: today, $lt: tomorrow }
-                            }
-                        },
-                        {
-                            $group: {
-                                _id: null,
-                                completedToday: {
-                                    $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
-                                },
-                                framesRenderedToday: {
-                                    $sum: { $size: { $ifNull: ['$frames.rendered', []] } }
+                        ],
+                        totals: [
+                            {
+                                $group: {
+                                    _id: null,
+                                    totalJobs: { $sum: 1 },
+                                    totalRenderTime: { $sum: { $ifNull: ['$renderTime', 0] } },
+                                    totalCreditsUsed: { $sum: { $ifNull: ['$totalCreditsDistributed', 0] } },
+                                    estimatedTotalCost: { $sum: { $ifNull: ['$estimatedCost', 0] } },
+                                    actualTotalCost: { $sum: { $ifNull: ['$actualCost', 0] } },
+                                    totalFramesRendered: {
+                                        $sum: { $size: { $ifNull: ['$frames.rendered', []] } }
+                                    }
                                 }
                             }
-                        }
-                    ]
+                        ],
+                        todayStats: [
+                            {
+                                $match: {
+                                    createdAt: { $gte: today, $lt: tomorrow }
+                                }
+                            },
+                            {
+                                $group: {
+                                    _id: null,
+                                    completedToday: {
+                                        $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+                                    },
+                                    framesRenderedToday: {
+                                        $sum: { $size: { $ifNull: ['$frames.rendered', []] } }
+                                    }
+                                }
+                            }
+                        ]
+                    }
                 }
-            }
+            ]),
+            userId ? User.findById(userId).select('stats').lean() : null
         ]);
 
-        const statusCounts = stats[0].statusCounts.reduce((acc: any, curr: any) => {
+        const stats = statsResult[0];
+        const userStats = (userData as any)?.stats;
+
+        const statusCounts = stats.statusCounts.reduce((acc: any, curr: any) => {
             acc[curr._id] = curr.count;
             return acc;
         }, {});
 
-        const totals = stats[0].totals[0] || {
+        const totals = stats.totals[0] || {
             totalJobs: 0,
             totalRenderTime: 0,
             totalCreditsUsed: 0,
@@ -664,13 +670,14 @@ export class JobService {
             totalFramesRendered: 0
         };
 
-        const todayStats = stats[0].todayStats[0] || {
+        const todayStats = stats.todayStats[0] || {
             completedToday: 0,
             framesRenderedToday: 0
         };
 
         return {
-            totalJobs: totals.totalJobs,
+            // Priority given to lifetime stats from User table if available
+            totalJobs: userStats?.jobsCreated ?? totals.totalJobs,
             activeJobs: (statusCounts.pending || 0) + (statusCounts.processing || 0) + (statusCounts.paused || 0),
             completedJobs: statusCounts.completed || 0,
             failedJobs: statusCounts.failed || 0,
@@ -679,9 +686,9 @@ export class JobService {
             completedToday: todayStats.completedToday,
             totalRenderTime: totals.totalRenderTime,
             totalCreditsUsed: totals.totalCreditsUsed,
-            totalFramesRendered: totals.totalFramesRendered,
-            avgRenderTimePerFrame: totals.totalFramesRendered > 0
-                ? totals.totalRenderTime / totals.totalFramesRendered
+            totalFramesRendered: userStats?.framesRendered ?? totals.totalFramesRendered,
+            avgRenderTimePerFrame: (userStats?.framesRendered ?? totals.totalFramesRendered) > 0
+                ? totals.totalRenderTime / (userStats?.framesRendered ?? totals.totalFramesRendered)
                 : 0,
             framesRenderedToday: todayStats.framesRenderedToday,
             estimatedTotalCost: totals.estimatedTotalCost,
@@ -691,7 +698,13 @@ export class JobService {
 
     // Get user-specific job statistics
     async getUserJobStats(userId: string): Promise<UserJobStats> {
-        const stats = await (Job as any).getUserStats(userId);
+        const [jobStats, user] = await Promise.all([
+            (Job as any).getUserStats(userId),
+            User.findById(userId).select('credits stats')
+        ]);
+
+        const stats = jobStats;
+        const userStats = (user as any)?.stats;
 
         const successRate = stats.totalJobs > 0
             ? (stats.completedJobs / stats.totalJobs) * 100
@@ -701,13 +714,11 @@ export class JobService {
             ? stats.totalRenderTime / stats.completedJobs
             : 0;
 
-        const user = await User.findById(userId).select('credits');
-
         return {
-            totalJobs: stats.totalJobs,
+            totalJobs: userStats?.jobsCreated ?? stats.totalJobs,
             activeJobs: stats.activeJobs,
             completedJobs: stats.completedJobs,
-            totalSpent: stats.totalSpent,
+            totalSpent: userStats?.totalSpent ?? stats.totalSpent,
             creditsRemaining: user?.credits || 0,
             avgJobCompletionTime,
             successRate

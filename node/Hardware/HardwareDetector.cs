@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using BlendFarm.Node.Models;
+using BlendFarm.Node.Services;
 
 namespace BlendFarm.Node.Hardware
 {
@@ -14,19 +15,21 @@ namespace BlendFarm.Node.Hardware
         private readonly GpuDetector _gpuDetector;
         private readonly StorageDetector _storageDetector;
         private readonly OsDetector _osDetector;
+        private readonly SpeedtestService _speedtestService;
         private readonly NetworkDetector _networkDetector;
         private readonly IpDetector _ipDetector;
         private readonly FingerprintDetector _fingerprintDetector;
 
-        public HardwareDetector(ILogger<HardwareDetector> logger)
+        public HardwareDetector(ILogger<HardwareDetector> logger, SpeedtestService speedtestService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _speedtestService = speedtestService ?? throw new ArgumentNullException(nameof(speedtestService));
             _cpuDetector = new CpuDetector(logger);
             _ramDetector = new RamDetector(logger);
             _gpuDetector = new GpuDetector(logger);
             _storageDetector = new StorageDetector(logger);
             _osDetector = new OsDetector(logger);
-            _networkDetector = new NetworkDetector(logger);
+            _networkDetector = new NetworkDetector(logger, _speedtestService);
             _ipDetector = new IpDetector(logger);
             _fingerprintDetector = new FingerprintDetector(logger);
         }

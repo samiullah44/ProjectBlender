@@ -12,6 +12,7 @@ using System.Net.Http;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Runtime.InteropServices;
 
 namespace BlendFarm.Node
 {
@@ -521,7 +522,7 @@ namespace BlendFarm.Node
             return null;
         }
         
-        private static string FindBlenderInDirectory(string directory, string targetVersion = null)
+        private static string? FindBlenderInDirectory(string directory, string? targetVersion = null)
         {
             if (!Directory.Exists(directory))
                 return null;
@@ -734,10 +735,49 @@ namespace BlendFarm.Node
     class Program
     {
         private static string _targetVersion = "5.0.1";
-        private static string _blenderPath = null;
-        
+        private static string? _blenderPath = null;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern IntPtr GetStdHandle(int nStdHandle);
+
+        [DllImport("kernel32.dll")]
+        static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+
+        [DllImport("kernel32.dll")]
+        static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+
+        const int STD_INPUT_HANDLE = -10;
+        const uint ENABLE_QUICK_EDIT_MODE = 0x0040;
+        const uint ENABLE_EXTENDED_FLAGS = 0x0080;
+
+        private static void DisableQuickEdit()
+        {
+            try
+            {
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    IntPtr consoleHandle = GetStdHandle(STD_INPUT_HANDLE);
+                    if (GetConsoleMode(consoleHandle, out uint mode))
+                    {
+                        // Clear the QuickEdit flag and ensure EXTENDED_FLAGS is set
+                        mode &= ~ENABLE_QUICK_EDIT_MODE;
+                        mode |= ENABLE_EXTENDED_FLAGS;
+
+                        if (!SetConsoleMode(consoleHandle, mode))
+                        {
+                            // Could not set mode
+                        }
+                    }
+                }
+            }
+            catch { /* Ignore if it fails */ }
+        }
+
         static async Task Main(string[] args)
         {
+            // Disable QuickEdit to prevent application hanging on mouse click
+            DisableQuickEdit();
+
             // If started by Windows AutoStart, the default directory is System32. 
             // We must switch to the EXE directory so relative paths work.
             if (Directory.GetCurrentDirectory().Contains("System32", StringComparison.OrdinalIgnoreCase))
@@ -1101,6 +1141,9 @@ namespace BlendFarm.Node
             new PythonRunnerService(
                 provider.GetRequiredService<ILogger<PythonRunnerService>>(), 
                 _blenderPath));
+        
+        // Register SpeedtestService
+        services.AddSingleton<SpeedtestService>();
         
         // Register NodeBackendService - ILoggerFactory will be auto-injected
         services.AddHostedService<NodeBackendService>();

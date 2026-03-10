@@ -29,6 +29,7 @@ const ApplyNodeProvider = React.lazy(() => import('@/pages/client/ApplyNodeProvi
 // Lazy loaded Node Pages
 const NodeDashboard = React.lazy(() => import('@/pages/node/Dashboard'))
 const NodeDetails = React.lazy(() => import('@/pages/node/NodeDetails'))
+const NodeSetupGuide = React.lazy(() => import('@/pages/node/NodeSetupGuide'))
 
 // Lazy loaded Admin Pages
 const AdminDashboard = React.lazy(() => import('@/pages/admin/Dashboard'))
@@ -167,6 +168,7 @@ function App() {
                     <Routes>
                       <Route path="/dashboard" element={<NodeDashboard />} />
                       <Route path="/nodes/:nodeId" element={<NodeDetails />} />
+                      <Route path="/setup-guide" element={<NodeSetupGuide />} />
                     </Routes>
                   </ProtectedRoute>
                 }

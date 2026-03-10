@@ -13,6 +13,10 @@
 
 import { Queue, QueueEvents, Worker, Job as BullJob, ConnectionOptions } from 'bullmq';
 
+// Global cooldown for on-demand sweep to prevent hammering Redis
+let lastSweepTime = 0;
+const SWEEP_COOLDOWN_MS = 10000;
+
 // ── Connection config ─────────────────────────────────────────────────────────
 
 export const redisConnectionOptions: ConnectionOptions = {
@@ -225,13 +229,21 @@ export async function nackFrame(
     bullJobId: string,
     lockToken: string,
     errorMessage: string,
-    queueName: string
+    queueName: string,
+    requeue: boolean = false
 ): Promise<void> {
     try {
         const q = getOrCreateQueue(queueName);
         const bullJob = await BullJob.fromId<FrameJobData>(q, bullJobId);
         if (!bullJob) return;
-        await bullJob.moveToFailed(new Error(errorMessage), lockToken, false);
+
+        if (requeue) {
+            // Move back to waiting so another node can pick it up immediately
+            // This is better than moveToFailed + retry() for node-offline scenarios
+            await (bullJob as any).moveToWait(lockToken, false);
+        } else {
+            await bullJob.moveToFailed(new Error(errorMessage), lockToken, false);
+        }
     } catch (err: any) {
         if (!err?.message?.includes('Missing lock')) {
             console.warn(`⚠️  nackFrame(${bullJobId}) warning: ${err?.message}`);
@@ -245,15 +257,105 @@ export async function nackFrame(
  * Wait — we only stored the string IDs. Let's just store `{id: string, queueName: string}` on Node.
  * We'll pass the `queueName` here directly.
  */
+/**
+ * Force a frame back to the waiting list for retry.
+ * Used when a frame failure is reported but retries remain.
+ */
+export async function requeueFrame(jobId: string, frame: number, engine: string, device: string): Promise<void> {
+    try {
+        const queueName = getQueueName(engine, device);
+        const q = getOrCreateQueue(queueName);
+        const bullJobId = `${jobId}-${frame}`;
+        const bullJob = await BullJob.fromId<FrameJobData>(q, bullJobId);
+
+        if (bullJob) {
+            // If it's in failed state, retry it
+            const state = await bullJob.getState();
+            if (state === 'failed') {
+                await bullJob.retry();
+            } else if (state === 'active') {
+                // If it's somehow active (though it shouldn't be if we are requeueing a failure),
+                // we can't easily move it without a token. But reportFrameFailure should have it.
+            }
+        } else {
+            // If it doesn't exist at all, re-enqueue it
+            await enqueueJobFrames(jobId, [frame], engine, device);
+        }
+    } catch (err: any) {
+        console.warn(`⚠️  requeueFrame(${jobId}-${frame}) warning: ${err?.message}`);
+    }
+}
+
 export async function requeueFramesFromOfflineNode(
     jobsToRequeue: Array<{ id: string, queueName: string, lockToken: string }>,
     nodeId: string
 ): Promise<void> {
     if (jobsToRequeue.length === 0) return;
     await Promise.all(
-        jobsToRequeue.map(job => nackFrame(job.id, job.lockToken, `Node ${nodeId} went offline mid-render`, job.queueName))
+        jobsToRequeue.map(job => nackFrame(job.id, job.lockToken, `Node ${nodeId} went offline mid-render`, job.queueName, true))
     );
-    console.log(`🔄 NACK'd ${jobsToRequeue.length} BullMQ frames from offline node ${nodeId}`);
+    console.log(`🔄 Requeued ${jobsToRequeue.length} BullMQ frames from offline node ${nodeId} to waiting list`);
+}
+
+/**
+ * Forcefully moves ALL current active jobs in BullMQ back to the waiting list.
+ * Use as a recovery mechanism if frames get stuck in 'active' state.
+ * @param specificQueues Optional list of queue names to sweep. If empty, sweeps all.
+ */
+export async function forceRequeueActiveJobs(specificQueues?: string[]): Promise<number> {
+    const now = Date.now();
+    if (now - lastSweepTime < SWEEP_COOLDOWN_MS) return 0;
+    lastSweepTime = now;
+
+    let count = 0;
+    if (queues.size === 0) {
+        initializeQueues();
+    }
+
+    // Determine which queues to check
+    const targets = specificQueues
+        ? Array.from(queues.entries()).filter(([name]) => specificQueues.includes(name))
+        : Array.from(queues.entries());
+
+    console.log(`🔍 Sweep: Checking ${targets.length} queues for stuck frames...`);
+
+    for (const [name, q] of targets) {
+        try {
+            const activeJobs = await q.getJobs(['active']);
+            if (activeJobs.length > 0) {
+                console.log(`Found ${activeJobs.length} active jobs in queue ${name}`);
+            }
+
+            for (const job of activeJobs) {
+                console.log(`Recovering stuck job: ${job.id} (state: active)`);
+                try {
+                    // Method 1: Try move to wait (requires lock, usually fails if node is dead but lock persists)
+                    await (job as any).moveToWait('force-recovery', true);
+                    count++;
+                } catch (e: any) {
+                    console.warn(`⚠️ Failed moveToWait for ${job.id}: ${e.message}. Using aggressive Remove + Re-add.`);
+                    try {
+                        // Method 2: Aggressive - remove the job entirely and re-enqueue it
+                        // Since we use deterministic IDs (${jobId}-${frame}), this is safe and effective.
+                        const { jobId, frame } = job.data as FrameJobData;
+                        const jobName = job.name;
+
+                        await q.remove(job.id!);
+                        await q.add(jobName, job.data, { jobId: job.id });
+
+                        count++;
+                        console.log(`✅ Successfully re-enqueued ${job.id}`);
+                    } catch (e2: any) {
+                        console.error(`❌ Total failure to rescue ${job.id}: ${e2.message}`);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error(`❌ Error in forceRequeueActiveJobs for queue ${name}:`, err);
+        }
+    }
+    if (count > 0) console.log(`🚀 Force-recovered ${count} stuck active BullMQ jobs`);
+    return count;
 }
 
 /**

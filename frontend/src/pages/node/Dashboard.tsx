@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     Cpu,
@@ -63,6 +64,10 @@ const NodeDashboard: React.FC = () => {
 
     // Revoke Confirm State
     const [revokingNodeId, setRevokingNodeId] = useState<string | null>(null)
+    // Download button state
+    const [isDownloading, setIsDownloading] = useState(false)
+
+    const navigate = useNavigate()
 
     const fetchData = async () => {
         try {
@@ -139,7 +144,7 @@ const NodeDashboard: React.FC = () => {
             }
             // Add real-time refresh for status changes or hardware rejections
             if (data.type === 'node_status_change' || data.type === 'node_update') {
-               fetchData() 
+                fetchData()
             }
         })
 
@@ -199,6 +204,32 @@ const NodeDashboard: React.FC = () => {
         }
     }
 
+    const handleDownloadNodeSoftware = async () => {
+        setIsDownloading(true)
+        try {
+            const res = await axiosInstance.get('/nodes/software/download')
+            if (res.data.success && res.data.downloadUrl) {
+                // Navigate to the setup guide — it will auto-trigger the download
+                const params = new URLSearchParams({
+                    downloadUrl: res.data.downloadUrl,
+                    ...(tokenData ? { token: tokenData.token } : {}),
+                })
+                navigate(`/node/setup-guide?${params.toString()}`)
+            } else {
+                toast.error('Could not get download URL. Please try again.')
+            }
+        } catch (error: any) {
+            console.error('Download node software error:', error)
+            if (error.response?.data?.error === 'NODE_SOFTWARE_NOT_FOUND') {
+                toast.error('Node software is not yet available. Please contact support.')
+            } else {
+                toast.error('Failed to start download. Please try again.')
+            }
+        } finally {
+            setIsDownloading(false)
+        }
+    }
+
     const getStatusBadge = (status: Node['status']) => {
         switch (status) {
             case 'online':
@@ -236,10 +267,14 @@ const NodeDashboard: React.FC = () => {
                     <Button
                         variant="outline"
                         className="text-purple-400 border-purple-500/30 hover:bg-cyan-500/10 hidden md:flex items-center"
-                        onClick={() => toast.success('Beginning software download...')}
+                        onClick={handleDownloadNodeSoftware}
+                        disabled={isDownloading}
                     >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download Node Software
+                        {isDownloading
+                            ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            : <Download className="w-4 h-4 mr-2" />
+                        }
+                        {isDownloading ? 'Fetching...' : 'Download Node Software'}
                         <span title="Download our dedicated rendering software to start contributing your local hardware.">
                             <Info className="w-3.5 h-3.5 ml-2 opacity-50 cursor-help" />
                         </span>

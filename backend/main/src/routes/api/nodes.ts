@@ -1,5 +1,6 @@
 import express from 'express';
 import { NodeController } from '../../controllers/node';
+import { NodeSoftwareController } from '../../controllers/NodeSoftwareController';
 import { authenticate, authorize } from '../../middleware/auth';
 import { tokenVerifyLimiter, tokenGenerateLimiter } from '../../middleware/rateLimiter';
 import { validateNodeSecret } from '../../middleware/nodeAuth';
@@ -57,6 +58,16 @@ router.post('/complete-frame/:nodeId', validateNodeSecret, NodeController.frameC
 // Node information - Protected
 router.get('/', authenticate, NodeController.getAllNodes);
 router.get('/statistics', authenticate, NodeController.getNodeStatistics);
+
+// ── Node Software Download ────────────────────────────────────────────────────
+// Must be declared before /:nodeId to avoid being captured as a node ID lookup
+router.get(
+  '/software/download',
+  authenticate,
+  authorize('node_provider', 'client', 'admin'),
+  NodeSoftwareController.getDownloadUrl
+);
+
 router.get('/:nodeId', authenticate, NodeController.getNode);
 
 // Job distribution reporting

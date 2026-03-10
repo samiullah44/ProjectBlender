@@ -22,7 +22,7 @@ namespace BlendFarm.Node.Services
             _cache = new BenchmarkCache(logger);
         }
 
-        public async Task<BenchmarkResult> GetOrRunBenchmarkAsync(bool force = false, HardwareInfo currentHardware = null)
+        public async Task<BenchmarkResult> GetOrRunBenchmarkAsync(bool force = false, HardwareInfo? currentHardware = null)
         {
             if (!force)
             {

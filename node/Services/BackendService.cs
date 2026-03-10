@@ -32,6 +32,7 @@ namespace BlendFarm.Node.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
         private readonly NodeIdentityService _identityService;
+        private readonly SpeedtestService _speedtestService;
         private string _nodeId;
         private string _friendlyName;
         private string _nodeDisplayName;
@@ -61,13 +62,15 @@ namespace BlendFarm.Node.Services
              ILoggerFactory loggerFactory,
             PythonRunnerService pythonRunner,
             IConfiguration configuration,
-            NodeIdentityService identityService)
+            NodeIdentityService identityService,
+            SpeedtestService speedtestService)
         {
             _logger = logger;
             _loggerFactory = loggerFactory;
             _pythonRunner = pythonRunner;
             _configuration = configuration;
             _identityService = identityService;
+            _speedtestService = speedtestService;
             _nodeId = configuration["NodeSettings:NodeId"] ?? Guid.NewGuid().ToString();
             _backendUrl = configuration["Backend:Url"] ?? "http://192.168.1.31:3000";
             _frameUploadUrls = new ConcurrentDictionary<int, (string, string)>();
@@ -139,7 +142,8 @@ namespace BlendFarm.Node.Services
             // // Detect hardware
             // var hardwareInfo = await DetectHardwareAsync();
 var hardwareDetector = new HardwareDetector(
-        _loggerFactory.CreateLogger<HardwareDetector>() 
+        _loggerFactory.CreateLogger<HardwareDetector>(),
+        _speedtestService
     );
     // Detect ALL hardware with network test (capped at 75s to avoid hangs)
     _logger.LogInformation("🔍 Detecting complete system specifications...");

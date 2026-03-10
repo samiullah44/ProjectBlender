@@ -245,4 +245,45 @@ export class S3Service {
 
     await this.s3Client.send(command);
   }
+
+  // ── Node Software Distribution ─────────────────────────────────
+
+  /** S3 key where node software is stored. Single canonical location. */
+  static readonly NODE_SOFTWARE_KEY = 'Node Software/BlendFarmNode.zip';
+
+  /**
+   * Upload (or replace) the node software ZIP to the fixed key.
+   * Called by the seed script; returns the S3 key.
+   */
+  async uploadNodeSoftware(fileBuffer: Buffer): Promise<string> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: S3Service.NODE_SOFTWARE_KEY,
+      Body: fileBuffer,
+      ContentType: 'application/zip',
+      ContentDisposition: 'attachment; filename="BlendFarmNode.zip"',
+      Metadata: {
+        'upload-type': 'node-software',
+        'updated-at': new Date().toISOString(),
+      },
+    });
+
+    await this.s3Client.send(command);
+    return S3Service.NODE_SOFTWARE_KEY;
+  }
+
+  /**
+   * Generate a time-limited pre-signed URL for downloading the node software.
+   * Default expiry: 24 hours (86400 seconds).
+   */
+  async getNodeSoftwareDownloadUrl(expiresIn: number = 86400): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: S3Service.NODE_SOFTWARE_KEY,
+      // Force browser to download as a file with correct name
+      ResponseContentDisposition: 'attachment; filename="BlendFarmNode.zip"',
+    });
+
+    return getSignedUrl(this.s3Client, command, { expiresIn });
+  }
 }
