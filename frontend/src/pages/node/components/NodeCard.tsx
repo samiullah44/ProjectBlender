@@ -41,7 +41,7 @@ export const NodeCard: React.FC<NodeCardProps> = ({ node, idx, revokingNodeId, o
         >
             <Card
                 className={cn(
-                    "bg-gray-900/40 border-gray-800 hover:border-purple-500/30 transition-all group relative overflow-hidden cursor-pointer",
+                    "bg-[#0A0A0B]/60 border-gray-800/50 backdrop-blur-md hover:border-purple-500/40 transition-all duration-300 group relative overflow-hidden cursor-pointer shadow-xl",
                     isRevoking ? "opacity-75" : ""
                 )}
                 onClick={() => !isRevoking && navigate(window.location.pathname.startsWith('/admin') ? `/admin/nodes/${node.nodeId}` : `/node/nodes/${node.nodeId}`)}
@@ -74,12 +74,12 @@ export const NodeCard: React.FC<NodeCardProps> = ({ node, idx, revokingNodeId, o
                             </Button>
                         </div>
                     </div>
-                    <CardTitle className="text-lg text-white group-hover:text-purple-400 transition-colors flex items-center justify-between">
+                    <CardTitle className="text-lg font-bold text-white group-hover:text-purple-400 transition-colors flex items-center justify-between tracking-tight">
                         {node.name}
-                        <ArrowRight className="w-4 h-4 text-gray-600 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                        <ArrowRight className="w-4 h-4 text-purple-600 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                     </CardTitle>
-                    <CardDescription className="text-xs font-mono text-gray-500">
-                        {node.nodeId}
+                    <CardDescription className="text-[10px] font-mono text-gray-500 uppercase tracking-widest mt-1">
+                        ID: {node.nodeId}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -97,8 +97,8 @@ export const NodeCard: React.FC<NodeCardProps> = ({ node, idx, revokingNodeId, o
                             </p>
                         </div>
                         <div>
-                            <p className="text-gray-500 text-xs mb-1">Earnings</p>
-                            <p className="text-emerald-400 font-semibold">{node.performance?.earnings?.toFixed(2) || '0.00'} CR</p>
+                            <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Earnings</p>
+                            <p className="text-emerald-400 font-bold font-mono">{node.performance?.earnings?.toFixed(2) || '0.00'} CR</p>
                         </div>
                         <div>
                             <p className="text-gray-500 text-xs mb-1">Last seen</p>
@@ -109,14 +109,17 @@ export const NodeCard: React.FC<NodeCardProps> = ({ node, idx, revokingNodeId, o
                     </div>
 
                     <div className="pt-2">
-                        <div className="flex items-center justify-between text-xs mb-2">
-                            <span className="text-gray-500">Utilization</span>
-                            <span className="text-emerald-400 font-medium">
-                                {node.status === 'busy' ? '100%' : '0%'}
+                        <div className="flex items-center justify-between text-[10px] uppercase tracking-widest mb-2 font-semibold">
+                            <span className="text-gray-500">Resource Utilization</span>
+                            <span className={cn(
+                                node.status === 'busy' ? "text-purple-400" : "text-emerald-400"
+                            )}>
+                                {node.status === 'busy' ? '100% Load' : 'Idle'}
                             </span>
                         </div>
-                        <Progress value={node.status === 'busy' ? 100 : 0} className="h-1.5 bg-gray-800" indicatorClassName={cn(
-                            node.status === 'busy' ? "bg-purple-500" : "bg-emerald-500"
+                        <Progress value={node.status === 'busy' ? 100 : 0} className="h-1 bg-gray-950 shadow-inner" indicatorClassName={cn(
+                            "transition-all duration-500",
+                            node.status === 'busy' ? "bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]" : "bg-emerald-500"
                         )} />
                     </div>
 

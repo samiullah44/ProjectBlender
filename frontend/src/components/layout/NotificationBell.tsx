@@ -6,6 +6,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '@/stores/authStore'
 import { useOnClickOutside } from '@/hooks/useOnClickOutside'
 
 export const NotificationBell: React.FC = () => {
@@ -21,7 +22,11 @@ export const NotificationBell: React.FC = () => {
         markAllAsRead,
         deleteNotification
     } = useNotificationStore()
+    const { user } = useAuthStore()
     const navigate = useNavigate()
+
+    const activeRole = user?.primaryRole || user?.role;
+    const isProvider = activeRole === 'node_provider';
 
     useOnClickOutside(containerRef, () => {
         if (isOpen) setIsOpen(false)
@@ -105,7 +110,10 @@ export const NotificationBell: React.FC = () => {
                                 {unreadCount > 0 && (
                                     <button
                                         onClick={() => markAllAsRead()}
-                                        className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                                        className={cn(
+                                            "text-xs transition-colors",
+                                            isProvider ? "text-purple-400 hover:text-purple-300" : "text-emerald-400 hover:text-emerald-300"
+                                        )}
                                     >
                                         Mark all as read
                                     </button>
@@ -125,7 +133,10 @@ export const NotificationBell: React.FC = () => {
                                                 onClick={() => handleNotificationClick(n)}
                                             >
                                                 {!n.read && (
-                                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />
+                                                    <div className={cn(
+                                                        "absolute left-0 top-0 bottom-0 w-1",
+                                                        isProvider ? "bg-purple-500" : "bg-emerald-500"
+                                                    )} />
                                                 )}
                                                 <div className="flex-shrink-0 mt-1">
                                                     {getIcon(n.type)}
@@ -142,7 +153,7 @@ export const NotificationBell: React.FC = () => {
                                                             {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                                                         </span>
                                                     </div>
-                                                    <p 
+                                                    <p
                                                         className="text-xs text-gray-400 mt-1 line-clamp-2 leading-relaxed break-words"
                                                         title={n.message}
                                                     >

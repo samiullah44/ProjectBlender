@@ -266,11 +266,11 @@ const ApplyNodeProvider: React.FC = () => {
                 <div className="container mx-auto px-4 py-16">
                     <Button
                         variant="ghost"
-                        onClick={() => navigate('/client/dashboard')}
+                        onClick={() => navigate(-1)}
                         className="mb-6 text-gray-400 hover:text-white"
                     >
                         <ArrowLeft className="w-4 h-4 mr-2" />
-                        Back to Dashboard
+                        Go Back
                     </Button>
 
                     <motion.div

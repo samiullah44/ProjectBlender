@@ -88,7 +88,7 @@ const NodeDashboard: React.FC = () => {
                         label: 'Total Earnings',
                         value: statsRes.data.performance?.totalEarnings?.toFixed(2) || '0.00',
                         unit: 'credits',
-                        icon: <DollarSign className="w-5 h-5 text-emerald-400" />,
+                        icon: <DollarSign className="w-5 h-5 text-purple-400" />,
                         trend: 'Real-time',
                         trendUp: true
                     },
@@ -96,7 +96,7 @@ const NodeDashboard: React.FC = () => {
                         label: 'Active Nodes',
                         value: statsRes.data.byStatus?.online?.toString() || '0',
                         unit: 'online',
-                        icon: <Activity className="w-5 h-5 text-purple-400" />,
+                        icon: <Activity className="w-5 h-5 text-emerald-400" />,
                         trend: `${statsRes.data.total || 0} total`,
                         trendUp: true
                     },
@@ -112,7 +112,7 @@ const NodeDashboard: React.FC = () => {
                         label: 'Total Rendered',
                         value: statsRes.data.performance?.totalJobsCompleted?.toLocaleString() || '0',
                         unit: 'jobs',
-                        icon: <Cpu className="w-5 h-5 text-cyan-400" />,
+                        icon: <Cpu className="w-5 h-5 text-purple-400" />,
                         trend: 'Historical',
                         trendUp: true
                     }
@@ -261,12 +261,12 @@ const NodeDashboard: React.FC = () => {
                         Provider Dashboard
                         <Badge variant="outline" className="text-purple-400 border-purple-500/30">Node Provider</Badge>
                     </h1>
-                    <p className="text-gray-400">Manage your distributed rendering hardware and track earnings.</p>
+                    <p className="text-gray-400">Manage your distributed hardware and monitor system performance.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Button
                         variant="outline"
-                        className="text-purple-400 border-purple-500/30 hover:bg-cyan-500/10 hidden md:flex items-center"
+                        className="text-purple-400 border-purple-500/30 hover:bg-purple-500/10 hidden md:flex items-center backdrop-blur-sm"
                         onClick={handleDownloadNodeSoftware}
                         disabled={isDownloading}
                     >
@@ -274,8 +274,8 @@ const NodeDashboard: React.FC = () => {
                             ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                             : <Download className="w-4 h-4 mr-2" />
                         }
-                        {isDownloading ? 'Fetching...' : 'Download Node Software'}
-                        <span title="Download our dedicated rendering software to start contributing your local hardware.">
+                        {isDownloading ? 'Fetching...' : 'Node Software'}
+                        <span title="Download the Render Engine to start contributing your local hardware power.">
                             <Info className="w-3.5 h-3.5 ml-2 opacity-50 cursor-help" />
                         </span>
                     </Button>
@@ -286,10 +286,11 @@ const NodeDashboard: React.FC = () => {
                     <Button
                         onClick={handleAddNode}
                         disabled={isGeneratingToken}
-                        className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 text-white shadow-xl shadow-purple-500/10 relative overflow-hidden"
+                        className="bg-gradient-to-r from-purple-700 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white shadow-xl shadow-purple-500/10 relative overflow-hidden"
                     >
+                        <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                         {isGeneratingToken ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Plus className="w-5 h-5 mr-2" />}
-                        {isGeneratingToken ? 'Generating...' : 'Add New Node'}
+                        {isGeneratingToken ? 'Generating...' : 'Add Node'}
                     </Button>
                 </div>
             </div>
@@ -304,23 +305,27 @@ const NodeDashboard: React.FC = () => {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: idx * 0.1 }}
                         >
-                            <Card className="bg-gray-900/40 border-gray-800 backdrop-blur-sm hover:border-white/10 transition-colors">
+                            <Card className="bg-[#0A0A0B]/60 border-gray-800/50 backdrop-blur-md hover:border-purple-500/30 transition-all duration-300 group shadow-2xl">
                                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-sm font-medium text-gray-400">
+                                    <CardTitle className="text-xs font-semibold text-gray-400 tracking-wider uppercase">
                                         {stat.label}
                                     </CardTitle>
-                                    <div className="p-2 rounded-lg bg-gray-800/50">
+                                    <div className="p-2 rounded-lg bg-white/5 border border-white/5 group-hover:border-purple-500/20 group-hover:bg-purple-500/10 transition-colors">
                                         {stat.icon}
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold text-white">
+                                    <div className="text-3xl font-bold text-white tracking-tight">
                                         {stat.value}
-                                        <span className="text-sm font-normal text-gray-500 ml-1.5">{stat.unit}</span>
+                                        <span className="text-sm font-medium text-gray-500 ml-1.5 font-mono">{stat.unit}</span>
                                     </div>
-                                    <div className="flex items-center gap-1 mt-1">
+                                    <div className="flex items-center gap-1 mt-2">
+                                        <div className={cn(
+                                            "h-1 w-1 rounded-full animate-pulse",
+                                            stat.trendUp ? "bg-emerald-400" : "bg-amber-400"
+                                        )} />
                                         <span className={cn(
-                                            "text-xs font-medium",
+                                            "text-[10px] font-bold uppercase tracking-widest",
                                             stat.trendUp ? "text-emerald-400" : "text-amber-400"
                                         )}>
                                             {stat.trend}

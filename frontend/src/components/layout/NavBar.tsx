@@ -57,6 +57,9 @@ const Navbar: React.FC = () => {
   const location = useLocation()
   const navigate = useNavigate()
 
+  const activeRole = user?.primaryRole || user?.role;
+  const isProvider = activeRole === 'node_provider';
+
   useOnClickOutside(userMenuRef, () => {
     if (userMenuOpen) setUserMenuOpen(false)
   })
@@ -227,9 +230,13 @@ const Navbar: React.FC = () => {
         transition={{ duration: 0.5, ease: 'easeOut' }}
         className={cn(
           'fixed top-0 w-full z-50 transition-all duration-300 backdrop-blur-xl border-b',
-          scrolled
-            ? 'bg-gray-950/95 border-gray-800'
-            : 'bg-gray-950/80 border-gray-900'
+          isProvider
+            ? scrolled
+              ? 'bg-[#0A0A0B]/95 border-purple-500/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)]'
+              : 'bg-[#0A0A0B]/80 border-purple-500/10'
+            : scrolled
+              ? 'bg-gray-950/95 border-gray-800'
+              : 'bg-gray-950/80 border-gray-900'
         )}
       >
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -239,7 +246,12 @@ const Navbar: React.FC = () => {
               <Link to="/" className="flex items-center gap-3 group">
                 <div className="flex flex-col">
                   <span className="font-bold text-xl tracking-tight">
-                    <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                    <span className={cn(
+                      "bg-gradient-to-r bg-clip-text text-transparent transition-all duration-500",
+                      isProvider
+                        ? "bg-purple-500"
+                        : "from-emerald-400 to-cyan-400"
+                    )}>
                       Render
                     </span>
                     <span className="text-white">Farm</span>
@@ -266,7 +278,9 @@ const Navbar: React.FC = () => {
                       "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                       location.pathname === item.href
                         ? "text-white bg-white/5"
-                        : "text-gray-300 hover:text-white hover:bg-white/5"
+                        : isProvider
+                          ? "text-gray-300 hover:text-purple-400 hover:bg-purple-500/5"
+                          : "text-gray-300 hover:text-white hover:bg-white/5"
                     )}
                   >
                     {item.icon}
@@ -296,7 +310,10 @@ const Navbar: React.FC = () => {
                               to={subItem.href}
                               className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors group"
                             >
-                              <div className="p-2 rounded-lg bg-white/5 group-hover:bg-emerald-500/20 transition-colors">
+                              <div className={cn(
+                                "p-2 rounded-lg bg-white/5 transition-colors",
+                                isProvider ? "group-hover:bg-purple-500/20" : "group-hover:bg-emerald-500/20"
+                              )}>
                                 {subItem.icon}
                               </div>
                               <div className="flex-1">
@@ -339,10 +356,21 @@ const Navbar: React.FC = () => {
                   <NotificationBell />
 
                   {/* Credits Display */}
-                  <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <div className={cn(
+                    "px-3 py-1.5 rounded-lg border transition-all duration-300",
+                    isProvider
+                      ? "bg-purple-500/10 border-purple-500/20"
+                      : "bg-emerald-500/10 border-emerald-500/20"
+                  )}>
                     <div className="flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-emerald-400" />
-                      <span className="text-sm font-medium text-emerald-400">
+                      <CreditCard className={cn(
+                        "w-4 h-4",
+                        isProvider ? "text-purple-400" : "text-emerald-400"
+                      )} />
+                      <span className={cn(
+                        "text-sm font-medium",
+                        isProvider ? "text-purple-400" : "text-emerald-400"
+                      )}>
                         {user.credits?.toLocaleString()} credits
                       </span>
                     </div>
@@ -443,7 +471,12 @@ const Navbar: React.FC = () => {
                           {user.role?.replace('_', ' ') || user.role}
                         </div>
                       </div>
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold">
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold transition-all duration-500",
+                        isProvider
+                          ? "bg-gradient-to-br from-purple-600 to-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+                          : "bg-gradient-to-br from-emerald-500 to-cyan-500"
+                      )}>
                         {user.name.charAt(0).toUpperCase()}
                       </div>
                       <ChevronDown className={cn(
@@ -608,7 +641,12 @@ const Navbar: React.FC = () => {
                     <>
                       <div className="mb-6">
                         <div className="flex items-center gap-3 mb-4">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold">
+                          <div className={cn(
+                            "w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold transition-all duration-500",
+                            isProvider
+                              ? "bg-gradient-to-br from-purple-500 to-emerald-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+                              : "bg-gradient-to-br from-emerald-500 to-cyan-500"
+                          )}>
                             {user.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
@@ -619,8 +657,14 @@ const Navbar: React.FC = () => {
                               {user.role?.replace('_', ' ') || user.role}
                             </div>
                             <div className="flex items-center gap-2 mt-1">
-                              <CreditCard className="w-3 h-3 text-emerald-400" />
-                              <span className="text-xs text-emerald-400 font-medium">
+                              <CreditCard className={cn(
+                                "w-3 h-3",
+                                isProvider ? "text-purple-400" : "text-emerald-400"
+                              )} />
+                              <span className={cn(
+                                "text-xs font-medium",
+                                isProvider ? "text-purple-400" : "text-emerald-400"
+                              )}>
                                 {user.credits?.toLocaleString()} credits
                               </span>
                             </div>
@@ -686,7 +730,12 @@ const Navbar: React.FC = () => {
                         </Button>
                       </Link>
                       <Link to="/register" onClick={() => setIsOpen(false)}>
-                        <Button className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700">
+                        <Button className={cn(
+                          "w-full bg-gradient-to-r transition-all duration-500",
+                          isProvider
+                            ? "from-purple-600 to-emerald-600 hover:from-purple-700 hover:to-emerald-700"
+                            : "from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700"
+                        )}>
                           Get Started Free
                         </Button>
                       </Link>
