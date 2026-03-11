@@ -39,6 +39,7 @@ import { toast } from 'react-hot-toast'
 import { websocketService } from '@/services/websocketService'
 import { useJob, useCancelJob } from '@/hooks/useJobs'
 import jobStore from '@/stores/jobStore'
+import FrameGrid from '@/components/dashboard/FrameGrid'
 
 interface FrameImage {
   frame: number
@@ -63,7 +64,25 @@ const JobDetails: React.FC = () => {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [localJob, setLocalJob] = useState<any>(null)
-  const [cachedFrames, setCachedFrames] = useState<FrameImage[]>([])
+
+  // Memoized version of frames for the gallery and distribution grid
+  const cachedFrames = useMemo(() => {
+    if (!localJob?.outputUrls) return []
+    return [...localJob.outputUrls]
+      .filter(f => f && f.frame !== undefined && f.url)
+      .sort((a, b) => a.frame - b.frame)
+  }, [localJob?.outputUrls])
+
+  // Mapping of frame number to URL for hover previews
+  const frameImageMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    cachedFrames.forEach((f: any) => {
+      if (f.frame !== undefined && (f.freshUrl || f.url)) {
+        map[f.frame] = f.freshUrl || f.url;
+      }
+    });
+    return map;
+  }, [cachedFrames])
 
   // Use TanStack Query for data fetching with cache-first approach
   const {
@@ -95,13 +114,6 @@ const JobDetails: React.FC = () => {
       if (isValidCache || cachedData.status === 'completed') {
         console.log('📦 Loading job from cache:', jobId)
         setLocalJob(cachedData)
-        if (cachedData.outputUrls) {
-          const validFrames = cachedData.outputUrls.filter((frame: FrameImage) =>
-            frame && frame.frame > 0 && frame.url
-          )
-          const sortedFrames = [...validFrames].sort((a, b) => a.frame - b.frame)
-          setCachedFrames(sortedFrames)
-        }
         return
       } else {
         // Cache expired, remove it
@@ -129,23 +141,6 @@ const JobDetails: React.FC = () => {
       // Update cache with timestamp
       jobDataCache.set(jobId, mergedJob)
       cacheTimestamps.set(jobId, Date.now())
-
-      // Cache frames when data loads - filter out invalid frames
-      if (mergedJob.outputUrls && mergedJob.outputUrls.length > 0) {
-        const validFrames = mergedJob.outputUrls.filter((frame: FrameImage) =>
-          frame && frame.frame > 0 && frame.url
-        )
-        const sortedFrames = [...validFrames].sort((a, b) => a.frame - b.frame)
-        setCachedFrames(sortedFrames)
-
-        // Cache image URLs
-        sortedFrames.forEach((frame: FrameImage) => {
-          const url = frame.freshUrl || frame.url
-          if (url && !imageCache.has(url)) {
-            imageCache.set(url, url)
-          }
-        })
-      }
     }
   }, [job, jobId])
 
@@ -155,14 +150,14 @@ const JobDetails: React.FC = () => {
 
     // Add existing valid frames
     existingFrames.forEach(frame => {
-      if (frame && frame.frame > 0 && frame.url) {
+      if (frame && frame.frame !== undefined && frame.url) {
         frameMap.set(frame.frame, frame)
       }
     })
 
     // Add or update with new valid frames
     newFrames.forEach(frame => {
-      if (frame && frame.frame > 0 && frame.url) {
+      if (frame && frame.frame !== undefined && frame.url) {
         frameMap.set(frame.frame, frame)
       }
     })
@@ -201,16 +196,9 @@ const JobDetails: React.FC = () => {
         if (updatedJob.outputUrls && updatedJob.outputUrls.length > 0) {
           mergedJob.outputUrls = mergeFrames(prev.outputUrls || [], updatedJob.outputUrls)
 
-          // Update cached frames with valid frames only
-          const validFrames = mergedJob.outputUrls.filter((frame: FrameImage) =>
-            frame && frame.frame > 0 && frame.url
-          )
-          const sortedFrames = [...validFrames].sort((a, b) => a.frame - b.frame)
-          setCachedFrames(sortedFrames)
-
           // Cache new image URLs
           updatedJob.outputUrls.forEach((frame: FrameImage) => {
-            if (frame && frame.frame > 0 && frame.url) {
+            if (frame && frame.frame !== undefined && frame.url) {
               const url = frame.freshUrl || frame.url
               if (url && !imageCache.has(url)) {
                 imageCache.set(url, url)
@@ -219,9 +207,13 @@ const JobDetails: React.FC = () => {
           })
         }
 
-        // Merge assignedNodes
+        // Update assignedNodes and frameAssignments - replace with full state from backend
         if (updatedJob.assignedNodes) {
-          mergedJob.assignedNodes = { ...prev.assignedNodes, ...updatedJob.assignedNodes }
+          mergedJob.assignedNodes = updatedJob.assignedNodes
+        }
+
+        if (updatedJob.frameAssignments) {
+          mergedJob.frameAssignments = updatedJob.frameAssignments
         }
 
         // Update timestamps
@@ -294,9 +286,16 @@ const JobDetails: React.FC = () => {
       const blob = await response.blob()
       const blobUrl = window.URL.createObjectURL(blob)
 
+      const getExtension = (key: string) => {
+        if (!key) return 'png';
+        const parts = key.split('.');
+        return parts.length > 1 ? parts.pop()?.toLowerCase() : 'png';
+      };
+
+      const extension = getExtension(frame.s3Key);
       const link = document.createElement('a')
       link.href = blobUrl
-      link.download = `frame_${String(frame.frame).padStart(3, '0')}.png`
+      link.download = `frame_${String(frame.frame).padStart(3, '0')}.${extension}`
       link.style.display = 'none'
 
       document.body.appendChild(link)
@@ -337,9 +336,16 @@ const JobDetails: React.FC = () => {
               const blob = await response.blob()
               const blobUrl = window.URL.createObjectURL(blob)
 
+              const getExtension = (key: string) => {
+                if (!key) return 'png';
+                const parts = key.split('.');
+                return parts.length > 1 ? parts.pop()?.toLowerCase() : 'png';
+              };
+
+              const extension = getExtension(frame.s3Key);
               const link = document.createElement('a')
               link.href = blobUrl
-              link.download = `frame_${String(frame.frame).padStart(3, '0')}.png`
+              link.download = `frame_${String(frame.frame).padStart(3, '0')}.${extension}`
               link.style.display = 'none'
               document.body.appendChild(link)
               link.click()
@@ -531,17 +537,22 @@ const JobDetails: React.FC = () => {
 
   const {
     jobId: id = '',
-    blendFileName = 'Unnamed Job',
+    name,
+    blendFileName = 'Job',
     type = 'animation',
     status = 'pending',
     settings = {},
     assignedNodes = {},
-    createdAt = new Date().toISOString(),
-    updatedAt = new Date().toISOString(),
+    createdAt,
+    updatedAt,
+    startedAt,
     completedAt,
     blendFileUrl,
     blendFileKey
   } = localJob || {}
+
+  const displayName = name || blendFileName || 'Unnamed Job'
+  const startTime = startedAt || createdAt
 
   return (
     <motion.div
@@ -588,7 +599,7 @@ const JobDetails: React.FC = () => {
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div>
-                <h1 className="text-2xl font-bold truncate max-w-2xl">{blendFileName || 'Unnamed Job'}</h1>
+                <h1 className="text-2xl font-bold truncate max-w-2xl">{displayName}</h1>
                 <div className="flex items-center gap-3 mt-1">
                   <Badge className={`${getStatusColor(status || 'pending')}`}>
                     <StatusIcon className="w-3 h-3 mr-1" />
@@ -596,7 +607,7 @@ const JobDetails: React.FC = () => {
                   </Badge>
                   <span className="text-sm text-gray-400">Job ID: {id ? id.substring(0, 8) : '...'}</span>
                   <span className="text-sm text-gray-400">
-                    Created: {createdAt ? new Date(createdAt).toLocaleDateString() : 'Unknown'}
+                    Created: {createdAt ? new Date(createdAt).toLocaleDateString() : '...'}
                   </span>
                   {status === 'processing' && (
                     <span className="text-xs text-blue-400">
@@ -690,14 +701,44 @@ const JobDetails: React.FC = () => {
                       </div>
                       <span className="font-bold text-xl">{progress}%</span>
                     </div>
-                    <Progress value={progress} className="h-2" />
+                    {/* High-fidelity frame detail for Grid Visualization */}
+                    {(() => {
+                        const frameDetail = {
+                            rendered: Array.from(new Set([
+                                ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'rendered').map((a: any) => a.frame) : []),
+                                ...(Array.isArray(localJob.frames?.rendered) ? localJob.frames.rendered : (Array.isArray(localJob.frames?.list) ? localJob.frames.list : []))
+                            ])),
+                            failed: Array.from(new Set([
+                                ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'failed').map((a: any) => a.frame) : []),
+                                ...(Array.isArray(localJob.frames?.failed) ? localJob.frames.failed : [])
+                            ])),
+                            assigned: Array.from(new Set([
+                                ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'assigned').map((a: any) => a.frame) : []),
+                                ...(Array.isArray(localJob.frames?.assigned) ? localJob.frames.assigned : []),
+                                ...Object.values(localJob.assignedNodes || {}).flat() as number[]
+                            ]))
+                        };
+
+                        return (
+                            <div className="mt-4">
+                                <FrameGrid
+                                    totalFrames={frameStats.totalFrames}
+                                    renderedFrames={frameDetail.rendered}
+                                    failedFrames={frameDetail.failed}
+                                    assignedFrames={frameDetail.assigned}
+                                    startFrame={localJob.frames?.start || 1}
+                                    frameImages={frameImageMap}
+                                />
+                            </div>
+                        );
+                    })()}
                     <div className="flex justify-between text-sm text-gray-400 mt-2">
-                      <span>
-                        {frameStats.renderedFrames} of {frameStats.totalFrames} frames rendered
-                      </span>
-                      <span>
-                        {frameStats.pendingFrames} pending • {frameStats.failedFrames} failed
-                      </span>
+                        <span>
+                            {frameStats.renderedFrames} of {frameStats.totalFrames} frames rendered
+                        </span>
+                        <span>
+                            {frameStats.pendingFrames} pending • {frameStats.failedFrames} failed
+                        </span>
                     </div>
                   </div>
 
@@ -801,41 +842,35 @@ const JobDetails: React.FC = () => {
                           <span className="font-medium">{frameStats.totalFrames}</span>
                         </div>
 
-                        {frameStats.renderedFrames > 0 && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-emerald-400">Rendered ({frameStats.renderedFrames})</span>
-                              <span className="text-sm">
-                                {Math.round((frameStats.renderedFrames / frameStats.totalFrames) * 100)}%
-                              </span>
-                            </div>
-                            <Progress value={(frameStats.renderedFrames / frameStats.totalFrames) * 100} className="h-2" />
-                          </div>
-                        )}
+                        {/* Live Render Grid Visualization */}
+                        {(() => {
+                           const frameDetail = {
+                               rendered: Array.from(new Set([
+                                   ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'rendered').map((a: any) => a.frame) : []),
+                                   ...(Array.isArray(localJob.frames?.rendered) ? localJob.frames.rendered : (Array.isArray(localJob.frames?.list) ? localJob.frames.list : []))
+                               ])),
+                               failed: Array.from(new Set([
+                                   ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'failed').map((a: any) => a.frame) : []),
+                                   ...(Array.isArray(localJob.frames?.failed) ? localJob.frames.failed : [])
+                               ])),
+                               assigned: Array.from(new Set([
+                                   ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'assigned').map((a: any) => a.frame) : []),
+                                   ...(Array.isArray(localJob.frames?.assigned) ? localJob.frames.assigned : []),
+                                   ...Object.values(localJob.assignedNodes || {}).flat() as number[]
+                               ]))
+                           };
 
-                        {frameStats.assignedFrames > 0 && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-blue-400">Assigned ({frameStats.assignedFrames})</span>
-                              <span className="text-sm">
-                                {Math.round((frameStats.assignedFrames / frameStats.totalFrames) * 100)}%
-                              </span>
-                            </div>
-                            <Progress value={(frameStats.assignedFrames / frameStats.totalFrames) * 100} className="h-2" />
-                          </div>
-                        )}
-
-                        {frameStats.pendingFrames > 0 && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-amber-400">Pending ({frameStats.pendingFrames})</span>
-                              <span className="text-sm">
-                                {Math.round((frameStats.pendingFrames / frameStats.totalFrames) * 100)}%
-                              </span>
-                            </div>
-                            <Progress value={(frameStats.pendingFrames / frameStats.totalFrames) * 100} className="h-2" />
-                          </div>
-                        )}
+                           return (
+                               <FrameGrid
+                                   totalFrames={frameStats.totalFrames}
+                                   renderedFrames={frameDetail.rendered}
+                                   failedFrames={frameDetail.failed}
+                                   assignedFrames={frameDetail.assigned}
+                                   startFrame={localJob.frames?.start || 1}
+                                   frameImages={frameImageMap}
+                               />
+                           );
+                        })()}
                       </div>
                     </CardContent>
                   </Card>
@@ -1099,12 +1134,16 @@ const JobDetails: React.FC = () => {
                         </div>
                         <div>
                           <label className="text-sm text-gray-400">Output Format</label>
-                          <div className="font-medium">{settings.outputFormat || 'PNG'}</div>
+                          <div className="font-medium">
+                            {settings.outputFormat || 'PNG'} ({settings.colorMode || 'RGBA'} {settings.colorDepth || '8'}-bit)
+                          </div>
                         </div>
-                        {settings.denoiser && (
+                        {settings.compression !== undefined && (
                           <div>
-                            <label className="text-sm text-gray-400">Denoiser</label>
-                            <div className="font-medium">{settings.denoiser}</div>
+                            <label className="text-sm text-gray-400">
+                              {settings.outputFormat === 'JPEG' ? 'Quality' : 'Compression'}
+                            </label>
+                            <div className="font-medium">{settings.compression}%</div>
                           </div>
                         )}
                       </div>
@@ -1288,7 +1327,7 @@ const JobDetails: React.FC = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Started:</span>
-                    <span>{new Date(createdAt).toLocaleTimeString()}</span>
+                    <span>{startTime ? new Date(startTime).toLocaleTimeString() : '...'}</span>
                   </div>
                   {status === 'completed' && completedAt ? (
                     <>
@@ -1296,10 +1335,25 @@ const JobDetails: React.FC = () => {
                         <span className="text-gray-400">Completed:</span>
                         <span>{new Date(completedAt).toLocaleTimeString()}</span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex justify-between font-bold text-blue-400">
                         <span className="text-gray-400">Duration:</span>
                         <span>
-                          {Math.round((new Date(completedAt).getTime() - new Date(createdAt).getTime()) / 60000)} minutes
+                          {(() => {
+                            const startDate = startTime || createdAt;
+                            const endDate = completedAt;
+                            
+                            if (!startDate || !endDate) return '...';
+                            
+                            const start = new Date(startDate).getTime();
+                            const end = new Date(endDate).getTime();
+                            
+                            if (isNaN(start) || isNaN(end)) return '...';
+                            
+                            const diffMs = Math.max(0, end - start);
+                            const minutes = Math.floor(diffMs / 60000);
+                            const seconds = Math.floor((diffMs % 60000) / 1000);
+                            return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+                          })()}
                         </span>
                       </div>
                     </>
@@ -1307,7 +1361,14 @@ const JobDetails: React.FC = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-400">Elapsed:</span>
                       <span>
-                        {Math.round((Date.now() - new Date(createdAt).getTime()) / 60000)} minutes
+                        {(() => {
+                          const startDate = startTime || createdAt;
+                          if (!startDate) return '0 minutes';
+                          const start = new Date(startDate).getTime();
+                          if (isNaN(start)) return '0 minutes';
+                          const diff = Math.max(0, Date.now() - start);
+                          return `${Math.round(diff / 60000)} minutes`;
+                        })()}
                       </span>
                     </div>
                   )}

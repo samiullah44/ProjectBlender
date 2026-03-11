@@ -47,6 +47,11 @@ export class JobController {
           tileSize: parseInt(req.body.tileSize) || 256,
           denoiser: req.body.denoiser,
           outputFormat: req.body.outputFormat || 'PNG',
+          colorMode: req.body.colorMode || 'RGBA',
+          colorDepth: req.body.colorDepth || '8',
+          compression: parseInt(req.body.compression) || 90,
+          exrCodec: req.body.exrCodec || 'ZIP',
+          tiffCodec: req.body.tiffCodec || 'DEFLATE',
           creditsPerFrame: parseFloat(req.body.creditsPerFrame) || 1,
           blenderVersion: req.body.blenderVersion || '4.5.0',
           selectedFrame: parseInt(req.body.selectedFrame)
@@ -370,18 +375,34 @@ export class JobController {
   // Generate frame upload URL
   async generateFrameUploadUrl(req: Request, res: Response): Promise<void> {
     try {
-      const { jobId, frame } = req.params;
+      const { jobId, frame } = req.params as { jobId: string, frame: string };
 
       if (!jobId || !frame) {
         throw new AppError('Job ID and frame number are required', 400);
       }
 
-      const frameNumber = parseInt(frame as string);
+      const frameNumber = parseInt(frame);
       if (isNaN(frameNumber) || frameNumber < 1) {
         throw new AppError('Frame must be a positive integer', 400);
       }
 
-      const { uploadUrl, s3Key } = await this.s3Service.generateFrameUploadUrl(jobId as string, frameNumber);
+      // Resolve extension based on job settings if possible
+      let extension = 'png';
+      try {
+        const job = await this.jobService.getJobByIdMinimal(jobId);
+        if (job && job.settings?.outputFormat) {
+          const format = job.settings.outputFormat.toUpperCase();
+          if (format === 'JPEG' || format === 'JPG') extension = 'jpg';
+          else if (format === 'OPEN_EXR' || format === 'EXR') extension = 'exr';
+          else if (format === 'TIFF') extension = 'tif';
+          else if (format === 'TARGA' || format === 'TGA') extension = 'tga';
+          else if (format === 'BMP') extension = 'bmp';
+        }
+      } catch (err) {
+        console.warn('Failed to fetch job settings for extension resolution, defaulting to png');
+      }
+
+      const { uploadUrl, s3Key } = await this.s3Service.generateFrameUploadUrl(jobId, frameNumber, extension);
 
       res.json({
         success: true,
@@ -392,7 +413,7 @@ export class JobController {
         fileStructure: {
           s3Key,
           rendersFolder: `renders/${jobId}/`,
-          fileName: `frame_${frameNumber.toString().padStart(4, '0')}.png`
+          fileName: `frame_${frameNumber.toString().padStart(4, '0')}.${extension}`
         }
       });
     } catch (error) {

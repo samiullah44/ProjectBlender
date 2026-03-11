@@ -670,9 +670,9 @@ export class WebSocketService {
       return {
         type: 'system_stats',
         data: {
-          totalJobs,
-          activeJobs,
-          completedJobs,
+          globalJobs: totalJobs,
+          globalActiveJobs: activeJobs,
+          globalCompletedJobs: completedJobs,
           totalNodes,
           activeNodes,
           timestamp: Date.now(),

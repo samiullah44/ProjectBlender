@@ -93,6 +93,11 @@ export class UploadController {
         tileSize: parseInt(jobSettings?.tileSize || '256'),
         denoiser: type === 'image' ? jobSettings?.denoiser || 'OPTIX' : undefined,
         outputFormat: jobSettings?.outputFormat || 'PNG',
+        colorMode: jobSettings?.colorMode || 'RGBA',
+        colorDepth: jobSettings?.colorDepth || '8',
+        compression: parseInt(jobSettings?.compression || '90'),
+        exrCodec: jobSettings?.exrCodec || 'ZIP',
+        tiffCodec: jobSettings?.tiffCodec || 'DEFLATE',
         creditsPerFrame: jobSettings?.creditsPerFrame || 1,
         blenderVersion: jobSettings?.blenderVersion || '4.5.0'
       };

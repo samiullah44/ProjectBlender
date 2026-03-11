@@ -93,10 +93,21 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
           // Generate fresh S3 URLs for blend file
           const blendFileUrl = await s3Service.generateBlendFileDownloadUrl(job.blendFileKey);
 
+          // Resolve extension based on job settings
+          let extension = 'png';
+          if (job.settings?.outputFormat) {
+            const format = job.settings.outputFormat.toUpperCase();
+            if (format === 'JPEG' || format === 'JPG') extension = 'jpg';
+            else if (format === 'OPEN_EXR' || format === 'EXR') extension = 'exr';
+            else if (format === 'TIFF') extension = 'tif';
+            else if (format === 'TARGA' || format === 'TGA') extension = 'tga';
+            else if (format === 'BMP') extension = 'bmp';
+          }
+
           // Generate upload URLs for pending frames
           const frameUploadUrls: Record<number, { uploadUrl: string, s3Key: string }> = {};
           for (const frame of pendingAssignedFrames) {
-            const { uploadUrl, s3Key } = await s3Service.generateFrameUploadUrl(job.jobId, frame);
+            const { uploadUrl, s3Key } = await s3Service.generateFrameUploadUrl(job.jobId, frame, extension);
             frameUploadUrls[frame] = { uploadUrl, s3Key };
           }
 
@@ -225,10 +236,21 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
     // 6. Mark frames as in-progress inside MongoDB (for Dashboard fidelity)
     // Remove them from frames.pending and frames.failed since they are assigned again
 
+    // Resolve extension based on job settings
+    let extension = 'png';
+    if (job.settings?.outputFormat) {
+      const format = job.settings.outputFormat.toUpperCase();
+      if (format === 'JPEG' || format === 'JPG') extension = 'jpg';
+      else if (format === 'OPEN_EXR' || format === 'EXR') extension = 'exr';
+      else if (format === 'TIFF') extension = 'tif';
+      else if (format === 'TARGA' || format === 'TGA') extension = 'tga';
+      else if (format === 'BMP') extension = 'bmp';
+    }
+
     // Generate S3 upload URLs for each frame
     const frameUploadUrls: Record<number, { uploadUrl: string, s3Key: string }> = {};
     for (const frame of assignedFrames) {
-      const { uploadUrl, s3Key } = await s3Service.generateFrameUploadUrl(job.jobId, frame);
+      const { uploadUrl, s3Key } = await s3Service.generateFrameUploadUrl(job.jobId, frame, extension);
       frameUploadUrls[frame] = { uploadUrl, s3Key };
     }
 

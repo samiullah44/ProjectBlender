@@ -57,9 +57,32 @@ const JobSettingsSchema = new Schema<IJobSettings>({
   },
   outputFormat: {
     type: String,
-    enum: ['PNG', 'JPEG', 'EXR', 'TIFF'],
+    enum: ['PNG', 'JPEG', 'EXR', 'TIFF', 'TARGA', 'BMP', 'OPEN_EXR'],
     default: 'PNG'
   },
+  colorMode: {
+    type: String,
+    enum: ['BW', 'RGB', 'RGBA'],
+    default: 'RGBA'
+  },
+  colorDepth: {
+    type: String,
+    enum: ['8', '16', '32'],
+    default: '8'
+  },
+  compression: { type: Number, default: 90 },
+  exrCodec: {
+    type: String,
+    enum: ['ZIP', 'PIZ', 'RLE', 'ZIPS', 'BXR', 'DWAA', 'DWAB'],
+    default: 'ZIP'
+  },
+  tiffCodec: {
+    type: String,
+    enum: ['NONE', 'PACKBITS', 'DEFLATE', 'LZW'],
+    default: 'DEFLATE'
+  },
+  scene: String,
+  camera: String,
   creditsPerFrame: { type: Number, default: 1 },
   blenderVersion: { type: String, default: '4.5.0' },
   selectedFrame: Number,

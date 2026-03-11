@@ -38,6 +38,13 @@ device_type = config.get('device', 'GPU').upper()
 resolution_x = config.get('resolution_x', 1920)
 resolution_y = config.get('resolution_y', 1080)
 output_format = config.get('output_format', 'PNG').upper()
+color_mode = config.get('color_mode', 'RGBA').upper()
+color_depth = config.get('color_depth', '8').upper()
+compression = config.get('compression', 90)
+exr_codec = config.get('exr_codec', 'ZIP').upper()
+tiff_codec = config.get('tiff_codec', 'DEFLATE').upper()
+scene_name = config.get('scene', '')
+camera_name = config.get('camera', '')
 denoiser = config.get('denoiser', 'NONE').upper()
 use_animation_settings = config.get('use_animation_settings', False)
 
@@ -49,11 +56,28 @@ print(f'  Engine: {engine}')
 print(f'  Device: {device_type}')
 print(f'  Resolution: {resolution_x}x{resolution_y}')
 print(f'  Format: {output_format}')
+print(f'  Color: {color_mode} {color_depth}-bit')
+print(f'  Compression/Quality: {compression}')
+print(f'  Scene: {scene_name if scene_name else "Default"}')
+print(f'  Camera: {camera_name if camera_name else "Default"}')
 print(f'  Denoiser: {denoiser}')
 print(f'  Animation Mode: {use_animation_settings}')
 
 # Apply ALL settings
 scene = bpy.context.scene
+
+# Set explicit scene if requested
+if scene_name and scene_name in bpy.data.scenes:
+    scene = bpy.data.scenes[scene_name]
+    bpy.context.window.scene = scene
+    print(f'Switched to scene: {scene_name}')
+
+# Set explicit camera if requested
+if camera_name and camera_name in bpy.data.objects:
+    cam_obj = bpy.data.objects[camera_name]
+    if cam_obj.type == 'CAMERA':
+        scene.camera = cam_obj
+        print(f'Set active camera: {camera_name}')
 scene.frame_set(frame_num)
 
 # Set engine and device - FIXED: No conflicting overrides
@@ -179,28 +203,27 @@ scene.render.filepath = output_path
 
 # Set output format based on configuration
 format_settings = scene.render.image_settings
+format_settings.color_mode = color_mode
+format_settings.color_depth = color_depth
+
 if output_format == 'PNG':
     format_settings.file_format = 'PNG'
-    format_settings.color_mode = 'RGBA'
-    format_settings.color_depth = '16'  # 16-bit PNG for better quality
-    format_settings.compression = 90    # High compression
+    format_settings.compression = compression
 elif output_format == 'JPEG' or output_format == 'JPG':
     format_settings.file_format = 'JPEG'
-    format_settings.color_mode = 'RGB'
-    format_settings.quality = 95        # High quality JPEG
-elif output_format == 'EXR':
+    format_settings.quality = compression
+elif output_format == 'OPEN_EXR' or output_format == 'EXR':
     format_settings.file_format = 'OPEN_EXR'
-    format_settings.color_mode = 'RGBA'
-    format_settings.color_depth = '32'
-    format_settings.exr_codec = 'ZIP'   # Compressed EXR
+    format_settings.exr_codec = exr_codec
 elif output_format == 'TIFF':
     format_settings.file_format = 'TIFF'
-    format_settings.color_mode = 'RGBA'
-    format_settings.color_depth = '16'
-    format_settings.tiff_codec = 'DEFLATE'  # Compressed TIFF
+    format_settings.tiff_codec = tiff_codec
+elif output_format == 'TARGA' or output_format == 'TGA':
+    format_settings.file_format = 'TARGA'
+elif output_format == 'BMP':
+    format_settings.file_format = 'BMP'
 else:
     format_settings.file_format = 'PNG'
-    format_settings.color_mode = 'RGBA'
     print(f'Warning: Unknown format {output_format}, defaulting to PNG')
 
 print(f'Output format set to: {format_settings.file_format}')

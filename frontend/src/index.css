@@ -1,21 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 
 @layer base {
     html {
-        font-family: 'Inter', sans-serif;
         text-rendering: optimizeLegibility;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-    }
-
-    .font-display {
-        font-family: 'Space Grotesk', sans-serif;
-        letter-spacing: -0.02em;
-    }
-
-    .font-mono {
-        font-family: 'JetBrains Mono', monospace;
     }
 }

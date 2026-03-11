@@ -1246,10 +1246,18 @@ private string CalculateNodeTier(HardwareInfo hw)
                 var resolutionX = settings.ResolutionX > 0 ? settings.ResolutionX : 1920;
                 var resolutionY = settings.ResolutionY > 0 ? settings.ResolutionY : 1080;
                 var outputFormat = settings.OutputFormat ?? "PNG";
+                var colorMode = settings.ColorMode ?? "RGBA";
+                var colorDepth = settings.ColorDepth ?? "8";
+                var compression = settings.Compression > 0 ? settings.Compression : 90;
+                var exrCodec = settings.ExrCodec ?? "ZIP";
+                var tiffCodec = settings.TiffCodec ?? "DEFLATE";
                 var blenderVersion = settings.BlenderVersion ?? "4.5.0";
                 var denoiser = settings.Denoiser ?? "NONE";
+                var tileSize = settings.TileSize > 0 ? settings.TileSize : 256;
+                var sceneName = settings.Scene;
+                var cameraName = settings.Camera;
 
-                _logger.LogInformation($"⚙️  Render settings: {engine}, {device}, {samples} samples, {resolutionX}x{resolutionY}, Output: {outputFormat}, Blender: {blenderVersion}, Denoiser: {denoiser}");
+                _logger.LogInformation($"⚙️  Render settings: {engine}, {device}, {samples} samples, {resolutionX}x{resolutionY}, Output: {outputFormat} ({colorMode} {colorDepth}-bit), Blender: {blenderVersion}, Denoiser: {denoiser}");
 
                 // Ensure the correct Blender version is available and set
                 _logger.LogInformation($"🔍 Acquiring Blender {blenderVersion} for job...");
@@ -1325,7 +1333,15 @@ private string CalculateNodeTier(HardwareInfo hw)
                             resolutionX: resolutionX,
                             resolutionY: resolutionY,
                             outputFormat: outputFormat,
+                            colorMode: colorMode,
+                            colorDepth: colorDepth,
+                            compression: compression,
+                            exrCodec: exrCodec,
+                            tiffCodec: tiffCodec,
+                            tileSize: tileSize,
                             denoiser: denoiser,
+                            scene: sceneName,
+                            camera: cameraName,
                             useAnimationSettings: isAnimation,
                             cancellationToken: renderToken);  // use render-specific token
 
@@ -1360,6 +1376,11 @@ private string CalculateNodeTier(HardwareInfo hw)
                             await ReportFailureAsync(assignment.JobId, frame, "No valid upload URL", null, cancellationToken);
                             continue;
                         }
+
+                        _logger.LogInformation($"🔗 S3 Upload Info for Frame {frame}:");
+                        _logger.LogInformation($"   - Key: {uploadInfo.s3Key}");
+                        _logger.LogInformation($"   - Format: {outputFormat}");
+                        _logger.LogInformation($"   - URL: {uploadInfo.uploadUrl.Substring(0, Math.Min(100, uploadInfo.uploadUrl.Length))}...");
 
                         _logger.LogInformation($"📤 Uploading frame {frame} directly to S3...");
                         var uploadResult = await UploadToS3Async(outputPath, uploadInfo.uploadUrl, uploadInfo.s3Key, cancellationToken);

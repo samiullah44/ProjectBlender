@@ -10,10 +10,17 @@ export interface JobSettings {
   resolutionX: number
   resolutionY: number
   tileSize: number
+  outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF' | 'TARGA' | 'BMP' | 'OPEN_EXR'
+  colorMode: 'BW' | 'RGB' | 'RGBA'
+  colorDepth: '8' | '16' | '32'
+  compression: number
+  exrCodec?: 'ZIP' | 'PIZ' | 'RLE' | 'ZIPS' | 'BXR' | 'DWAA' | 'DWAB'
+  tiffCodec?: 'NONE' | 'PACKBITS' | 'DEFLATE' | 'LZW'
   denoiser?: 'NONE' | 'OPTIX' | 'OPENIMAGEDENOISE' | 'NLM'
-  outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF'
   creditsPerFrame: number
   blenderVersion?: string
+  scene?: string
+  camera?: string
 }
 
 export interface JobUploadData {

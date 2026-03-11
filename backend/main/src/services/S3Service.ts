@@ -87,14 +87,28 @@ export class S3Service {
   /**
    * Generate a pre-signed URL for uploading rendered frames
    */
-  async generateFrameUploadUrl(jobId: string, frame: number, expiresIn: number = 3600): Promise<{ uploadUrl: string; s3Key: string }> {
-    const fileName = `frame_${frame.toString().padStart(4, '0')}.png`;
+  async generateFrameUploadUrl(
+    jobId: string,
+    frame: number,
+    extension: string = 'png',
+    expiresIn: number = 3600
+  ): Promise<{ uploadUrl: string; s3Key: string }> {
+    const fileName = `frame_${frame.toString().padStart(4, '0')}.${extension}`;
     const fileKey = `renders/${jobId}/${fileName}`;
+
+    // Determine Content-Type based on extension
+    let contentType = 'image/png';
+    const ext = extension.toLowerCase();
+    if (ext === 'jpg' || ext === 'jpeg') contentType = 'image/jpeg';
+    else if (ext === 'exr') contentType = 'image/x-exr';
+    else if (ext === 'tif' || ext === 'tiff') contentType = 'image/tiff';
+    else if (ext === 'tga') contentType = 'image/x-targa';
+    else if (ext === 'bmp') contentType = 'image/bmp';
 
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: fileKey,
-      ContentType: 'image/png',
+      ContentType: contentType,
       Metadata: {
         'job-id': jobId,
         'frame-number': frame.toString(),

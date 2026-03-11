@@ -154,7 +154,7 @@ export class JobService {
 
             // Broadcast via WebSocket and notify nodes to check for work
             if (this.wsService) {
-                this.wsService.broadcastSystemUpdate({
+                this.wsService.emitToUser(userId, 'system_update', {
                     type: 'job_created',
                     data: {
                         jobId,
@@ -679,6 +679,8 @@ export class JobService {
             // Priority given to lifetime stats from User table if available
             totalJobs: userStats?.jobsCreated ?? totals.totalJobs,
             activeJobs: (statusCounts.pending || 0) + (statusCounts.processing || 0) + (statusCounts.paused || 0),
+            processingJobs: statusCounts.processing || 0,
+            pendingJobs: statusCounts.pending || 0,
             completedJobs: statusCounts.completed || 0,
             failedJobs: statusCounts.failed || 0,
             cancelledJobs: statusCounts.cancelled || 0,

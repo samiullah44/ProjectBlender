@@ -20,10 +20,17 @@ interface JobSettings {
   resolutionX: number
   resolutionY: number
   tileSize: number
-  outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF'
+  outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF' | 'TARGA' | 'BMP' | 'OPEN_EXR'
+  colorMode: 'BW' | 'RGB' | 'RGBA'
+  colorDepth: '8' | '16' | '32'
+  compression: number
+  exrCodec?: 'ZIP' | 'PIZ' | 'RLE' | 'ZIPS' | 'BXR' | 'DWAA' | 'DWAB'
+  tiffCodec?: 'NONE' | 'PACKBITS' | 'DEFLATE' | 'LZW'
   denoiser?: 'NONE' | 'OPTIX' | 'OPENIMAGEDENOISE' | 'NLM'
   selectedFrame?: number
   creditsPerFrame: number
+  scene?: string
+  camera?: string
 }
 
 export interface Job {
@@ -44,6 +51,13 @@ export interface Job {
     resolutionY: number
     tileSize: number
     outputFormat: string
+    colorMode?: string
+    colorDepth?: string
+    compression?: number
+    exrCodec?: string
+    tiffCodec?: string
+    scene?: string
+    camera?: string
     denoiser?: string
     selectedFrame?: number
     creditsPerFrame?: number
@@ -69,8 +83,10 @@ export interface Job {
     creditsEarned?: number
     s3Key?: string
   }>
+  name?: string
   createdAt: string
   updatedAt: string
+  startedAt?: string
   completedAt?: string
 }
 
@@ -106,6 +122,8 @@ interface JobStore {
   getDashboardStats: () => Promise<{
     totalJobs: number
     activeJobs: number
+    processingJobs: number
+    pendingJobs: number
     completedJobs: number
     failedJobs: number
     completedToday: number
@@ -315,6 +333,13 @@ const jobStore = create<JobStore>((set, get) => ({
             resolutionY: result.settings?.resolutionY || jobData.settings.resolutionY,
             tileSize: result.settings?.tileSize || jobData.settings.tileSize,
             outputFormat: result.settings?.outputFormat || jobData.settings.outputFormat,
+            colorMode: result.settings?.colorMode || jobData.settings.colorMode,
+            colorDepth: result.settings?.colorDepth || jobData.settings.colorDepth,
+            compression: result.settings?.compression || jobData.settings.compression,
+            exrCodec: result.settings?.exrCodec || jobData.settings.exrCodec,
+            tiffCodec: result.settings?.tiffCodec || jobData.settings.tiffCodec,
+            scene: result.settings?.scene || jobData.settings.scene,
+            camera: result.settings?.camera || jobData.settings.camera,
             denoiser: result.settings?.denoiser || jobData.settings.denoiser,
             creditsPerFrame: result.settings?.creditsPerFrame || jobData.settings.creditsPerFrame
           },
@@ -580,6 +605,8 @@ const jobStore = create<JobStore>((set, get) => ({
       return {
         totalJobs: 0,
         activeJobs: 0,
+        processingJobs: 0,
+        pendingJobs: 0,
         completedJobs: 0,
         failedJobs: 0,
         completedToday: 0,

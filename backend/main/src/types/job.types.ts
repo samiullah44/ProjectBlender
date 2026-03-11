@@ -31,13 +31,20 @@ export interface IJobSettings {
     resolutionY: number;
     tileSize: number;
     denoiser?: 'NONE' | 'OPTIX' | 'OPENIMAGEDENOISE' | 'NLM';
-    outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF';
+    outputFormat: 'PNG' | 'JPEG' | 'EXR' | 'TIFF' | 'TARGA' | 'BMP' | 'OPEN_EXR';
+    colorMode?: 'BW' | 'RGB' | 'RGBA';
+    colorDepth?: '8' | '16' | '32';
+    compression?: number; // 0-100 for PNG/JPEG
+    exrCodec?: 'ZIP' | 'PIZ' | 'RLE' | 'ZIPS' | 'BXR' | 'DWAA' | 'DWAB';
+    tiffCodec?: 'NONE' | 'PACKBITS' | 'DEFLATE' | 'LZW';
     creditsPerFrame: number;
     blenderVersion?: string;
     selectedFrame?: number;
     animationFrameRate?: number;
     useCompositing?: boolean;
     useSequencer?: boolean;
+    scene?: string;
+    camera?: string;
 }
 
 export interface IJobFrames {
@@ -142,6 +149,8 @@ export interface PaginationOptions {
 export interface JobStats {
     totalJobs: number;
     activeJobs: number;
+    processingJobs: number;
+    pendingJobs: number;
     completedJobs: number;
     failedJobs: number;
     cancelledJobs: number;

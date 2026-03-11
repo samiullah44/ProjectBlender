@@ -49,6 +49,8 @@ import { type Job } from '@/stores/jobStore'
 interface SystemStats {
   totalJobs: number
   activeJobs: number
+  processingJobs: number
+  pendingJobs: number
   completedJobs: number
   failedJobs: number
   completedToday: number
@@ -192,14 +194,16 @@ const AllJobsTab: React.FC<{
   listJobs: (params: any) => Promise<any>,
   navigate: any,
   getJobProgress: (job: Job) => number,
-  getRenderedFrames: (job: Job) => number
+  getRenderedFrames: (job: Job) => number,
+  globalStats: any
 }> = ({
   jobs,
   pagination,
   listJobs,
   navigate,
   getJobProgress,
-  getRenderedFrames
+  getRenderedFrames,
+  globalStats
 }) => {
     const [filter, setFilter] = useState<string>('all')
     const [searchQuery, setSearchQuery] = useState('')
@@ -260,15 +264,13 @@ const AllJobsTab: React.FC<{
 
     const statusCounts = useMemo(() => {
       return {
-        all: pagination.total,
-        // These counts are now just for the current view or would need a separate API call for full totals per status
-        // For simplicity, we use the total and labels.
-        completed: jobs.filter(j => j.status === 'completed').length,
-        processing: jobs.filter(j => j.status === 'processing').length,
-        pending: jobs.filter(j => j.status === 'pending').length,
-        failed: jobs.filter(j => j.status === 'failed').length
+        all: globalStats.totalJobs || pagination.total,
+        completed: globalStats.completedJobs || 0,
+        processing: globalStats.processingJobs || 0,
+        pending: globalStats.pendingJobs || 0,
+        failed: globalStats.failedJobs || 0
       }
-    }, [jobs, pagination.total])
+    }, [globalStats, pagination.total])
 
     return (
       <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
@@ -357,7 +359,7 @@ const AllJobsTab: React.FC<{
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate mb-1">{job.blendFileName}</div>
+                        <div className="font-medium truncate mb-1">{job.name || job.blendFileName}</div>
                         <div className="text-sm text-gray-400 flex items-center gap-2 flex-wrap">
                           <Badge className={`px-2 py-0.5 text-xs ${job.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
                             job.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
@@ -539,7 +541,7 @@ const ActiveJobsSection: React.FC<{ activeJobs: any[], navigate: any, isLoading:
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
                       <div className="font-medium truncate max-w-xs">
-                        {job.blendFileName}
+                        {job.name || job.blendFileName}
                       </div>
                       <Badge variant="outline" className="border-blue-500/30 text-blue-400">
                         {job.type === 'animation' ? 'Animation' : 'Image'}
@@ -739,6 +741,8 @@ const ClientDashboard: React.FC = () => {
     return {
       totalJobs: realTimeStats?.totalJobs || systemStats?.totalJobs || pagination.total || jobs.length,
       activeJobs: realTimeStats?.activeJobs || systemStats?.activeJobs || activeJobs.length,
+      processingJobs: realTimeStats?.processingJobs || systemStats?.processingJobs || jobs.filter(j => j.status === 'processing').length,
+      pendingJobs: realTimeStats?.pendingJobs || systemStats?.pendingJobs || jobs.filter(j => j.status === 'pending').length,
       completedJobs: realTimeStats?.completedJobs || systemStats?.completedJobs || completedJobs.length,
       failedJobs: realTimeStats?.failedJobs || systemStats?.failedJobs || failedJobs.length,
       completedToday: realTimeStats?.completedToday || systemStats?.completedToday || completedJobs.filter(j => {
@@ -1264,6 +1268,7 @@ const ClientDashboard: React.FC = () => {
               navigate={navigate}
               getJobProgress={getJobProgress}
               getRenderedFrames={getRenderedFrames}
+              globalStats={dashboardStats}
             />
           </TabsContent>
         </Tabs>

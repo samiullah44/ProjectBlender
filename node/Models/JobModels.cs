@@ -80,10 +80,31 @@ namespace BlendFarm.Node.Models
         
         [JsonPropertyName("outputFormat")]
         public string? OutputFormat { get; set; } = "PNG";
-        
+
+        [JsonPropertyName("colorMode")]
+        public string? ColorMode { get; set; } = "RGBA";
+
+        [JsonPropertyName("colorDepth")]
+        public string? ColorDepth { get; set; } = "8";
+
+        [JsonPropertyName("compression")]
+        public int Compression { get; set; } = 90;
+
+        [JsonPropertyName("exrCodec")]
+        public string? ExrCodec { get; set; } = "ZIP";
+
+        [JsonPropertyName("tiffCodec")]
+        public string? TiffCodec { get; set; } = "DEFLATE";
+
+        [JsonPropertyName("scene")]
+        public string? Scene { get; set; }
+
+        [JsonPropertyName("camera")]
+        public string? Camera { get; set; }
+
         [JsonPropertyName("creditsPerFrame")]
         public int CreditsPerFrame { get; set; } = 1;
-        
+
         [JsonPropertyName("blenderVersion")]
         public string? BlenderVersion { get; set; } = "4.5.0";
     }
@@ -174,8 +195,32 @@ namespace BlendFarm.Node.Models
         [JsonPropertyName("output_format")]
         public string OutputFormat { get; set; }
 
+        [JsonPropertyName("color_mode")]
+        public string ColorMode { get; set; }
+
+        [JsonPropertyName("color_depth")]
+        public string ColorDepth { get; set; }
+
+        [JsonPropertyName("compression")]
+        public int Compression { get; set; }
+
+        [JsonPropertyName("exr_codec")]
+        public string ExrCodec { get; set; }
+
+        [JsonPropertyName("tiff_codec")]
+        public string TiffCodec { get; set; }
+
+        [JsonPropertyName("scene")]
+        public string? Scene { get; set; }
+
+        [JsonPropertyName("camera")]
+        public string? Camera { get; set; }
+
         [JsonPropertyName("denoiser")]
         public string Denoiser { get; set; }
+
+        [JsonPropertyName("tile_size")]
+        public int TileSize { get; set; }
 
         [JsonPropertyName("use_animation_settings")]
         public bool UseAnimationSettings { get; set; }
