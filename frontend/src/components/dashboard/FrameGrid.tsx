@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
+import SmartImage from '../ui/SmartImage';
 
 interface FrameGridProps {
   totalFrames: number;
@@ -129,16 +130,16 @@ const FrameGrid: React.FC<FrameGridProps> = ({
               <div className="bg-gray-950 border border-white/20 rounded-xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.8)] backdrop-blur-3xl min-w-[140px] border-b-0">
                 {frame.status === 'done' && frameImages[frame.num] ? (
                   <div className="w-40 aspect-video bg-black relative">
-                    <img 
+                    <SmartImage 
                       src={frameImages[frame.num]} 
                       alt={`Frame ${frame.num}`} 
                       className="w-full h-full object-cover"
                       loading="eager"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x200/111827/4b5563?text=Preview+Pending';
+                        console.error('Hover preview error:', e);
                       }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
                   </div>
                 ) : (
                   <div className="p-4 text-center bg-white/[0.02]">

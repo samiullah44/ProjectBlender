@@ -91,14 +91,15 @@ export class JobService {
                 blendFileName: blendFile.originalname || name,
                 type,
                 settings: {
+                    ...settings,
                     engine: settings.engine || 'CYCLES',
                     device: settings.device || 'GPU',
                     samples: settings.samples || 128,
                     resolutionX: settings.resolutionX || 1920,
                     resolutionY: settings.resolutionY || 1080,
                     tileSize: settings.tileSize || 256,
-                    denoiser: settings.denoiser,
                     outputFormat: settings.outputFormat || 'PNG',
+                    compression: settings.compression ?? 90,
                     creditsPerFrame: settings.creditsPerFrame || 1,
                     blenderVersion: normalizeBlenderVersion(settings.blenderVersion || '4.5.0'),
                     selectedFrame: settings.selectedFrame || selectedFrame

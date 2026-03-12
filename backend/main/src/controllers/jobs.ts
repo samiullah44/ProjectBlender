@@ -5,6 +5,7 @@ import { JobService } from '../services/JobService';
 import { S3Service } from '../services/S3Service';
 import { AppError } from '../middleware/error';
 import { CreateJobRequest, JobFilterOptions, PaginationOptions } from '../types/job.types';
+import archiver from 'archiver';
 // Removed unused authMiddleware import
 
 export class JobController {
@@ -49,7 +50,13 @@ export class JobController {
           outputFormat: req.body.outputFormat || 'PNG',
           colorMode: req.body.colorMode || 'RGBA',
           colorDepth: req.body.colorDepth || '8',
-          compression: parseInt(req.body.compression) || 90,
+          compression: (() => {
+            const raw = (req.body as any).compression;
+            if (raw === undefined || raw === null || raw === '') return 90;
+            const n = typeof raw === 'number' ? raw : parseInt(raw, 10);
+            if (Number.isNaN(n)) return 90;
+            return Math.min(100, Math.max(0, n));
+          })(),
           exrCodec: req.body.exrCodec || 'ZIP',
           tiffCodec: req.body.tiffCodec || 'DEFLATE',
           creditsPerFrame: parseFloat(req.body.creditsPerFrame) || 1,
@@ -126,6 +133,99 @@ export class JobController {
           error: 'Failed to get job',
           details: error instanceof Error ? error.message : 'Unknown error'
         });
+      }
+    }
+  }
+
+  // Stream all rendered frames for a job as a ZIP archive
+  async downloadJobFramesZip(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const user = (req as any).user;
+
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+
+      // Large ZIPs can take a long time; disable request/response timeouts.
+      // (Note: upstream proxies/load balancers may still impose their own limits.)
+      try {
+        (req as any).setTimeout?.(0);
+        res.setTimeout?.(0);
+      } catch {}
+
+      const job = await this.jobService.getJobById(jobId as string, user.userId, user.role);
+
+      if (!job) {
+        throw new AppError('Job not found', 404);
+      }
+
+      const outputs = job.outputUrls || [];
+      const outputsWithKeys = outputs.filter((o: any) => o && o.s3Key);
+
+      if (!outputsWithKeys.length) {
+        throw new AppError('No rendered frames available for this job', 400);
+      }
+
+      const safeJobId = job.jobId || jobId;
+
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="job_${safeJobId}_frames.zip"`
+      );
+      res.setHeader('X-Frames-Total', String(outputsWithKeys.length));
+      res.setHeader('Cache-Control', 'no-store');
+
+      const archive = archiver('zip', {
+        zlib: { level: 0 } // Images are already compressed; avoid extra CPU
+      });
+
+      archive.on('error', (err: Error) => {
+        console.error('ZIP archive error:', err);
+        if (!res.headersSent) {
+          res.status(500).end('Failed to generate ZIP archive');
+        } else {
+          res.end();
+        }
+      });
+
+      archive.pipe(res);
+
+      // Append each frame from S3 into the archive
+      for (const output of outputsWithKeys) {
+        const key: string = output.s3Key;
+        const frameNumber: number = output.frame ?? 0;
+        const ext = key.includes('.') ? key.split('.').pop() || 'png' : 'png';
+        const fileName = `frame_${String(frameNumber).padStart(4, '0')}.${ext}`;
+
+        try {
+          const stream = await this.s3Service.getObjectStream(key);
+          archive.append(stream, { name: fileName });
+        } catch (err) {
+          console.warn(`Failed to append frame ${frameNumber} (${key}) to ZIP:`, err);
+          // Skip this frame but continue with others
+        }
+      }
+
+      archive.finalize();
+    } catch (error) {
+      console.error('Download job frames ZIP error:', error);
+      if (error instanceof AppError) {
+        if (!res.headersSent) {
+          res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.message
+          });
+        }
+      } else {
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            error: 'Failed to download frames ZIP',
+            details: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
       }
     }
   }

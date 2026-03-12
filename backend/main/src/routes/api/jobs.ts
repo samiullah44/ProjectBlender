@@ -83,6 +83,11 @@ router.get('/:jobId',
     jobController.getJob.bind(jobController)
 );
 
+router.get('/:jobId/frames/zip',
+    authenticate,
+    jobController.downloadJobFramesZip.bind(jobController)
+);
+
 router.put('/:jobId',
     authenticate,
     jobController.updateJob.bind(jobController)

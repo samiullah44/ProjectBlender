@@ -95,7 +95,13 @@ export class UploadController {
         outputFormat: jobSettings?.outputFormat || 'PNG',
         colorMode: jobSettings?.colorMode || 'RGBA',
         colorDepth: jobSettings?.colorDepth || '8',
-        compression: parseInt(jobSettings?.compression || '90'),
+        compression: (() => {
+          const raw = jobSettings?.compression;
+          if (raw === undefined || raw === null || raw === '') return 90;
+          const n = typeof raw === 'number' ? raw : parseInt(raw, 10);
+          if (Number.isNaN(n)) return 90;
+          return Math.min(100, Math.max(0, n));
+        })(),
         exrCodec: jobSettings?.exrCodec || 'ZIP',
         tiffCodec: jobSettings?.tiffCodec || 'DEFLATE',
         creditsPerFrame: jobSettings?.creditsPerFrame || 1,

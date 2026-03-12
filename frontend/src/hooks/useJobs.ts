@@ -22,7 +22,11 @@ const fetchJobs = async (params = {}): Promise<{ jobs: Job[]; pagination: any }>
 
 const fetchJob = async (jobId: string): Promise<Job> => {
   const response = await axiosInstance.get(`/jobs/${jobId}`)
-  return response.data
+  // Backend may return either:
+  // - { success: true, job: {...} }
+  // - { ...job }
+  const data = response.data as any
+  return (data?.job ?? data) as Job
 }
 
 const fetchDashboardStats = async () => {

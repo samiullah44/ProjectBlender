@@ -28,7 +28,8 @@ import {
   Loader2,
   BarChart3,
   Timer,
-  Rocket
+  Rocket,
+  Archive
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -37,9 +38,12 @@ import { Badge } from '@/components/ui/Badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { toast } from 'react-hot-toast'
 import { websocketService } from '@/services/websocketService'
-import { useJob, useCancelJob } from '@/hooks/useJobs'
+import { axiosInstance } from '@/lib/axios'
+import { useQueryClient } from '@tanstack/react-query'
+import { jobKeys, useJob, useCancelJob } from '@/hooks/useJobs'
 import jobStore from '@/stores/jobStore'
 import FrameGrid from '@/components/dashboard/FrameGrid'
+import SmartImage from '@/components/ui/SmartImage'
 
 interface FrameImage {
   frame: number
@@ -50,28 +54,36 @@ interface FrameImage {
   uploadedAt: string
 }
 
-// Global cache for job data and images to persist across page navigation
-const jobDataCache = new Map<string, any>()
-const imageCache = new Map<string, string>()
-const cacheTimestamps = new Map<string, number>()
-const CACHE_DURATION = 20 * 60 * 1000 // 20 minutes
-
 const JobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  
   const [activeTab, setActiveTab] = useState('overview')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
-  const [localJob, setLocalJob] = useState<any>(null)
+  const [isZipDownloading, setIsZipDownloading] = useState(false)
+  const [zipBytesLoaded, setZipBytesLoaded] = useState(0)
+  const [zipBytesTotal, setZipBytesTotal] = useState<number | null>(null)
+
+  // Use TanStack Query as the single source of truth
+  const {
+    data: job,
+    isLoading,
+    error,
+    refetch
+  } = useJob(jobId)
+
+  const cancelJobMutation = useCancelJob()
 
   // Memoized version of frames for the gallery and distribution grid
   const cachedFrames = useMemo(() => {
-    if (!localJob?.outputUrls) return []
-    return [...localJob.outputUrls]
+    if (!job?.outputUrls) return []
+    return [...job.outputUrls]
       .filter(f => f && f.frame !== undefined && f.url)
       .sort((a, b) => a.frame - b.frame)
-  }, [localJob?.outputUrls])
+  }, [job?.outputUrls])
 
   // Mapping of frame number to URL for hover previews
   const frameImageMap = useMemo(() => {
@@ -84,172 +96,77 @@ const JobDetails: React.FC = () => {
     return map;
   }, [cachedFrames])
 
-  // Use TanStack Query for data fetching with cache-first approach
-  const {
-    data: job,
-    isLoading,
-    error,
-    refetch
-  } = useJob(jobId)
-
-  const cancelJobMutation = useCancelJob()
-
-  // Force refresh function that bypasses cache
+  // Force refresh function that bypasses TanStack Query stale time
   const forceRefresh = useCallback(() => {
     if (jobId) {
       console.log('🔄 Force refreshing job data:', jobId)
-      jobDataCache.delete(jobId)
-      cacheTimestamps.delete(jobId)
       refetch()
     }
   }, [jobId, refetch])
 
-  // Initialize from cache first, then from API
-  useEffect(() => {
-    if (jobId && jobDataCache.has(jobId)) {
-      const cachedData = jobDataCache.get(jobId)
-      const cacheTime = cacheTimestamps.get(jobId) || 0
-      const isValidCache = Date.now() - cacheTime < CACHE_DURATION
-
-      if (isValidCache || cachedData.status === 'completed') {
-        console.log('📦 Loading job from cache:', jobId)
-        setLocalJob(cachedData)
-        return
-      } else {
-        // Cache expired, remove it
-        jobDataCache.delete(jobId)
-        cacheTimestamps.delete(jobId)
-      }
-    }
-  }, [jobId])
-
-  // Update local job state when query data changes
-  useEffect(() => {
-    if (job && jobId) {
-      console.log('🔄 Updating job data from API:', jobId)
-
-      // Merge with existing cached data to preserve state
-      const existingData = jobDataCache.get(jobId) || {}
-      const mergedJob = {
-        ...existingData,
-        ...job,
-        // Preserve existing frames and only add new ones
-        outputUrls: mergeFrames(existingData.outputUrls || [], job.outputUrls || [])
-      }
-
-      setLocalJob(mergedJob)
-      // Update cache with timestamp
-      jobDataCache.set(jobId, mergedJob)
-      cacheTimestamps.set(jobId, Date.now())
-    }
-  }, [job, jobId])
-
   // Helper function to merge frames without duplicates and filter invalid frames
   const mergeFrames = (existingFrames: FrameImage[], newFrames: FrameImage[]): FrameImage[] => {
     const frameMap = new Map<number, FrameImage>()
-
-    // Add existing valid frames
+    
+    // Add existing
     existingFrames.forEach(frame => {
-      if (frame && frame.frame !== undefined && frame.url) {
-        frameMap.set(frame.frame, frame)
-      }
+      if (frame && frame.frame !== undefined) frameMap.set(frame.frame, frame)
     })
-
-    // Add or update with new valid frames
+    
+    // Merge new (preserve existing fields like freshUrl when new payload is partial)
     newFrames.forEach(frame => {
-      if (frame && frame.frame !== undefined && frame.url) {
-        frameMap.set(frame.frame, frame)
+      if (frame && frame.frame !== undefined) {
+        const existing = frameMap.get(frame.frame)
+        frameMap.set(frame.frame, existing ? { ...existing, ...frame } : frame)
       }
     })
 
     return Array.from(frameMap.values()).sort((a, b) => a.frame - b.frame)
   }
 
-  // Subscribe to WebSocket updates
+  // Subscribe to WebSocket updates and update Query cache directly
   useEffect(() => {
     if (!jobId) return
 
-    const unsubscribe = websocketService.subscribeToJob(jobId, (updatedJob) => {
-      console.log('📡 WebSocket update received:', updatedJob)
+    const unsubscribe = websocketService.subscribeToJob(jobId, (updatedFields) => {
+      console.log('📡 WebSocket update received:', updatedFields)
 
-      setLocalJob((prev: any) => {
-        if (!prev) return updatedJob
+      // Update the TanStack Query cache directly
+      queryClient.setQueryData(jobKeys.detail(jobId), (oldData: any) => {
+        if (!oldData) return updatedFields
 
-        // Intelligently merge updates to preserve existing data
-        const mergedJob = { ...prev }
-
-        // Only update specific fields that changed
-        if (updatedJob.progress !== undefined) {
-          mergedJob.progress = updatedJob.progress
+        // Intelligently merge updates
+        const newData = { ...oldData, ...updatedFields }
+        
+        // Handle nested merges like frames and outputUrls
+        if (updatedFields.frames) {
+          newData.frames = { ...oldData.frames, ...updatedFields.frames }
         }
 
-        if (updatedJob.status) {
-          mergedJob.status = updatedJob.status
+        if (updatedFields.outputUrls && updatedFields.outputUrls.length > 0) {
+          newData.outputUrls = mergeFrames(oldData.outputUrls || [], updatedFields.outputUrls)
         }
 
-        // Merge frames data carefully
-        if (updatedJob.frames) {
-          mergedJob.frames = { ...prev.frames, ...updatedJob.frames }
-        }
-
-        // Merge outputUrls - preserve existing and add new valid frames only
-        if (updatedJob.outputUrls && updatedJob.outputUrls.length > 0) {
-          mergedJob.outputUrls = mergeFrames(prev.outputUrls || [], updatedJob.outputUrls)
-
-          // Cache new image URLs
-          updatedJob.outputUrls.forEach((frame: FrameImage) => {
-            if (frame && frame.frame !== undefined && frame.url) {
-              const url = frame.freshUrl || frame.url
-              if (url && !imageCache.has(url)) {
-                imageCache.set(url, url)
-              }
-            }
-          })
-        }
-
-        // Update assignedNodes and frameAssignments - replace with full state from backend
-        if (updatedJob.assignedNodes) {
-          mergedJob.assignedNodes = updatedJob.assignedNodes
-        }
-
-        if (updatedJob.frameAssignments) {
-          mergedJob.frameAssignments = updatedJob.frameAssignments
-        }
-
-        // Update timestamps
-        mergedJob.updatedAt = updatedJob.updatedAt || new Date().toISOString()
-        if (updatedJob.completedAt) {
-          mergedJob.completedAt = updatedJob.completedAt
-        }
-
-        // Update cache with timestamp
-        if (jobId) {
-          jobDataCache.set(jobId, mergedJob)
-          cacheTimestamps.set(jobId, Date.now())
-        }
-
-        return mergedJob
+        return newData
       })
 
-      // Update job store
-      jobStore.getState().updateJobProgress(jobId, updatedJob)
+      // Update global job store too
+      jobStore.getState().updateJobProgress(jobId, updatedFields)
     })
 
-    return () => {
-      unsubscribe()
-    }
-  }, [jobId, localJob?.status])
+    return () => unsubscribe()
+  }, [jobId, queryClient])
 
   // Auto-refresh interval
   useEffect(() => {
-    if (!jobId || !autoRefresh || localJob?.status !== 'processing') return
+    if (!jobId || !autoRefresh || job?.status !== 'processing') return
 
     const interval = setInterval(() => {
       refetch()
     }, 30000)
 
     return () => clearInterval(interval)
-  }, [jobId, autoRefresh, localJob?.status, refetch])
+  }, [jobId, autoRefresh, job?.status, refetch])
 
   const handleCancelJob = async () => {
     if (!jobId) return
@@ -313,7 +230,12 @@ const JobDetails: React.FC = () => {
   }, [])
 
   const handleDownloadAll = useCallback(async () => {
-    if (!cachedFrames?.length) {
+    // Always refetch just before download to get fresh pre-signed URLs
+    const latest = await refetch()
+    const latestJob = latest.data as any
+    const frames: FrameImage[] = (latestJob?.outputUrls || cachedFrames || []) as FrameImage[]
+
+    if (!frames?.length) {
       toast.error('No frames to download')
       return
     }
@@ -321,8 +243,8 @@ const JobDetails: React.FC = () => {
     const toastId = toast.loading(`Downloading ${cachedFrames.length} frames...`)
 
     try {
-      for (let i = 0; i < cachedFrames.length; i++) {
-        const frame = cachedFrames[i]
+      for (let i = 0; i < frames.length; i++) {
+        const frame = frames[i]
         const imageUrl = frame.freshUrl || frame.url
 
         if (imageUrl) {
@@ -363,13 +285,62 @@ const JobDetails: React.FC = () => {
       }
 
       toast.dismiss(toastId)
-      toast.success(`Downloaded ${cachedFrames.length} frames`)
+      toast.success(`Downloaded ${frames.length} frames`)
     } catch (error) {
       console.error('Bulk download error:', error)
       toast.dismiss(toastId)
       toast.error('Failed to download frames')
     }
-  }, [cachedFrames])
+  }, [cachedFrames, refetch])
+
+  const handleDownloadZip = useCallback(async () => {
+    if (!jobId) {
+      toast.error('Missing job ID')
+      return
+    }
+
+    const toastId = toast.loading('Preparing ZIP to Download...')
+    setIsZipDownloading(true)
+    setZipBytesLoaded(0)
+    setZipBytesTotal(null)
+
+    try {
+      const response = await axiosInstance.get(`/jobs/${jobId}/frames/zip`, {
+        responseType: 'blob',
+        // ZIP streaming for many frames can take a long time
+        timeout: 0,
+        onDownloadProgress: (progressEvent: any) => {
+          const loaded = typeof progressEvent?.loaded === 'number' ? progressEvent.loaded : 0
+          const total = typeof progressEvent?.total === 'number' && progressEvent.total > 0 ? progressEvent.total : null
+          setZipBytesLoaded(loaded)
+          setZipBytesTotal(total)
+        }
+      })
+
+      const blob = new Blob([response.data], { type: 'application/zip' })
+      const blobUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = `job_${jobId}_frames.zip`
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(blobUrl)
+
+      toast.dismiss(toastId)
+      toast.success('ZIP download started')
+    } catch (error: any) {
+      console.error('ZIP download error:', error)
+      toast.dismiss(toastId)
+      const message =
+        error?.response?.data?.error ||
+        (error instanceof Error ? error.message : 'Failed to download ZIP')
+      toast.error(message)
+    } finally {
+      setIsZipDownloading(false)
+    }
+  }, [jobId])
 
   const formatFileSize = useCallback((bytes: number) => {
     if (!bytes || bytes === 0 || isNaN(bytes)) return ''
@@ -415,9 +386,9 @@ const JobDetails: React.FC = () => {
     }
   }, [])
 
-  // Calculate derived data from localJob
+  // Calculate derived data from job
   const frameStats = useMemo(() => {
-    if (!localJob) return {
+    if (!job) return {
       totalFrames: 0,
       renderedFrames: 0,
       failedFrames: 0,
@@ -425,14 +396,14 @@ const JobDetails: React.FC = () => {
       pendingFrames: 0
     }
 
-    const totalFrames = localJob.frames?.total || 0
+    const totalFrames = job.frames?.total || 0
     // Only count valid rendered frames
     const validRenderedFrames = cachedFrames.filter(frame =>
       frame && frame.frame > 0 && frame.url
     ).length
-    const renderedFrames = validRenderedFrames || localJob.frames?.rendered?.length || 0
-    const failedFrames = localJob.frames?.failed?.length || 0
-    const assignedFrames = localJob.frames?.assigned?.length || 0
+    const renderedFrames = validRenderedFrames || job.frames?.rendered?.length || 0
+    const failedFrames = job.frames?.failed?.length || 0
+    const assignedFrames = job.frames?.assigned?.length || 0
     const pendingFrames = Math.max(0, totalFrames - renderedFrames - failedFrames)
 
     return {
@@ -442,25 +413,25 @@ const JobDetails: React.FC = () => {
       assignedFrames,
       pendingFrames
     }
-  }, [localJob, cachedFrames])
+  }, [job, cachedFrames])
 
   const progress = useMemo(() => {
-    if (!localJob) return 0
+    if (!job) return 0
 
     // Use WebSocket progress if available, otherwise calculate from frames
-    if (localJob.progress !== undefined && localJob.status === 'processing') {
-      return Math.min(Math.max(localJob.progress, 0), 100)
+    if (job.progress !== undefined && job.status === 'processing') {
+      return Math.min(Math.max(job.progress, 0), 100)
     }
 
     if (frameStats.totalFrames === 0) return 0
     const calculatedProgress = Math.round((frameStats.renderedFrames / frameStats.totalFrames) * 100)
     return Math.min(Math.max(calculatedProgress, 0), 100)
-  }, [localJob, frameStats])
+  }, [job, frameStats])
 
   const activeNodes = useMemo(() => {
-    if (!localJob?.assignedNodes) return 0
-    return Object.keys(localJob.assignedNodes).length
-  }, [localJob])
+    if (!job?.assignedNodes) return 0
+    return Object.keys(job.assignedNodes).length
+  }, [job])
 
   const totalRenderSize = useMemo(() => {
     if (!cachedFrames.length) return 0
@@ -489,9 +460,9 @@ const JobDetails: React.FC = () => {
     ).sort((a, b) => a.frame - b.frame)
   }, [cachedFrames])
 
-  const StatusIcon = localJob ? getStatusIcon(localJob.status) : Clock
+  const StatusIcon = job ? getStatusIcon(job.status) : Clock
 
-  if (isLoading && !localJob) {
+  if (isLoading && !job) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
@@ -502,7 +473,7 @@ const JobDetails: React.FC = () => {
     )
   }
 
-  if (error && !localJob) {
+  if (error && !job) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
@@ -524,7 +495,7 @@ const JobDetails: React.FC = () => {
     )
   }
 
-  if (!localJob) {
+  if (!job) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
@@ -541,7 +512,7 @@ const JobDetails: React.FC = () => {
     blendFileName = 'Job',
     type = 'animation',
     status = 'pending',
-    settings = {},
+    settings = {} as any,
     assignedNodes = {},
     createdAt,
     updatedAt,
@@ -549,7 +520,7 @@ const JobDetails: React.FC = () => {
     completedAt,
     blendFileUrl,
     blendFileKey
-  } = localJob || {}
+  } = job
 
   const displayName = name || blendFileName || 'Unnamed Job'
   const startTime = startedAt || createdAt
@@ -655,13 +626,51 @@ const JobDetails: React.FC = () => {
               )}
 
               {status === 'completed' && cachedFrames.length > 0 && (
-                <Button
-                  onClick={handleDownloadAll}
-                  className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Download All ({cachedFrames.length})
-                </Button>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      onClick={handleDownloadZip}
+                      disabled={isZipDownloading}
+                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                    >
+                      {isZipDownloading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Preparing ZIP...
+                        </>
+                      ) : (
+                        <>
+                          <Archive className="w-4 h-4 mr-2" />
+                          Download ZIP ({cachedFrames.length})
+                        </>
+                      )}
+                    </Button>
+
+                    {isZipDownloading && (
+                      <div className="w-[260px]">
+                        <Progress value={zipBytesTotal ? Math.min(100, (zipBytesLoaded / zipBytesTotal) * 100) : 35} />
+                        <div className="mt-1 text-[10px] text-gray-400 tabular-nums flex justify-between">
+                          <span>
+                            Downloaded {(zipBytesLoaded / (1024 * 1024)).toFixed(1)} MB
+                          </span>
+                          <span>
+                            {zipBytesTotal
+                              ? `${Math.round((zipBytesLoaded / zipBytesTotal) * 100)}%`
+                              : 'Streaming...'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadAll}
+                    className="border-white/20 hover:bg-white/5"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Individual Frames
+                  </Button>
+                </div>
               )}
 
               <Button
@@ -705,17 +714,17 @@ const JobDetails: React.FC = () => {
                     {(() => {
                         const frameDetail = {
                             rendered: Array.from(new Set([
-                                ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'rendered').map((a: any) => a.frame) : []),
-                                ...(Array.isArray(localJob.frames?.rendered) ? localJob.frames.rendered : (Array.isArray(localJob.frames?.list) ? localJob.frames.list : []))
+                                ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'rendered').map((a: any) => a.frame) : []),
+                                ...(Array.isArray(job.frames?.rendered) ? job.frames.rendered : [])
                             ])),
                             failed: Array.from(new Set([
-                                ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'failed').map((a: any) => a.frame) : []),
-                                ...(Array.isArray(localJob.frames?.failed) ? localJob.frames.failed : [])
+                                ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'failed').map((a: any) => a.frame) : []),
+                                ...(Array.isArray(job.frames?.failed) ? job.frames.failed : [])
                             ])),
                             assigned: Array.from(new Set([
-                                ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'assigned').map((a: any) => a.frame) : []),
-                                ...(Array.isArray(localJob.frames?.assigned) ? localJob.frames.assigned : []),
-                                ...Object.values(localJob.assignedNodes || {}).flat() as number[]
+                                ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'assigned').map((a: any) => a.frame) : []),
+                                ...(Array.isArray(job.frames?.assigned) ? job.frames.assigned : []),
+                                ...Object.values(job.assignedNodes || {}).flat() as number[]
                             ]))
                         };
 
@@ -726,7 +735,7 @@ const JobDetails: React.FC = () => {
                                     renderedFrames={frameDetail.rendered}
                                     failedFrames={frameDetail.failed}
                                     assignedFrames={frameDetail.assigned}
-                                    startFrame={localJob.frames?.start || 1}
+                                    startFrame={job.frames?.start || 1}
                                     frameImages={frameImageMap}
                                 />
                             </div>
@@ -846,17 +855,17 @@ const JobDetails: React.FC = () => {
                         {(() => {
                            const frameDetail = {
                                rendered: Array.from(new Set([
-                                   ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'rendered').map((a: any) => a.frame) : []),
-                                   ...(Array.isArray(localJob.frames?.rendered) ? localJob.frames.rendered : (Array.isArray(localJob.frames?.list) ? localJob.frames.list : []))
+                                   ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'rendered').map((a: any) => a.frame) : []),
+                                   ...(Array.isArray(job.frames?.rendered) ? job.frames.rendered : [])
                                ])),
                                failed: Array.from(new Set([
-                                   ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'failed').map((a: any) => a.frame) : []),
-                                   ...(Array.isArray(localJob.frames?.failed) ? localJob.frames.failed : [])
+                                   ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'failed').map((a: any) => a.frame) : []),
+                                   ...(Array.isArray(job.frames?.failed) ? job.frames.failed : [])
                                ])),
                                assigned: Array.from(new Set([
-                                   ...(Array.isArray(localJob.frameAssignments) ? localJob.frameAssignments.filter((a: any) => a.status === 'assigned').map((a: any) => a.frame) : []),
-                                   ...(Array.isArray(localJob.frames?.assigned) ? localJob.frames.assigned : []),
-                                   ...Object.values(localJob.assignedNodes || {}).flat() as number[]
+                                   ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'assigned').map((a: any) => a.frame) : []),
+                                   ...(Array.isArray(job.frames?.assigned) ? job.frames.assigned : []),
+                                   ...Object.values(job.assignedNodes || {}).flat() as number[]
                                ]))
                            };
 
@@ -866,7 +875,7 @@ const JobDetails: React.FC = () => {
                                    renderedFrames={frameDetail.rendered}
                                    failedFrames={frameDetail.failed}
                                    assignedFrames={frameDetail.assigned}
-                                   startFrame={localJob.frames?.start || 1}
+                                   startFrame={job.frames?.start || 1}
                                    frameImages={frameImageMap}
                                />
                            );
@@ -957,16 +966,16 @@ const JobDetails: React.FC = () => {
                           className="group relative overflow-hidden rounded-lg bg-white/5 border border-white/10 hover:border-blue-500/50 transition-all duration-300"
                         >
                           <div className="aspect-square relative overflow-hidden">
-                            <img
+                            <SmartImage
                               src={frame.freshUrl || frame.url}
                               alt={`Frame ${String(frame.frame).padStart(3, '0')}`}
                               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                               loading="lazy"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x300/1f2937/9ca3af?text=No+Preview'
+                                console.error('Gallery image error:', e);
                               }}
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
                             <div className="absolute top-2 right-2">
                               <Badge className="bg-black/50 backdrop-blur-sm">
@@ -1265,14 +1274,24 @@ const JobDetails: React.FC = () => {
                   </Button>
 
                   {status === 'completed' && cachedFrames.length > 0 && (
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start border-white/20 hover:bg-white/5"
-                      onClick={handleDownloadAll}
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download All Frames
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/50"
+                        onClick={handleDownloadZip}
+                      >
+                        <Archive className="w-4 h-4 mr-2" />
+                        Download as ZIP
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start border-white/20 hover:bg-white/5"
+                        onClick={handleDownloadAll}
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download Individual Frames
+                      </Button>
+                    </>
                   )}
 
                   <Button

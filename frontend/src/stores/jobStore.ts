@@ -335,7 +335,7 @@ const jobStore = create<JobStore>((set, get) => ({
             outputFormat: result.settings?.outputFormat || jobData.settings.outputFormat,
             colorMode: result.settings?.colorMode || jobData.settings.colorMode,
             colorDepth: result.settings?.colorDepth || jobData.settings.colorDepth,
-            compression: result.settings?.compression || jobData.settings.compression,
+            compression: result.settings?.compression ?? jobData.settings.compression,
             exrCodec: result.settings?.exrCodec || jobData.settings.exrCodec,
             tiffCodec: result.settings?.tiffCodec || jobData.settings.tiffCodec,
             scene: result.settings?.scene || jobData.settings.scene,

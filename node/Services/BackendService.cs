@@ -72,7 +72,7 @@ namespace BlendFarm.Node.Services
             _identityService = identityService;
             _speedtestService = speedtestService;
             _nodeId = configuration["NodeSettings:NodeId"] ?? Guid.NewGuid().ToString();
-            _backendUrl = configuration["Backend:Url"] ?? "http://192.168.1.31:3000";
+            _backendUrl = configuration["Backend:Url"] ?? "http://192.168.1.32:3000";
             _frameUploadUrls = new ConcurrentDictionary<int, (string, string)>();
             _blendFileCache = new ConcurrentDictionary<string, (string, DateTime)>();
              _computeScoreService = new ComputeScoreService(logger);
@@ -1248,7 +1248,8 @@ private string CalculateNodeTier(HardwareInfo hw)
                 var outputFormat = settings.OutputFormat ?? "PNG";
                 var colorMode = settings.ColorMode ?? "RGBA";
                 var colorDepth = settings.ColorDepth ?? "8";
-                var compression = settings.Compression > 0 ? settings.Compression : 90;
+                // Correctly handle 0 (lossless) as a valid setting
+                var compression = settings.Compression >= 0 ? settings.Compression : 90;
                 var exrCodec = settings.ExrCodec ?? "ZIP";
                 var tiffCodec = settings.TiffCodec ?? "DEFLATE";
                 var blenderVersion = settings.BlenderVersion ?? "4.5.0";

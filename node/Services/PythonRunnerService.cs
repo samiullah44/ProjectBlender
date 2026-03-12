@@ -79,6 +79,7 @@ namespace BlendFarm.Node.Services
             int compression = 90,
             string exrCodec = "ZIP",
             string tiffCodec = "DEFLATE",
+            int tileSize = 256,
             string denoiser = "NONE",
             string? scene = null,
             string? camera = null,
@@ -90,6 +91,7 @@ namespace BlendFarm.Node.Services
                 _logger.LogInformation($"[Render] Starting render: {Path.GetFileName(blendFilePath)} Frame {frame}");
                 _logger.LogInformation($"[Render] Settings: {samples} samples, {engine}, {device}, {resolutionX}x{resolutionY}, Format: {outputFormat}");
                 _logger.LogInformation($"[Render] Mode: {(useAnimationSettings ? "Animation" : "Single Frame")}");
+                _logger.LogInformation($"[DEBUG] PythonRunnerService version: 1.0.1 (Robust Timeout)");
                 
                 // Get or install Blender if needed
                 var blenderExe = await GetOrInstallBlenderAsync();
@@ -134,6 +136,7 @@ namespace BlendFarm.Node.Services
                     compression,
                     exrCodec,
                     tiffCodec,
+                    tileSize,
                     denoiser,
                     scene,
                     camera,
@@ -294,15 +297,26 @@ process.Exited += (sender, e) =>
                 
                 // Calculate timeout based on samples and device
                 // More sophisticated timeout calculation
-                var baseTimeout = device.ToUpper() == "GPU" ? 30 : 120; // seconds per sample
-                var timeoutSeconds = Math.Max(30, samples * (baseTimeout / 10)); // Scale with samples
+                var baseTimeout = device.ToUpper().Contains("GPU") ? 60 : 120; // Increase GPU base
+                var timeoutSeconds = Math.Max(60, samples * (baseTimeout / 10)); // Scale with samples
                 
                 // Add extra time for high resolutions
                 var resolutionFactor = (resolutionX * resolutionY) / (1920 * 1080.0);
                 timeoutSeconds = (int)(timeoutSeconds * Math.Max(1.0, resolutionFactor * 0.5));
                 
+                // CRITICAL: Add a heavy buffer for GPU kernel loading which can take 5-10 minutes
+                if (device.ToUpper().Contains("GPU"))
+                {
+                    _logger.LogInformation($"[DEBUG] GPU detected, adding massive 1200s (20m) kernel loading buffer");
+                    timeoutSeconds += 1200; // Increase to 20 minutes to be absolutely sure
+                }
+                else
+                {
+                    _logger.LogInformation($"[DEBUG] Device is {device}, skipping extra GPU buffer");
+                }
+                
                 var timeout = TimeSpan.FromSeconds(timeoutSeconds);
-                _logger.LogInformation($"[System] Timeout set to: {timeout.TotalSeconds} seconds (samples: {samples}, resolution: {resolutionX}x{resolutionY})");
+                _logger.LogInformation($"[System] Final Timeout set to: {timeout.TotalSeconds} seconds");
                 
                 try
                 {
@@ -500,7 +514,20 @@ resolution_y = config.get('resolution_y', 1080)
 output_format = config.get('output_format', 'PNG').upper()
 color_mode = config.get('color_mode', 'RGBA').upper()
 color_depth = config.get('color_depth', '8').upper()
-compression = config.get('compression', 90)
+raw_compression = config.get('compression', 90)
+
+# Normalize compression/quality:
+# - Preserve 0 as a valid value (meaning: lowest compression for PNG, lowest quality for JPEG)
+# - Treat missing/empty as default
+# - Clamp to [0, 100]
+try:
+    if raw_compression is None or raw_compression == '':
+        compression = 90
+    else:
+        compression = int(raw_compression)
+except Exception:
+    compression = 90
+compression = max(0, min(100, compression))
 exr_codec = config.get('exr_codec', 'ZIP').upper()
 tiff_codec = config.get('tiff_codec', 'DEFLATE').upper()
 scene_name = config.get('scene', '')

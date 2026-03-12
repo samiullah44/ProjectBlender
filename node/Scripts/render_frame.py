@@ -40,12 +40,26 @@ resolution_y = config.get('resolution_y', 1080)
 output_format = config.get('output_format', 'PNG').upper()
 color_mode = config.get('color_mode', 'RGBA').upper()
 color_depth = config.get('color_depth', '8').upper()
-compression = config.get('compression', 90)
+raw_compression = config.get('compression', 90)
+
+# Normalize compression/quality:
+# - Preserve 0 as a valid value (meaning: lowest compression for PNG, lowest quality for JPEG)
+# - Treat missing/empty as default
+# - Clamp to [0, 100]
+try:
+    if raw_compression is None or raw_compression == '':
+        compression = 90
+    else:
+        compression = int(raw_compression)
+except Exception:
+    compression = 90
+compression = max(0, min(100, compression))
 exr_codec = config.get('exr_codec', 'ZIP').upper()
 tiff_codec = config.get('tiff_codec', 'DEFLATE').upper()
 scene_name = config.get('scene', '')
 camera_name = config.get('camera', '')
 denoiser = config.get('denoiser', 'NONE').upper()
+tile_size = config.get('tile_size', 256)
 use_animation_settings = config.get('use_animation_settings', False)
 
 print(f'=== Render Settings ===')
@@ -61,6 +75,7 @@ print(f'  Compression/Quality: {compression}')
 print(f'  Scene: {scene_name if scene_name else "Default"}')
 print(f'  Camera: {camera_name if camera_name else "Default"}')
 print(f'  Denoiser: {denoiser}')
+print(f'  Tile Size: {tile_size}')
 print(f'  Animation Mode: {use_animation_settings}')
 
 # Apply ALL settings
@@ -113,24 +128,36 @@ if engine == 'CYCLES':
             import addon_utils
             addon_utils.enable('cycles')
             
-            # Set compute device type
+            # Set compute device type based on availability and request
             if hasattr(bpy.context.preferences.addons['cycles'], 'preferences'):
                 prefs = bpy.context.preferences.addons['cycles'].preferences
                 
-                # Try CUDA first, then OPTIX, then CPU
-                for compute_device_type in ['CUDA', 'OPTIX', 'CPU']:
+                # Check available types: CUDA, OPTIX, HIP, METAL, ONEAPI
+                # Order: User preference first, then fallback to best available
+                requested = device_type
+                if requested == 'GPU': requested = 'OPTIX' # Default to Optix for generic GPU
+                
+                priorities = [requested, 'OPTIX', 'CUDA', 'HIP', 'METAL', 'ONEAPI']
+                
+                success = False
+                for compute_device_type in priorities:
                     try:
                         prefs.compute_device_type = compute_device_type
-                        print(f'Trying compute device type: {compute_device_type}')
-                        break
+                        print(f'Attempting compute device type: {compute_device_type}')
+                        # Refresh and check if any devices of this type exist
+                        prefs.get_devices()
+                        valid_devices = [d for d in prefs.devices if d.type == compute_device_type]
+                        if valid_devices:
+                            for device in valid_devices:
+                                device.use = True
+                                print(f'Enabled {compute_device_type} device: {device.name}')
+                            success = True
+                            break
                     except:
                         continue
                 
-                # Refresh and enable devices
-                prefs.get_devices()
-                for device in prefs.devices:
-                    device.use = True
-                    print(f'Enabled device: {device.name}')
+                if not success:
+                    print('Warning: No suitable GPU compute device found, using fallback if possible')
             
             scene.cycles.device = 'GPU'
             print('GPU rendering enabled')
@@ -151,6 +178,17 @@ elif engine == 'EEVEE':
 scene.render.resolution_x = resolution_x
 scene.render.resolution_y = resolution_y
 scene.render.resolution_percentage = 100
+
+# Set tile size
+try:
+    if hasattr(scene.render, 'tile_x'):
+        scene.render.tile_x = tile_size
+        scene.render.tile_y = tile_size
+    elif hasattr(scene.cycles, 'tile_size'):
+        scene.cycles.tile_size = tile_size
+    print(f'Tile size set to {tile_size}')
+except:
+    print('Could not set tile size (using default)')
 
 # Set animation settings if needed
 if use_animation_settings:

@@ -1146,11 +1146,11 @@ const ClientDashboard: React.FC = () => {
                   <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        {webSocketConnected ? (
+                        {/* {webSocketConnected ? (
                           <Wifi className="w-5 h-5 text-emerald-400 animate-pulse" />
                         ) : (
                           <WifiOff className="w-5 h-5 text-red-400" />
-                        )}
+                        )} */}
                         System Status
                       </CardTitle>
                     </CardHeader>

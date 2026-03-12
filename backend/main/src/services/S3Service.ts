@@ -1,11 +1,16 @@
 import {
-  S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, CreateMultipartUploadCommand,
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  CreateMultipartUploadCommand,
   UploadPartCommand,
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from "../config/env";
+import { Readable } from 'stream';
 
 export class S3Service {
   private s3Client: S3Client;
@@ -134,6 +139,23 @@ export class S3Service {
     });
 
     return await getSignedUrl(this.s3Client, command, { expiresIn });
+  }
+
+  /**
+   * Get a readable stream for an S3 object (used for server-side ZIP streaming)
+   */
+  async getObjectStream(fileKey: string): Promise<Readable> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: fileKey
+    });
+
+    const response: any = await this.s3Client.send(command);
+    if (!response.Body) {
+      throw new Error(`No body returned for S3 object: ${fileKey}`);
+    }
+    // In Node.js runtime, Body will be a Readable stream compatible with Node's Readable.
+    return response.Body as Readable;
   }
 
   /**

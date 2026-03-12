@@ -117,7 +117,7 @@ const CreateJob: React.FC = () => {
       outputFormat: 'PNG',
       colorMode: 'RGBA',
       colorDepth: '8',
-      compression: 90,
+      compression: 0,
       denoiser: 'OPTIX',
       creditsPerFrame: 1,
       blenderVersion: '4.5.0'
