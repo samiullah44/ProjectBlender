@@ -88,6 +88,12 @@ router.get('/:jobId/frames/zip',
     jobController.downloadJobFramesZip.bind(jobController)
 );
 
+router.post('/:jobId/rerender',
+    authenticate,
+    injectServices,
+    jobController.rerenderFrames.bind(jobController)
+);
+
 router.put('/:jobId',
     authenticate,
     jobController.updateJob.bind(jobController)
@@ -98,10 +104,9 @@ router.delete('/:jobId',
     jobController.cancelJob.bind(jobController)
 );
 
-// Admin-only routes
+// Job approval (also used by client to finalize completed jobs)
 router.post('/:jobId/approve',
     authenticate,
-    authorize('admin'),
     jobController.approveJob.bind(jobController)
 );
 
@@ -126,14 +131,7 @@ router.get('/dashboard/stats',
     jobController.getJobStats.bind(jobController)
 );
 
-router.get('/:jobId/upload-url/:frame',
-    jobController.generateFrameUploadUrl.bind(jobController)
-);
-
-router.post('/:jobId/complete-frame',
-    jobController.completeFrame.bind(jobController)
-);
-
+router.post('/:jobId/complete-frame', jobController.completeFrame.bind(jobController));
 router.post('/:jobId/fail-frame', validateNodeSecret, NodeController.reportFrameFailure);
 
 router.post('/:jobId/select-frames',

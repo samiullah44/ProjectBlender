@@ -252,17 +252,152 @@ export class JobService {
                     })
                 );
             } catch (err) {
-                console.warn(`Failed to generate output URLs for job ${jobId}:`, err);
+                console.warn(`Failed to generate fresh output URLs for job ${jobId}:`, err);
             }
 
             return {
                 ...job,
                 blendFileUrl,
                 outputUrls: outputUrlsWithFreshUrls
-            };
+            } as any;
         } catch (error) {
             console.error(`Error in getJobById for ${jobId}:`, error);
             throw error;
+        }
+    }
+
+    /**
+     * Synchronize job status based on frame rendering progress.
+     * Useful for fixing "stuck" jobs or ensuring status is correct upon subscription.
+     */
+    async syncJobStatus(jobId: string): Promise<IJob | null> {
+        const job = await Job.findOne({ jobId });
+        if (!job) return null;
+
+        if (['completed', 'failed', 'cancelled'].includes(job.status)) {
+            return job;
+        }
+
+        const selectedOrAll = job.frames.selected && job.frames.selected.length > 0
+            ? job.frames.selected
+            : Array.from({ length: job.frames.total }, (_, i) => job.frames.start + i);
+
+        const totalFramesToRender = selectedOrAll.length;
+        const renderedFrames = job.frames.rendered.length;
+        const stillInFlight = job.frames.assigned.length;
+        const stillFailed = job.frames.failed.filter((f: number) => !job.frames.rendered.includes(f)).length;
+
+        // If rendering is done (all frames reached rendered or failed state, and none are in progress)
+        if ((renderedFrames + stillFailed >= totalFramesToRender) && stillInFlight === 0) {
+            const oldStatus = job.status;
+            
+            if (renderedFrames > 0) {
+                job.status = 'completed';
+            } else if (stillFailed > 0) {
+                job.status = 'failed';
+            }
+
+            if (job.status !== oldStatus) {
+                job.completedAt = new Date();
+                
+                // REFINE: Use session-based wall-clock accumulation
+                const sessionStart = job.startedAt || job.createdAt;
+                const sessionDurationMs = Math.max(0, job.completedAt.getTime() - sessionStart.getTime());
+                
+                // Add current session to accumulated time
+                job.renderTime = (job.renderTime || 0) + sessionDurationMs;
+                
+                await job.save();
+                console.log(`🔄 Sync: Job ${jobId} status updated to ${job.status}. Added ${Math.round(sessionDurationMs/1000)}s to renderTime (Total: ${Math.round((job.renderTime || 0)/1000)}s)`);
+            }
+        }
+
+        return job;
+    }
+
+    // Re-render selected frames for a completed job (user-initiated, max attempts enforced by controller)
+    async rerenderFrames(job: IJob, frames: number[], userId: string, req: any): Promise<void> {
+        const JobModel = Job; // mongoose model
+
+        const currentCount = job.userRerenderCount ?? 0;
+        const maxCount = job.userRerenderMax ?? 2;
+
+        const uniqueFrames = Array.from(new Set(frames));
+
+        const nextCount = currentCount + 1;
+
+        // Update job document
+        const jobDoc = await JobModel.findOne({ jobId: job.jobId });
+        if (!jobDoc) {
+            throw new AppError('Job not found', 404);
+        }
+
+        // Ensure arrays exist
+        jobDoc.frames.rendered = jobDoc.frames.rendered || [];
+        jobDoc.frames.failed = jobDoc.frames.failed || [];
+        jobDoc.frames.pending = jobDoc.frames.pending || [];
+        jobDoc.frames.selected = jobDoc.frames.selected || [];
+
+        for (const frame of uniqueFrames) {
+            // Remove from rendered/failed
+            jobDoc.frames.rendered = jobDoc.frames.rendered.filter((f: number) => f !== frame);
+            jobDoc.frames.failed = jobDoc.frames.failed.filter((f: number) => f !== frame);
+
+            // Add back to pending & selected
+            if (!jobDoc.frames.pending.includes(frame)) {
+                jobDoc.frames.pending.push(frame);
+            }
+            if (!jobDoc.frames.selected.includes(frame)) {
+                jobDoc.frames.selected.push(frame);
+            }
+
+            // Clear existing assignments for this frame so frontend doesn't show it as "rendered"
+            if (Array.isArray(jobDoc.frameAssignments)) {
+                jobDoc.frameAssignments = jobDoc.frameAssignments.filter((a: any) => a.frame !== frame);
+            }
+
+            // Clear from assignedNodes Map as well
+            if (jobDoc.assignedNodes instanceof Map) {
+                jobDoc.assignedNodes.delete(frame.toString());
+            } else if (jobDoc.assignedNodes && typeof jobDoc.assignedNodes === 'object') {
+                for (const nodeId in (jobDoc.assignedNodes as any)) {
+                    (jobDoc.assignedNodes as any)[nodeId] = (jobDoc.assignedNodes as any)[nodeId].filter((f: number) => f !== frame);
+                }
+            }
+        }
+
+        // Reset status & progress
+        jobDoc.status = 'processing';
+        jobDoc.startedAt = new Date();
+        jobDoc.renderTime = jobDoc.renderTime || 0; // Ensure it's initialized
+        jobDoc.userRerenderCount = nextCount;
+        jobDoc.userRerenderMax = maxCount;
+        
+        // Track historically re-rendered frames
+        const existingHistory = jobDoc.rerenderedHistory || [];
+        jobDoc.rerenderedHistory = Array.from(new Set([...existingHistory, ...uniqueFrames]));
+
+        jobDoc.updatedAt = new Date();
+        await jobDoc.save();
+
+        // First remove existing jobs from BullMQ so they can be re-queued with the same ID
+        try {
+            await removeJobFrames(job.jobId, uniqueFrames, job.settings.engine, job.settings.device);
+        } catch (removeErr) {
+            console.warn(`⚠️  Failed to remove previous frames from BullMQ for job ${job.jobId}:`, removeErr);
+        }
+
+        // Enqueue frames into BullMQ
+        try {
+            await enqueueJobFrames(job.jobId, uniqueFrames, job.settings.engine, job.settings.device);
+        } catch (queueErr) {
+            console.error(`⚠️  Failed to enqueue re-render frames for job ${job.jobId}:`, queueErr);
+        }
+
+        // Broadcast update and notify nodes
+        if (this.wsService) {
+            await this.wsService.broadcastJobUpdate(job.jobId);
+            await this.wsService.notifyNodesToCheckJobs();
         }
     }
 
@@ -562,30 +697,46 @@ export class JobService {
         return true;
     }
 
-    // Approve job (admin only)
-    async approveJob(jobId: string, adminId: string): Promise<boolean> {
+    // Approve job (Dual Context: Admin start render vs User finalize completed job)
+    async approveJob(jobId: string, requestingUserId: string, role: string): Promise<boolean> {
         const job = await Job.findOne({ jobId });
         if (!job) return false;
 
-        if (job.approved) {
-            throw new AppError('Job is already approved', 400);
+        if (job.status === 'completed') {
+            // Context 1: Client finalizing their own completed job
+            if (role !== 'admin' && job.userId.toString() !== requestingUserId) {
+                throw new AppError('Only the job owner or an admin can finalize this job', 403);
+            }
+
+            job.approved = true;
+            // job.status remains 'completed'
+            
+            await job.save();
+            this.wsService?.broadcastJobUpdate(jobId);
+            return true;
+        } else {
+            // Context 2: Admin approving a pending job to start rendering
+            if (role !== 'admin') {
+                throw new AppError('Admin access required to approve pending scripts', 403);
+            }
+
+            if (job.approved) {
+                throw new AppError('Job is already approved', 400);
+            }
+
+            if (!job.requireApproval) {
+                throw new AppError('Job does not require approval', 400);
+            }
+
+            job.approved = true;
+            job.approvedBy = new Types.ObjectId(requestingUserId);
+            job.approvedAt = new Date();
+            job.status = 'pending'; // Ready for processing
+
+            await job.save();
+            this.wsService?.broadcastJobUpdate(jobId);
+            return true;
         }
-
-        if (!job.requireApproval) {
-            throw new AppError('Job does not require approval', 400);
-        }
-
-        job.approved = true;
-        job.approvedBy = new Types.ObjectId(adminId);
-        job.approvedAt = new Date();
-        job.status = 'pending'; // Ready for processing
-
-        await job.save();
-
-        // Broadcast update
-        this.wsService?.broadcastJobUpdate(jobId);
-
-        return true;
     }
 
     // Get job statistics
@@ -676,6 +827,8 @@ export class JobService {
             framesRenderedToday: 0
         };
 
+        const totalRenderTimeSec = (totals.totalRenderTime || 0) / 1000;
+
         return {
             // Priority given to lifetime stats from User table if available
             totalJobs: userStats?.jobsCreated ?? totals.totalJobs,
@@ -687,11 +840,11 @@ export class JobService {
             cancelledJobs: statusCounts.cancelled || 0,
             pausedJobs: statusCounts.paused || 0,
             completedToday: todayStats.completedToday,
-            totalRenderTime: totals.totalRenderTime,
+            totalRenderTime: totalRenderTimeSec,
             totalCreditsUsed: totals.totalCreditsUsed,
             totalFramesRendered: userStats?.framesRendered ?? totals.totalFramesRendered,
             avgRenderTimePerFrame: (userStats?.framesRendered ?? totals.totalFramesRendered) > 0
-                ? totals.totalRenderTime / (userStats?.framesRendered ?? totals.totalFramesRendered)
+                ? totalRenderTimeSec / (userStats?.framesRendered ?? totals.totalFramesRendered)
                 : 0,
             framesRenderedToday: todayStats.framesRenderedToday,
             estimatedTotalCost: totals.estimatedTotalCost,
@@ -713,8 +866,10 @@ export class JobService {
             ? (stats.completedJobs / stats.totalJobs) * 100
             : 0;
 
+        const totalRenderTimeSec = (stats.totalRenderTime || 0) / 1000;
+
         const avgJobCompletionTime = stats.completedJobs > 0
-            ? stats.totalRenderTime / stats.completedJobs
+            ? totalRenderTimeSec / stats.completedJobs
             : 0;
 
         return {

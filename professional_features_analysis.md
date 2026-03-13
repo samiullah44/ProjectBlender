@@ -2,7 +2,7 @@
 
 After analyzing the current backend and node architecture, I have identified several key features that would elevate BlendFarm to a professional-grade render farm/network. Here is a categorized breakdown of potential improvements.
 
-## 1. Project Asset Management (High Priority)
+## 1. Project Asset Management (High Priority)  
 **Current State**: Only single `.blend` files are supported.
 **The Gap**: Most professional 3D projects rely on external assets (textures, HDRIs, linked `.blend` files, caches, and fonts). If these aren't packed into the file, the render will fail or look incorrect.
 **Professional Solution**:

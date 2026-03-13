@@ -209,30 +209,31 @@ const AllJobsTab: React.FC<{
     const [searchQuery, setSearchQuery] = useState('')
     const [localLoading, setLocalLoading] = useState(false)
 
-    // Fetch jobs when filters or search change (reset to page 1)
+    // 1. Handle Filter/Search changes (always reset to page 1)
     useEffect(() => {
       const fetchJobs = async () => {
         setLocalLoading(true)
         await listJobs({
           status: filter === 'all' ? undefined : filter,
           search: searchQuery || undefined,
-          page: 1, // Reset to page 1 on filter/search change
+          page: 1,
           limit: pagination.limit
         })
         setLocalLoading(false)
       }
 
+      // 300ms debounce for inputs and filter changes
       const timer = setTimeout(() => {
-        if (filter !== 'all' || searchQuery) {
-          fetchJobs()
-        }
+        fetchJobs()
       }, 300)
 
       return () => clearTimeout(timer)
-    }, [filter, searchQuery]) // Only depend on filter/search for the "reset to 1" effect
+    }, [filter, searchQuery])
 
-    // Fetch jobs when page changes
+    // 2. Handle Page changes (only if not page 1, which handled by effect #1)
     useEffect(() => {
+      if (pagination.page === 1) return
+
       const fetchJobs = async () => {
         setLocalLoading(true)
         await listJobs({
@@ -244,10 +245,7 @@ const AllJobsTab: React.FC<{
         setLocalLoading(false)
       }
 
-      // Avoid double fetch on initial mount or when page is already correctly set by the filter effect
-      if (pagination.page !== 1 || (filter === 'all' && !searchQuery)) {
-        fetchJobs()
-      }
+      fetchJobs()
     }, [pagination.page])
 
     const handlePageChange = (newPage: number) => {
@@ -881,7 +879,7 @@ const ClientDashboard: React.FC = () => {
           job.status === 'processing' ? 'processing' as const :
             job.status === 'pending' ? 'upload' as const : 'failed' as const,
         title: `${job.blendFileName}`,
-        time: new Date(job.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: new Date(job.createdAt).toLocaleString(),
         status: job.status,
         progress: getJobProgress(job),
         framesCompleted: getRenderedFrames(job),

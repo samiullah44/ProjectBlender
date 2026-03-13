@@ -88,6 +88,10 @@ export interface Job {
   updatedAt: string
   startedAt?: string
   completedAt?: string
+  renderTime?: number
+  userRerenderCount?: number
+  userRerenderMax?: number
+  rerenderedHistory?: number[]
 }
 
 interface JobStore {

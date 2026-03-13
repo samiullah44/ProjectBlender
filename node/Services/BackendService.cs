@@ -298,6 +298,12 @@ var hardwareDetector = new HardwareDetector(
                             _logger.LogWarning("⚡ WS disconnected, falling back to REST job poll...");
                             await PollForJobsAsync(stoppingToken);
                         }
+                        else if (string.IsNullOrEmpty(GetCurrentJobId()))
+                        {
+                            // Periodic safety poll even when WS is connected, to catch any missed jobs
+                            _logger.LogDebug("🔄 Periodic safety job poll while idle...");
+                            await PollForJobsAsync(stoppingToken);
+                        }
                         await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
                     }
                     catch (OperationCanceledException) { break; }

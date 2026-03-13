@@ -592,14 +592,50 @@ export class WebSocketService {
 
   private async getJobData(jobId: string) {
     try {
-      const job = await Job.findOne({ jobId }).lean();
+      const job = await Job.findOne({ jobId });
       if (!job) return null;
 
-      // Calculate pending frames
+      // Real-time Sync: If job is stuck in processing but all frames are done, update it
+      if (['pending', 'processing'].includes(job.status)) {
+        const selectedOrAll = job.frames.selected && job.frames.selected.length > 0
+          ? job.frames.selected
+          : Array.from({ length: job.frames.total }, (_, i) => job.frames.start + i);
+
+        const totalFramesToRender = selectedOrAll.length;
+        const renderedFrames = job.frames.rendered.length;
+        const stillInFlight = job.frames.assigned.length;
+        const stillFailed = job.frames.failed.filter((f: number) => !job.frames.rendered.includes(f)).length;
+
+        if ((renderedFrames + stillFailed >= totalFramesToRender) && stillInFlight === 0) {
+          const oldStatus = job.status;
+          if (renderedFrames > 0) {
+            job.status = 'completed';
+          } else if (stillFailed > 0) {
+            job.status = 'failed';
+          }
+
+          if (job.status !== oldStatus) {
+            job.completedAt = new Date();
+            
+            // REFINE: Use session-based wall-clock accumulation (User requirement)
+            const sessionStart = job.startedAt || job.createdAt;
+            const sessionDurationMs = Math.max(0, job.completedAt.getTime() - sessionStart.getTime());
+            
+            // Add current session to accumulated time
+            job.renderTime = (job.renderTime || 0) + sessionDurationMs;
+            
+            await job.save();
+            console.log(`🔌 WS Sync: Job ${jobId} auto-completed during subscription`);
+          }
+        }
+      }
+
+      // Calculate statistics for returned data
       const totalFrames = job.frames.total;
       const renderedFrames = job.frames.rendered.length;
       const failedFrames = job.frames.failed.length;
       const pendingFrames = totalFrames - renderedFrames - failedFrames;
+      const progress = totalFrames > 0 ? Math.round((renderedFrames / totalFrames) * 100) : 0;
 
       // Convert assignedNodes Map to plain object safely
       let assignedNodes = {};
@@ -614,16 +650,18 @@ export class WebSocketService {
       return {
         jobId: job.jobId,
         status: job.status,
-        progress: job.progress,
+        progress: progress,
         frames: {
           total: totalFrames,
-          rendered: renderedFrames,
-          failed: failedFrames,
-          pending: pendingFrames,
-          list: job.frames.rendered,
+          renderedCount: renderedFrames,
+          failedCount: failedFrames,
+          pendingCount: pendingFrames,
+          rendered: job.frames.rendered || [],
+          failed: job.frames.failed || [],
           start: job.frames.start,
           end: job.frames.end,
-          assigned: job.frames.assigned || []
+          assigned: job.frames.assigned || [],
+          selected: job.frames.selected || []
         },
         outputUrls: job.outputUrls || [],
         settings: job.settings,
@@ -633,11 +671,15 @@ export class WebSocketService {
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
         completedAt: job.completedAt,
+        renderTime: job.renderTime,
         assignedNodes: assignedNodes,
         frameAssignments: job.frameAssignments || [],
         type: job.type,
         projectId: job.projectId,
-        userId: job.userId
+        userId: job.userId,
+        userRerenderCount: job.userRerenderCount || 0,
+        userRerenderMax: job.userRerenderMax || 0,
+        rerenderedHistory: job.rerenderedHistory || []
       };
     } catch (error) {
       console.error('Error getting job data:', error);

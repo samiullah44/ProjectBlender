@@ -58,7 +58,7 @@ const JobDetails: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  
+
   const [activeTab, setActiveTab] = useState('overview')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null)
@@ -66,6 +66,8 @@ const JobDetails: React.FC = () => {
   const [isZipDownloading, setIsZipDownloading] = useState(false)
   const [zipBytesLoaded, setZipBytesLoaded] = useState(0)
   const [zipBytesTotal, setZipBytesTotal] = useState<number | null>(null)
+  const [isRerenderModalOpen, setIsRerenderModalOpen] = useState(false)
+  const [selectedRerenderFrames, setSelectedRerenderFrames] = useState<number[]>([])
 
   // Use TanStack Query as the single source of truth
   const {
@@ -107,12 +109,12 @@ const JobDetails: React.FC = () => {
   // Helper function to merge frames without duplicates and filter invalid frames
   const mergeFrames = (existingFrames: FrameImage[], newFrames: FrameImage[]): FrameImage[] => {
     const frameMap = new Map<number, FrameImage>()
-    
+
     // Add existing
     existingFrames.forEach(frame => {
       if (frame && frame.frame !== undefined) frameMap.set(frame.frame, frame)
     })
-    
+
     // Merge new (preserve existing fields like freshUrl when new payload is partial)
     newFrames.forEach(frame => {
       if (frame && frame.frame !== undefined) {
@@ -137,7 +139,7 @@ const JobDetails: React.FC = () => {
 
         // Intelligently merge updates
         const newData = { ...oldData, ...updatedFields }
-        
+
         // Handle nested merges like frames and outputUrls
         if (updatedFields.frames) {
           newData.frames = { ...oldData.frames, ...updatedFields.frames }
@@ -156,6 +158,13 @@ const JobDetails: React.FC = () => {
 
     return () => unsubscribe()
   }, [jobId, queryClient])
+
+  // Toast on completion
+  useEffect(() => {
+    if (job?.status === 'completed') {
+      toast.success('Job completed successfully!');
+    }
+  }, [job?.status]);
 
   // Auto-refresh interval
   useEffect(() => {
@@ -341,6 +350,74 @@ const JobDetails: React.FC = () => {
       setIsZipDownloading(false)
     }
   }, [jobId])
+
+  const userRerenderCount = (job as any)?.userRerenderCount ?? 0
+  const userRerenderMax = (job as any)?.userRerenderMax ?? 2
+  const canRerender = job?.status === 'completed' && userRerenderCount < userRerenderMax
+  const isFinalized = !!(job as any)?.approved || (job?.status === 'completed' && !canRerender)
+
+  const toggleFrameSelection = useCallback((frameNumber: number) => {
+    setSelectedRerenderFrames(prev => (
+      prev.includes(frameNumber)
+        ? prev.filter(f => f !== frameNumber)
+        : [...prev, frameNumber]
+    ))
+  }, [])
+
+  const handleSubmitRerender = useCallback(async () => {
+    if (!jobId) {
+      toast.error('Missing job ID')
+      return
+    }
+    if (!selectedRerenderFrames.length) {
+      toast.error('Select at least one frame to re-render')
+      return
+    }
+
+    const toastId = toast.loading('Queuing selected frames for re-render...')
+    try {
+      await axiosInstance.post(`/jobs/${jobId}/rerender`, {
+        frames: selectedRerenderFrames
+      })
+      toast.dismiss(toastId)
+      toast.success('Frames queued for re-render')
+      setIsRerenderModalOpen(false)
+      setSelectedRerenderFrames([])
+      await refetch()
+    } catch (error: any) {
+      console.error('Re-render error:', error)
+      toast.dismiss(toastId)
+      const message =
+        error?.response?.data?.error ||
+        (error instanceof Error ? error.message : 'Failed to queue re-render')
+      toast.error(message)
+    }
+  }, [jobId, selectedRerenderFrames, refetch])
+
+  const handleApproveJob = useCallback(async () => {
+    if (!jobId) {
+      toast.error('Missing job ID')
+      return
+    }
+
+    const toastId = toast.loading('Finalizing job...')
+    try {
+      const response = await axiosInstance.post(`/jobs/${jobId}/approve`)
+      toast.dismiss(toastId)
+      if (response.data?.success) {
+        toast.success('Job approved and finalized. Thank you for trusting the render.')
+        await refetch()
+      } else {
+        toast.error(response.data?.error || 'Failed to approve job')
+      }
+    } catch (error: any) {
+      toast.dismiss(toastId)
+      const message =
+        error?.response?.data?.error ||
+        (error instanceof Error ? error.message : 'Failed to approve job')
+      toast.error(message)
+    }
+  }, [jobId, refetch])
 
   const formatFileSize = useCallback((bytes: number) => {
     if (!bytes || bytes === 0 || isNaN(bytes)) return ''
@@ -576,6 +653,11 @@ const JobDetails: React.FC = () => {
                     <StatusIcon className="w-3 h-3 mr-1" />
                     {(status || 'pending').toUpperCase()}
                   </Badge>
+                  {isFinalized && (
+                    <Badge className="bg-emerald-600/20 text-emerald-300 border-emerald-500/40 text-[11px] font-semibold">
+                      Finalized
+                    </Badge>
+                  )}
                   <span className="text-sm text-gray-400">Job ID: {id ? id.substring(0, 8) : '...'}</span>
                   <span className="text-sm text-gray-400">
                     Created: {createdAt ? new Date(createdAt).toLocaleDateString() : '...'}
@@ -589,98 +671,126 @@ const JobDetails: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {status === 'processing' && (
-                <Button
-                  variant="outline"
-                  onClick={() => setAutoRefresh(!autoRefresh)}
-                  className="border-white/20 hover:bg-white/5"
-                >
-                  {autoRefresh ? (
-                    <>
-                      <Pause className="w-4 h-4 mr-2" />
-                      Pause Updates
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 mr-2" />
-                      Resume Updates
-                    </>
-                  )}
-                </Button>
-              )}
-
-              {status === 'processing' && (
-                <Button
-                  variant="outline"
-                  onClick={handleCancelJob}
-                  disabled={cancelJobMutation.isPending}
-                  className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50"
-                >
-                  {cancelJobMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    'Cancel Job'
-                  )}
-                </Button>
-              )}
-
-              {status === 'completed' && cachedFrames.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      onClick={handleDownloadZip}
-                      disabled={isZipDownloading}
-                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                    >
-                      {isZipDownloading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Preparing ZIP...
-                        </>
-                      ) : (
-                        <>
-                          <Archive className="w-4 h-4 mr-2" />
-                          Download ZIP ({cachedFrames.length})
-                        </>
-                      )}
-                    </Button>
-
-                    {isZipDownloading && (
-                      <div className="w-[260px]">
-                        <Progress value={zipBytesTotal ? Math.min(100, (zipBytesLoaded / zipBytesTotal) * 100) : 35} />
-                        <div className="mt-1 text-[10px] text-gray-400 tabular-nums flex justify-between">
-                          <span>
-                            Downloaded {(zipBytesLoaded / (1024 * 1024)).toFixed(1)} MB
-                          </span>
-                          <span>
-                            {zipBytesTotal
-                              ? `${Math.round((zipBytesLoaded / zipBytesTotal) * 100)}%`
-                              : 'Streaming...'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-3">
+                {status === 'processing' && (
                   <Button
                     variant="outline"
-                    onClick={handleDownloadAll}
+                    onClick={() => setAutoRefresh(!autoRefresh)}
                     className="border-white/20 hover:bg-white/5"
                   >
-                    <Download className="w-4 h-4 mr-2" />
-                    Individual Frames
+                    {autoRefresh ? (
+                      <>
+                        <Pause className="w-4 h-4 mr-2" />
+                        Pause Updates
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 mr-2" />
+                        Resume Updates
+                      </>
+                    )}
                   </Button>
-                </div>
-              )}
+                )}
 
-              <Button
-                variant="outline"
-                onClick={forceRefresh}
-                disabled={isLoading}
-                className="border-white/20 hover:bg-white/5"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-              </Button>
+                {status === 'processing' && (
+                  <Button
+                    variant="outline"
+                    onClick={handleCancelJob}
+                    disabled={cancelJobMutation.isPending}
+                    className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50"
+                  >
+                    {cancelJobMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Cancel Job'
+                    )}
+                  </Button>
+                )}
+
+                {status === 'completed' && !isFinalized && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={!!(job as any)?.approved}
+                      onClick={handleApproveJob}
+                      className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/50"
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      {(job as any)?.approved ? 'Approved' : 'Approve'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={!canRerender}
+                      onClick={() => setIsRerenderModalOpen(true)}
+                      className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/70"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      {canRerender ? 'Re-render Frames' : 'Re-render Limit Reached'}
+                    </Button>
+                    <span className="text-[11px] text-gray-500">
+                      Attempts used: {userRerenderCount}/{userRerenderMax}
+                    </span>
+                  </div>
+                )}
+
+                {status === 'completed' && cachedFrames.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        onClick={handleDownloadZip}
+                        disabled={isZipDownloading}
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                      >
+                        {isZipDownloading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Preparing ZIP...
+                          </>
+                        ) : (
+                          <>
+                            <Archive className="w-4 h-4 mr-2" />
+                            Download ZIP ({cachedFrames.length})
+                          </>
+                        )}
+                      </Button>
+
+                      {isZipDownloading && (
+                        <div className="w-[260px]">
+                          <Progress value={zipBytesTotal ? Math.min(100, (zipBytesLoaded / zipBytesTotal) * 100) : 35} />
+                          <div className="mt-1 text-[10px] text-gray-400 tabular-nums flex justify-between">
+                            <span>
+                              Downloaded {(zipBytesLoaded / (1024 * 1024)).toFixed(1)} MB
+                            </span>
+                            <span>
+                              {zipBytesTotal
+                                ? `${Math.round((zipBytesLoaded / zipBytesTotal) * 100)}%`
+                                : 'Streaming...'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={handleDownloadAll}
+                      className="border-white/20 hover:bg-white/5"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Individual Frames
+                    </Button>
+                  </div>
+                )}
+
+                <Button
+                  variant="outline"
+                  onClick={forceRefresh}
+                  disabled={isLoading}
+                  className="border-white/20 hover:bg-white/5"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -712,42 +822,67 @@ const JobDetails: React.FC = () => {
                     </div>
                     {/* High-fidelity frame detail for Grid Visualization */}
                     {(() => {
-                        const frameDetail = {
-                            rendered: Array.from(new Set([
-                                ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'rendered').map((a: any) => a.frame) : []),
-                                ...(Array.isArray(job.frames?.rendered) ? job.frames.rendered : [])
-                            ])),
-                            failed: Array.from(new Set([
-                                ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'failed').map((a: any) => a.frame) : []),
-                                ...(Array.isArray(job.frames?.failed) ? job.frames.failed : [])
-                            ])),
-                            assigned: Array.from(new Set([
-                                ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'assigned').map((a: any) => a.frame) : []),
-                                ...(Array.isArray(job.frames?.assigned) ? job.frames.assigned : []),
-                                ...Object.values(job.assignedNodes || {}).flat() as number[]
-                            ]))
-                        };
+                      const frameDetail = {
+                        rendered: Array.from(new Set([
+                          ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'rendered').map((a: any) => a.frame) : []),
+                          ...(Array.isArray(job.frames?.rendered) ? job.frames.rendered : [])
+                        ])),
+                        failed: Array.from(new Set([
+                          ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'failed').map((a: any) => a.frame) : []),
+                          ...(Array.isArray(job.frames?.failed) ? job.frames.failed : [])
+                        ])),
+                        assigned: Array.from(new Set([
+                          ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'assigned').map((a: any) => a.frame) : []),
+                          ...(Array.isArray(job.frames?.assigned) ? job.frames.assigned : []),
+                          ...Object.values(job.assignedNodes || {}).flat() as number[]
+                        ]))
+                      };
 
-                        return (
-                            <div className="mt-4">
-                                <FrameGrid
-                                    totalFrames={frameStats.totalFrames}
-                                    renderedFrames={frameDetail.rendered}
-                                    failedFrames={frameDetail.failed}
-                                    assignedFrames={frameDetail.assigned}
-                                    startFrame={job.frames?.start || 1}
-                                    frameImages={frameImageMap}
-                                />
-                            </div>
+                      // Detect re-rendering frames:
+                      // The backend sets frames.selected to the re-queued frames and increments userRerenderCount.
+                      // A frame is "re-rendering" when it is assigned AND was explicitly queued for re-render.
+                      const rerenderedFrames = (() => {
+                        const isRerender = (job.userRerenderCount ?? 0) > 0;
+                        if (!isRerender) return [];
+                        // Primary: frames.selected explicitly tracks what was re-queued
+                        const selectedSet = new Set<number>(
+                          Array.isArray(job.frames?.selected)
+                            ? job.frames.selected.map((f: any) => Number(f))
+                            : []
                         );
+                        // Fallback: outputUrls has frames that were previously rendered
+                        const prevOutputSet = new Set<number>(
+                          Array.isArray(job.outputUrls)
+                            ? job.outputUrls.map((o: any) => Number(o.frame))
+                            : []
+                        );
+                        return frameDetail.assigned.filter((f: number) =>
+                          selectedSet.has(Number(f)) || prevOutputSet.has(Number(f))
+                        );
+                      })();
+
+                      return (
+                        <div className="mt-4">
+                          <FrameGrid
+                            totalFrames={frameStats.totalFrames}
+                            renderedFrames={frameDetail.rendered}
+                            failedFrames={frameDetail.failed}
+                            assignedFrames={frameDetail.assigned}
+                            rerenderedFrames={rerenderedFrames}
+                            rerenderedHistory={job.rerenderedHistory}
+                            startFrame={job.frames?.start || 1}
+                            frameImages={frameImageMap}
+                          />
+                        </div>
+                      );
                     })()}
                     <div className="flex justify-between text-sm text-gray-400 mt-2">
-                        <span>
-                            {frameStats.renderedFrames} of {frameStats.totalFrames} frames rendered
-                        </span>
-                        <span>
-                            {frameStats.pendingFrames} pending • {frameStats.failedFrames} failed
-                        </span>
+                      <span>
+                        {frameStats.renderedFrames} of {frameStats.totalFrames} frames rendered
+                      </span>
+                      <span>
+                        {frameStats.pendingFrames} pending • {frameStats.failedFrames} failed
+                      </span>
                     </div>
                   </div>
 
@@ -853,32 +988,53 @@ const JobDetails: React.FC = () => {
 
                         {/* Live Render Grid Visualization */}
                         {(() => {
-                           const frameDetail = {
-                               rendered: Array.from(new Set([
-                                   ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'rendered').map((a: any) => a.frame) : []),
-                                   ...(Array.isArray(job.frames?.rendered) ? job.frames.rendered : [])
-                               ])),
-                               failed: Array.from(new Set([
-                                   ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'failed').map((a: any) => a.frame) : []),
-                                   ...(Array.isArray(job.frames?.failed) ? job.frames.failed : [])
-                               ])),
-                               assigned: Array.from(new Set([
-                                   ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'assigned').map((a: any) => a.frame) : []),
-                                   ...(Array.isArray(job.frames?.assigned) ? job.frames.assigned : []),
-                                   ...Object.values(job.assignedNodes || {}).flat() as number[]
-                               ]))
-                           };
+                          const frameDetail = {
+                            rendered: Array.from(new Set([
+                              ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'rendered').map((a: any) => a.frame) : []),
+                              ...(Array.isArray(job.frames?.rendered) ? job.frames.rendered : [])
+                            ])),
+                            failed: Array.from(new Set([
+                              ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'failed').map((a: any) => a.frame) : []),
+                              ...(Array.isArray(job.frames?.failed) ? job.frames.failed : [])
+                            ])),
+                            assigned: Array.from(new Set([
+                              ...(Array.isArray(job.frameAssignments) ? job.frameAssignments.filter((a: any) => a.status === 'assigned').map((a: any) => a.frame) : []),
+                              ...(Array.isArray(job.frames?.assigned) ? job.frames.assigned : []),
+                              ...Object.values(job.assignedNodes || {}).flat() as number[]
+                            ]))
+                          };
 
-                           return (
-                               <FrameGrid
-                                   totalFrames={frameStats.totalFrames}
-                                   renderedFrames={frameDetail.rendered}
-                                   failedFrames={frameDetail.failed}
-                                   assignedFrames={frameDetail.assigned}
-                                   startFrame={job.frames?.start || 1}
-                                   frameImages={frameImageMap}
-                               />
-                           );
+                          // Detect re-rendering frames same logic
+                          const rerenderedFrames2 = (() => {
+                            const isRerender = (job.userRerenderCount ?? 0) > 0;
+                            if (!isRerender) return [];
+                            const selectedSet2 = new Set<number>(
+                              Array.isArray(job.frames?.selected)
+                                ? job.frames.selected.map((f: any) => Number(f))
+                                : []
+                            );
+                            const prevOutputSet2 = new Set<number>(
+                              Array.isArray(job.outputUrls)
+                                ? job.outputUrls.map((o: any) => Number(o.frame))
+                                : []
+                            );
+                            return frameDetail.assigned.filter((f: number) =>
+                              selectedSet2.has(Number(f)) || prevOutputSet2.has(Number(f))
+                            );
+                          })();
+
+                          return (
+                            <FrameGrid
+                              totalFrames={frameStats.totalFrames}
+                              renderedFrames={frameDetail.rendered}
+                              failedFrames={frameDetail.failed}
+                              assignedFrames={frameDetail.assigned}
+                              rerenderedFrames={rerenderedFrames2}
+                              rerenderedHistory={job.rerenderedHistory}
+                              startFrame={job.frames?.start || 1}
+                              frameImages={frameImageMap}
+                            />
+                          );
                         })()}
                       </div>
                     </CardContent>
@@ -1346,28 +1502,39 @@ const JobDetails: React.FC = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Started:</span>
-                    <span>{startTime ? new Date(startTime).toLocaleTimeString() : '...'}</span>
+                    <span>{startTime ? new Date(startTime).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' }) : '...'}</span>
                   </div>
                   {status === 'completed' && completedAt ? (
                     <>
                       <div className="flex justify-between">
                         <span className="text-gray-400">Completed:</span>
-                        <span>{new Date(completedAt).toLocaleTimeString()}</span>
+                        <span>{new Date(completedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' })}</span>
                       </div>
                       <div className="flex justify-between font-bold text-blue-400">
                         <span className="text-gray-400">Duration:</span>
                         <span>
                           {(() => {
+                            // PRIORITIZE: backend-accumulated compute time (Session Model)
+                            const accumulatedMs = (job as any)?.renderTime || 0;
+                            const isFinal = ['completed', 'failed', 'cancelled'].includes(job.status || '');
+                            
+                            if (isFinal && accumulatedMs > 0) {
+                              const mins = Math.floor(accumulatedMs / 60000);
+                              const secs = Math.floor((accumulatedMs % 60000) / 1000);
+                              return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                            }
+
+                            // FALLBACK: Calculation for older jobs or those just starting
                             const startDate = startTime || createdAt;
                             const endDate = completedAt;
-                            
+
                             if (!startDate || !endDate) return '...';
-                            
+
                             const start = new Date(startDate).getTime();
                             const end = new Date(endDate).getTime();
-                            
+
                             if (isNaN(start) || isNaN(end)) return '...';
-                            
+
                             const diffMs = Math.max(0, end - start);
                             const minutes = Math.floor(diffMs / 60000);
                             const seconds = Math.floor((diffMs % 60000) / 1000);
@@ -1381,12 +1548,23 @@ const JobDetails: React.FC = () => {
                       <span className="text-gray-400">Elapsed:</span>
                       <span>
                         {(() => {
+                          // SESSION ACCUMULATION MODEL: sum of previous sessions + current session duration
+                          const accumulatedMs = (job as any)?.renderTime || 0;
                           const startDate = startTime || createdAt;
                           if (!startDate) return '0 minutes';
                           const start = new Date(startDate).getTime();
                           if (isNaN(start)) return '0 minutes';
-                          const diff = Math.max(0, Date.now() - start);
-                          return `${Math.round(diff / 60000)} minutes`;
+                          
+                          // If currently processing, add the time since current session started
+                          const isProcessing = job.status === 'processing';
+                          const currentSessionMs = isProcessing ? Math.max(0, Date.now() - start) : 0;
+                          const totalMs = accumulatedMs + currentSessionMs;
+
+                          const minutes = Math.floor(totalMs / 60000);
+                          const seconds = Math.floor((totalMs % 60000) / 1000);
+                          
+                          if (minutes > 0) return `${minutes}m ${seconds}s`;
+                          return `${seconds}s`;
                         })()}
                       </span>
                     </div>
@@ -1397,6 +1575,104 @@ const JobDetails: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Re-render modal */}
+      <AnimatePresence>
+        {isRerenderModalOpen && (
+          <motion.div
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-3xl rounded-2xl bg-[#020617] border border-white/10 p-6 shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-amber-400" />
+                    Select Frames to Re-render
+                  </h2>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Choose any completed frames you’d like to send back to the render farm.
+                  </p>
+                </div>
+                <Button variant="ghost" onClick={() => setIsRerenderModalOpen(false)} className="text-gray-400 hover:text-white hover:bg-white/5">
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="border border-white/10 rounded-xl max-h-[360px] overflow-y-auto p-3 bg-black/40">
+                {cachedFrames.length === 0 ? (
+                  <div className="py-10 text-center text-gray-500 text-sm">
+                    No rendered frames available to re-render.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {cachedFrames.map((frame) => {
+                      const isSelected = selectedRerenderFrames.includes(frame.frame)
+                      return (
+                        <button
+                          key={frame.frame}
+                          type="button"
+                          onClick={() => toggleFrameSelection(frame.frame)}
+                          className={`group relative rounded-xl border text-left overflow-hidden transition-all ${isSelected
+                            ? 'border-amber-400 bg-amber-500/10'
+                            : 'border-white/10 bg-black/40 hover:border-white/30'
+                            }`}
+                        >
+                          <div className="aspect-video bg-gray-900/60 flex items-center justify-center overflow-hidden">
+                            <SmartImage
+                              src={frame.freshUrl || frame.url}
+                              alt={`Frame ${frame.frame}`}
+                              className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform"
+                            />
+                          </div>
+                          <div className="px-3 py-2 flex items-center justify-between">
+                            <span className="text-xs font-medium text-white tabular-nums">
+                              #{String(frame.frame).padStart(4, '0')}
+                            </span>
+                            <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-amber-400' : 'bg-gray-500'}`} />
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between">
+                <span className="text-[11px] text-gray-500">
+                  Selected {selectedRerenderFrames.length} frame{selectedRerenderFrames.length === 1 ? '' : 's'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setSelectedRerenderFrames([])
+                      setIsRerenderModalOpen(false)
+                    }}
+                    className="text-gray-400 hover:text-white hover:bg-white/5"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSubmitRerender}
+                    disabled={selectedRerenderFrames.length === 0}
+                    className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                  >
+                    Queue Re-render
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

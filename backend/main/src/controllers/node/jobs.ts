@@ -214,102 +214,93 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
     const assignedBullFrames = dequeuedAll.filter(f => f.jobId === targetJobId);
     const rejectedBullFrames = dequeuedAll.filter(f => f.jobId !== targetJobId);
 
+    // Immediately return frames from other jobs to the queue
     if (rejectedBullFrames.length > 0) {
       await Promise.all(rejectedBullFrames.map(f =>
-        nackFrame(f.bullJobId, f.lockToken, 'Node requested frames but was grouped into another job, returning', f.queueName)
+        nackFrame(f.bullJobId, f.lockToken, 'Node requested frames but was grouped into another job', f.queueName)
       ));
     }
 
-    // 5. Fetch the ONE target Job from MongoDB to track progress & stats
-    const job = await Job.findOne({ jobId: targetJobId });
-    if (!job || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
-      await Promise.all(assignedBullFrames.map(f =>
-        nackFrame(f.bullJobId, f.lockToken, 'Job is no longer active in MongoDB', f.queueName)
-      ));
-      res.json({ jobId: null });
-      return;
-    }
+    try {
+      // 5. Fetch the ONE target Job from MongoDB to track progress & stats
+      const job = await Job.findOne({ jobId: targetJobId });
+      if (!job || ['completed', 'failed', 'cancelled'].includes(job.status)) {
+        throw new AppError(`Job ${targetJobId} is no longer active in MongoDB`, 400);
+      }
 
-    // Build array of extracted frame indices
-    const assignedFrames = assignedBullFrames.map(f => f.frame);
+      // Build array of extracted frame indices
+      const assignedFrames = assignedBullFrames.map(f => f.frame);
 
-    // 6. Mark frames as in-progress inside MongoDB (for Dashboard fidelity)
-    // Remove them from frames.pending and frames.failed since they are assigned again
+      // Resolve extension based on job settings
+      let extension = 'png';
+      if (job.settings?.outputFormat) {
+        const format = job.settings.outputFormat.toUpperCase();
+        if (format === 'JPEG' || format === 'JPG') extension = 'jpg';
+        else if (format === 'OPEN_EXR' || format === 'EXR') extension = 'exr';
+        else if (format === 'TIFF') extension = 'tif';
+        else if (format === 'TARGA' || format === 'TGA') extension = 'tga';
+        else if (format === 'BMP') extension = 'bmp';
+      }
 
-    // Resolve extension based on job settings
-    let extension = 'png';
-    if (job.settings?.outputFormat) {
-      const format = job.settings.outputFormat.toUpperCase();
-      if (format === 'JPEG' || format === 'JPG') extension = 'jpg';
-      else if (format === 'OPEN_EXR' || format === 'EXR') extension = 'exr';
-      else if (format === 'TIFF') extension = 'tif';
-      else if (format === 'TARGA' || format === 'TGA') extension = 'tga';
-      else if (format === 'BMP') extension = 'bmp';
-    }
+      // Generate S3 upload URLs for each frame
+      const frameUploadUrls: Record<number, { uploadUrl: string, s3Key: string }> = {};
+      for (const frame of assignedFrames) {
+        const { uploadUrl, s3Key } = await s3Service.generateFrameUploadUrl(job.jobId, frame, extension);
+        frameUploadUrls[frame] = { uploadUrl, s3Key };
+      }
 
-    // Generate S3 upload URLs for each frame
-    const frameUploadUrls: Record<number, { uploadUrl: string, s3Key: string }> = {};
-    for (const frame of assignedFrames) {
-      const { uploadUrl, s3Key } = await s3Service.generateFrameUploadUrl(job.jobId, frame, extension);
-      frameUploadUrls[frame] = { uploadUrl, s3Key };
-    }
+      // Use atomic operations to prevent duplicates
+      const updateOp: any = {
+        $set: {
+          status: 'processing',
+          updatedAt: now,
+          [`assignedNodes.${nodeId}`]: assignedFrames
+        },
+        $addToSet: {
+          'frames.assigned': { $each: assignedFrames }
+        },
+        $pullAll: {
+          'frames.pending': assignedFrames,
+          'frames.failed': assignedFrames
+        },
+        $push: {
+          frameAssignments: {
+            $each: assignedFrames.map(frame => ({
+              frame,
+              nodeId,
+              status: 'assigned',
+              assignedAt: now,
+              creditsEarned: job.settings.creditsPerFrame || DEFAULT_CREDITS_PER_FRAME
+            }))
+          }
+        }
+      };
 
-    // Use atomic operations to prevent duplicates
-    // Also pull retried frames out of frames.failed so they can be tracked properly again
-    const updateOp: any = {
-      $set: {
-        status: 'processing',
-        updatedAt: now,
-        [`assignedNodes.${nodeId}`]: assignedFrames
-      },
-      $addToSet: {
-        'frames.assigned': { $each: assignedFrames }
-      },
-      $push: {
-        frameAssignments: {
-          $each: assignedFrames.map(frame => ({
-            frame,
-            nodeId,
-            status: 'assigned',
-            assignedAt: now,
-            creditsEarned: job.settings.creditsPerFrame || DEFAULT_CREDITS_PER_FRAME
-          }))
+      // If this is the start of a rendering session (status was pending), set startedAt
+      if (job.status !== 'processing') {
+        updateOp.$set.startedAt = now;
+        if (job.renderTime === undefined) {
+          updateOp.$set.renderTime = 0;
         }
       }
-    };
 
-    // Remove any of the newly-assigned frames from the failed list (retry)
-    const failedFrames = job.frames.failed || [];
-    const reassignedFailedFrames = assignedFrames.filter(f => failedFrames.includes(f));
-    if (reassignedFailedFrames.length > 0) {
-      updateOp.$pull = { 'frames.failed': { $in: reassignedFailedFrames } };
-      console.log(`🔄 Retrying ${reassignedFailedFrames.length} previously-failed frame(s): [${reassignedFailedFrames.join(', ')}]`);
-    }
+      // Remove any of the newly-assigned frames from the failed list (retry log)
+      const reassignedFailedFrames = assignedFrames.filter(f => (job.frames.failed || []).includes(f));
+      if (reassignedFailedFrames.length > 0) {
+        console.log(`🔄 Retrying ${reassignedFailedFrames.length} previously-failed frame(s): [${reassignedFailedFrames.join(', ')}]`);
+      }
 
-    // Remove newly assigned frames from pending/failed tracking arrays
-    const pendingFrames = job.frames.pending || [];
-    const failedFramesList = job.frames.failed || [];
+      // Execute atomic update
+      const result = await Job.findOneAndUpdate(
+        { jobId: targetJobId },
+        updateOp,
+        { new: true }
+      );
 
-    assignedFrames.forEach(frame => {
-      const pendingIdx = pendingFrames.indexOf(frame);
-      if (pendingIdx !== -1) pendingFrames.splice(pendingIdx, 1);
+      if (!result) {
+        throw new AppError('Failed to update job status in MongoDB', 500);
+      }
 
-      const failedIdx = failedFramesList.indexOf(frame);
-      if (failedIdx !== -1) failedFramesList.splice(failedIdx, 1);
-    });
-
-    // Update the objects back
-    job.frames.pending = pendingFrames;
-    job.frames.failed = failedFramesList;
-
-    // Execute atomic update
-    const result = await Job.findOneAndUpdate(
-      { jobId: targetJobId },
-      updateOp,
-      { new: true }
-    );
-
-    if (result) {
       const blendFileUrl = await s3Service.generateBlendFileDownloadUrl(job.blendFileKey);
 
       // Update node status & save active BullMQ jobs
@@ -329,20 +320,16 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
         }
       );
 
-      // Calculate job progress
-      const totalFrames = result.frames.total;
-      const renderedFrames = result.frames.rendered.length;
-      const progress = Math.round((renderedFrames / totalFrames) * 100);
+      const totalFramesCount = result.frames.total;
+      const renderedCount = result.frames.rendered.length;
+      const jobProgress = Math.round((renderedCount / totalFramesCount) * 100);
 
       console.log(`📋 Smart assigned ${assignedFrames.length} frames to node ${nodeId} for job ${result.jobId}`);
-      console.log(`📊 Job ${result.jobId} progress: ${progress}% (${renderedFrames}/${totalFrames} frames)`);
-      console.log(`⚡ Node performance: ${currentNodePerf.hardwareScore.toFixed(2)} hardware, ${currentNodePerf.reliabilityScore.toFixed(2)} reliability, ${currentNodePerf.avgFrameTime.toFixed(2)}s avg frame time`);
 
-      // Broadcast job assignment via WebSocket
+      // Broadcast updates via WebSocket
       const wsService = getWsService(req);
       if (wsService) {
-        // Push job directly to the node if it is connected via WebSocket
-        const wsDelivered = wsService.sendToNode(nodeId, {
+        wsService.sendToNode(nodeId, {
           type: 'job_assigned',
           jobId: result.jobId,
           frames: assignedFrames,
@@ -352,16 +339,10 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
           totalFrames: result.frames.total,
           selectedFrames: result.frames.selected || [],
           assignedFramesCount: assignedFrames.length,
-          jobProgress: progress
+          jobProgress
         });
-        if (wsDelivered) {
-          console.log(`📡 Job pushed to node ${nodeId} via WebSocket`);
-        }
 
-        // Broadcast job update to dashboard
         await wsService.broadcastJobUpdate(result.jobId);
-
-        // Broadcast node update
         wsService.broadcastNodeUpdate(nodeId, {
           status: 'busy',
           currentJob: result.jobId,
@@ -377,25 +358,24 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
         frameUploadUrls,
         settings: result.settings,
         totalFrames: result.frames.total,
-        selectedFrames: result.frames.selected || [], // NEW: Include selected frames
+        selectedFrames: result.frames.selected || [],
         assignedFramesCount: assignedFrames.length,
-        jobProgress: progress,
+        jobProgress,
         nextHeartbeatExpectedIn: 30000,
         fileStructure: {
           blendFile: result.blendFileKey,
           uploadsFolder: `uploads/${result.jobId}/`,
-          rendersFolder: `renders/${job.jobId}/`
+          rendersFolder: `renders/${result.jobId}/`
         }
       });
 
-      return;
+    } catch (innerError) {
+      // CRITICAL: NACK frames so they can be picked up by another node
+      await Promise.all(assignedBullFrames.map(f =>
+        nackFrame(f.bullJobId, f.lockToken, innerError instanceof Error ? innerError.message : 'Assignment error', f.queueName)
+      ));
+      throw innerError; // Fall through to main catch block
     }
-
-    // If we fall through and didn't return, something failed. NACK the frames.
-    await Promise.all(assignedBullFrames.map(f =>
-      nackFrame(f.bullJobId, f.lockToken, 'MongoDB job assignment transaction failed', f.queueName)
-    ));
-    res.json({ jobId: null });
 
   } catch (error) {
     console.error('❌ Job assignment error:', error);
@@ -622,13 +602,21 @@ export const frameCompleted = async (req: Request, res: Response): Promise<void>
       job.outputUrls = [];
     }
 
-    job.outputUrls.push({
+    const newUrlEntry = {
       frame,
       url: downloadUrl,
       s3Key,
       fileSize: fileSize || 0,
       uploadedAt: now
-    });
+    };
+
+    // Replace if exists, else push
+    const existingIndex = job.outputUrls.findIndex((u: any) => u.frame === frame);
+    if (existingIndex !== -1) {
+      job.outputUrls[existingIndex] = newUrlEntry;
+    } else {
+      job.outputUrls.push(newUrlEntry);
+    }
 
     // Update Client Stats: Increment framesRendered
     await User.findByIdAndUpdate(job.userId, {
@@ -644,21 +632,43 @@ export const frameCompleted = async (req: Request, res: Response): Promise<void>
     const totalFramesToRender = selectedOrAll.length;
     // Frames still needing work: assigned (in-flight) OR still failed (will retry)
     const stillInFlight = job.frames.assigned.length;
+    // Frames that failed and haven't been successfully re-rendered yet
     const stillFailed = job.frames.failed.filter((f: number) => !job.frames.rendered.includes(f)).length;
 
-    if (renderedFrames === totalFramesToRender) {
-      job.status = 'completed';
+    // Check if the overall rendering process is "finished" for now
+    // (All frames have either succeeded or failed, and none are currently being rendered by any node)
+    if ((renderedFrames + stillFailed >= totalFramesToRender) && stillInFlight === 0) {
+      const oldStatus = job.status;
+      // Determine job status: 'completed' if any frames rendered, 'failed' if all failed.
+      if (renderedFrames > 0) {
+        job.status = 'completed';
+      } else if (stillFailed > 0) {
+        job.status = 'failed';
+      }
+      
       job.completedAt = now;
 
-      // Calculate total credits distributed
-      const totalCredits = job.frameAssignments
-        .filter((a: IFrameAssignment) => a.status === 'rendered')
-        .reduce((sum: number, a: IFrameAssignment) => sum + (a.creditsEarned || 0), 0);
+      // Accumulate total render time based on wall-clock duration of the job.
+      // We only accumulate if this is the first time the job reaches a final state in this session.
+      if (oldStatus !== 'completed' && oldStatus !== 'failed' && oldStatus !== 'cancelled') {
+        const sessionStart = job.startedAt || job.createdAt;
+        const sessionDurationMs = Math.max(0, now.getTime() - sessionStart.getTime());
+        job.renderTime = (job.renderTime || 0) + sessionDurationMs;
+      }
 
-      job.totalCreditsDistributed = totalCredits || 0;
+      // Calculate total credits distributed across all successfully rendered frames.
+      let totalCredits = 0;
+      job.frameAssignments.forEach((a: IFrameAssignment) => {
+        if (a.status === 'rendered') {
+          totalCredits += (a.creditsEarned || 0);
+        }
+      });
+      job.totalCreditsDistributed = totalCredits;
 
-      console.log(`🎉 Job ${job.jobId} completed! All ${totalFrames} frames rendered.`);
+      console.log(`🏁 Rendering process finished for job ${job.jobId}. Status: ${job.status}`);
+      console.log(`📊 Rendered: ${renderedFrames}/${totalFramesToRender}, Failed: ${stillFailed}`);
       console.log(`💰 Total credits distributed: ${totalCredits}`);
+      console.log(`⏱️ Total Accumulated Render Time: ${Math.round((job.renderTime || 0) / 1000)}s`);
     }
 
     // Update node performance

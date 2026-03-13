@@ -124,6 +124,9 @@ export interface IJob {
     approved?: boolean;
     approvedBy?: Types.ObjectId;
     approvedAt?: Date;
+    userRerenderCount?: number;
+    userRerenderMax?: number;
+    rerenderedHistory?: number[];
 }
 
 export interface JobFilterOptions {

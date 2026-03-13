@@ -230,6 +230,76 @@ export class JobController {
     }
   }
 
+  // Allow user to re-render selected frames (up to 2 attempts per job)
+  async rerenderFrames(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const user = (req as any).user;
+
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+
+      const frames: number[] = Array.isArray(req.body.frames) ? req.body.frames : [];
+      if (!frames.length) {
+        throw new AppError('No frames specified for re-render', 400);
+      }
+
+      const job = await this.jobService.getJobById(jobId as string, user.userId, user.role);
+      if (!job) {
+        throw new AppError('Job not found', 404);
+      }
+
+      if (job.status !== 'completed') {
+        throw new AppError('Re-render is only allowed for completed jobs', 400);
+      }
+
+      const currentCount = job.userRerenderCount ?? 0;
+      const maxCount = job.userRerenderMax ?? 2;
+      if (currentCount >= maxCount) {
+        throw new AppError('Maximum re-render attempts reached for this job', 400);
+      }
+
+      const jobStart = job.frames.start;
+      const jobEnd = job.frames.end;
+      const invalidFrames = frames.filter(f => !Number.isInteger(f) || f < jobStart || f > jobEnd);
+      if (invalidFrames.length) {
+        throw new AppError(`Invalid frame numbers: ${invalidFrames.join(', ')}`, 400);
+      }
+
+      // Only allow re-render of frames that have been rendered at least once
+      const renderedSet = new Set(job.frames.rendered);
+      const framesToRerender = frames.filter(f => renderedSet.has(f));
+      if (!framesToRerender.length) {
+        throw new AppError('Selected frames are not rendered yet', 400);
+      }
+
+      await this.jobService.rerenderFrames(job, framesToRerender, user.userId, req);
+
+      res.json({
+        success: true,
+        message: 'Frames queued for re-render',
+        jobId: job.jobId,
+        frames: framesToRerender,
+        remainingRerenders: maxCount - (currentCount + 1)
+      });
+    } catch (error) {
+      console.error('Re-render frames error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
+          error: error.message
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to re-render frames',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+  }
+
   // List jobs with filtering
   async listJobs(req: Request, res: Response): Promise<void> {
     try {
@@ -379,14 +449,12 @@ export class JobController {
         throw new AppError('Authentication required', 401);
       }
 
-      if (user.role !== 'admin') {
-        throw new AppError('Admin access required', 403);
-      }
-
-      const success = await this.jobService.approveJob(jobId as string, user.userId);
+      // We pass the role to the service, which determines if they have permission
+      // based on the current job status and ownership
+      const success = await this.jobService.approveJob(jobId as string, user.userId, user.role);
 
       if (!success) {
-        throw new AppError('Job not found', 404);
+        throw new AppError('Job not found or access denied', 404);
       }
 
       res.json({
@@ -537,15 +605,20 @@ export class JobController {
   async completeFrame(req: Request, res: Response): Promise<void> {
     try {
       const { jobId } = req.params;
-      const { frame, nodeId, renderTime, fileSize, s3Key } = req.body;
+      const { nodeId, frame, renderTime, fileSize, s3Key } = req.body;
 
-      // This would typically be called by a node, so authentication might be different
-      // For now, we'll keep it simple
+      if (!req.body.jobId) {
+          req.body.jobId = jobId;
+      }
+      
+      // If nodeId is not in params but in body, we need to adapt for NodeController.frameCompleted
+      if (!req.params.nodeId && nodeId) {
+          req.params.nodeId = nodeId;
+      }
 
-      res.json({
-        success: true,
-        message: 'Frame completion recorded'
-      });
+      // Import NodeController dynamically to avoid circular dependency if any
+      const { NodeController } = require('./node');
+      await NodeController.frameCompleted(req, res);
     } catch (error) {
       console.error('Complete frame error:', error);
       if (error instanceof AppError) {

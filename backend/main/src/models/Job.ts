@@ -231,6 +231,8 @@ const JobSchema = new Schema<IJob>({
   // System fields
   retryCount: { type: Number, default: 0 },
   maxRetries: { type: Number, default: 3 },
+  userRerenderCount: { type: Number, default: 0 },
+  userRerenderMax: { type: Number, default: 2 },
   priority: {
     type: String,
     enum: ['low', 'normal', 'high', 'urgent'],
@@ -239,7 +241,8 @@ const JobSchema = new Schema<IJob>({
   requireApproval: Boolean,
   approved: Boolean,
   approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
-  approvedAt: Date
+  approvedAt: Date,
+  rerenderedHistory: { type: [Number], default: [] }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -428,9 +431,18 @@ JobSchema.methods.completeFrame = async function (frame: number, data: Partial<I
 
   // Update status if complete
   if (rendered === total) {
+    const oldStatus = this.status;
     this.status = 'completed';
-    this.completedAt = new Date();
-    this.renderTime = Date.now() - (this.startedAt?.getTime() || this.createdAt.getTime());
+    const now = new Date();
+    this.completedAt = now;
+    
+    // REFINE: Use session-based wall-clock accumulation
+    // Only accumulate if we were previously in a non-final state
+    if (oldStatus !== 'completed' && oldStatus !== 'failed' && oldStatus !== 'cancelled') {
+        const sessionStart = this.startedAt || this.createdAt;
+        const sessionDurationMs = Math.max(0, now.getTime() - sessionStart.getTime());
+        this.renderTime = (this.renderTime || 0) + sessionDurationMs;
+    }
   }
 
   await this.save();
