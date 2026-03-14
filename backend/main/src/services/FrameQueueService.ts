@@ -153,6 +153,45 @@ export async function removeJobFrames(jobId: string, frames: number[], engine: s
 }
 
 /**
+ * Aggressively completely purges all frames across all initialized queues that belong to a specified jobId.
+ * Used when a job is unexpectedly deleted from MongoDB but ghost frames remain in BullMQ.
+ */
+export async function purgeJobFromAllQueues(targetJobId: string): Promise<number> {
+    let removedCount = 0;
+    if (queues.size === 0) {
+        initializeQueues();
+    }
+
+    const stateTypes: any[] = ['waiting', 'delayed', 'paused', 'prioritized'];
+
+    console.log(`🧹 Aggressive Purge: Checking all queues for ghost frames of job ${targetJobId}`);
+
+    for (const [name, q] of queues.entries()) {
+        try {
+            // We fetch the jobs to check their data.jobId
+            const jobsInQueue = await q.getJobs(stateTypes);
+            const targetJobs = jobsInQueue.filter(j => j?.data?.jobId === targetJobId);
+
+            for (const job of targetJobs) {
+                try {
+                    await job.remove();
+                    removedCount++;
+                } catch (e) {
+                    // ignore if already removed
+                }
+            }
+        } catch (err) {
+            console.error(`❌ Error sweeping queue ${name} for job ${targetJobId}:`, err);
+        }
+    }
+
+    if (removedCount > 0) {
+        console.log(`✅ Successfully purged ${removedCount} ghost frames from BullMQ for deleted job ${targetJobId}`);
+    }
+    return removedCount;
+}
+
+/**
  * Atomically pop up to `count` frames from the queue for a node.
  * Uses Worker.getNextJob() which is backed by a Redis LMOVE + lock —
  * no two nodes can ever receive the same frame.

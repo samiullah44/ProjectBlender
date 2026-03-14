@@ -162,6 +162,11 @@ const JobSchema = new Schema<IJob>({
     enum: ['image', 'animation'],
     required: true
   },
+  inputType: {
+    type: String,
+    enum: ['blend', 'archive'],
+    default: 'blend'
+  },
 
   // Settings
   settings: JobSettingsSchema,

@@ -25,6 +25,7 @@ export class UploadService {
     userId,
     projectId,
     type,
+    inputType,
     startFrame,
     endFrame,
     selectedFrame,
@@ -37,6 +38,7 @@ export class UploadService {
     userId: string;
     projectId: string;
     type: 'image' | 'animation';
+    inputType: 'blend' | 'archive';
     startFrame: number;
     endFrame: number;
     selectedFrame: number;
@@ -75,6 +77,7 @@ export class UploadService {
         blendFileUrl,
         blendFileName: filename,
         type,
+        inputType,
         settings: {
           ...jobSettings,
           engine,
@@ -135,6 +138,7 @@ export class UploadService {
         jobId: job.jobId,
         message: 'Upload completed and job created!',
         type: job.type,
+        inputType: job.inputType,
         totalFrames: job.frames.total,
         selectedFrames: job.frames.selected,
         blendFileUrl: job.blendFileUrl,

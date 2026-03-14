@@ -108,6 +108,9 @@ export class UploadController {
         blenderVersion: jobSettings?.blenderVersion || '4.5.0'
       };
 
+      const isZip = filename.toLowerCase().endsWith('.zip');
+      const inputType = isZip ? 'archive' : 'blend';
+
       // Complete upload and create job
       const result = await uploadService.completeUploadAndCreateJob({
         key,
@@ -117,6 +120,7 @@ export class UploadController {
         userId,
         projectId,
         type: type as 'image' | 'animation',
+        inputType,
         startFrame: parseInt(startFrame as string),
         endFrame: parseInt(endFrame as string),
         selectedFrame: parseInt(selectedFrame as string),

@@ -1342,14 +1342,6 @@ const JobDetails: React.FC = () => {
                           <span>{blendFileName}</span>
                         )}
                       </div>
-                      {blendFileKey && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">S3 Key:</span>
-                          <code className="text-sm text-gray-400 font-mono truncate max-w-xs">
-                            {blendFileKey}
-                          </code>
-                        </div>
-                      )}
                       <div className="flex justify-between">
                         <span className="text-gray-400">Created:</span>
                         <span>{new Date(createdAt).toLocaleString()}</span>
@@ -1517,7 +1509,7 @@ const JobDetails: React.FC = () => {
                             // PRIORITIZE: backend-accumulated compute time (Session Model)
                             const accumulatedMs = (job as any)?.renderTime || 0;
                             const isFinal = ['completed', 'failed', 'cancelled'].includes(job.status || '');
-                            
+
                             if (isFinal && accumulatedMs > 0) {
                               const mins = Math.floor(accumulatedMs / 60000);
                               const secs = Math.floor((accumulatedMs % 60000) / 1000);
@@ -1554,7 +1546,7 @@ const JobDetails: React.FC = () => {
                           if (!startDate) return '0 minutes';
                           const start = new Date(startDate).getTime();
                           if (isNaN(start)) return '0 minutes';
-                          
+
                           // If currently processing, add the time since current session started
                           const isProcessing = job.status === 'processing';
                           const currentSessionMs = isProcessing ? Math.max(0, Date.now() - start) : 0;
@@ -1562,7 +1554,7 @@ const JobDetails: React.FC = () => {
 
                           const minutes = Math.floor(totalMs / 60000);
                           const seconds = Math.floor((totalMs % 60000) / 1000);
-                          
+
                           if (minutes > 0) return `${minutes}m ${seconds}s`;
                           return `${seconds}s`;
                         })()}

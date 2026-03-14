@@ -413,6 +413,16 @@ process.Exited += (sender, e) =>
                             }
                             
                             _logger.LogError($"[System] Error: Output file not found after Blender exit.");
+                            
+                            // 🐛 IMPORTANT VITAL DEBUGGING: Dump the actual output since Blender lied about exit code 0.
+                            if (outputBuilder.Length > 0 || errorBuilder.Length > 0)
+                            {
+                                var output = outputBuilder.ToString();
+                                var errorOut = errorBuilder.ToString();
+                                _logger.LogError($"[Blender Silent Failure] Blender exited with 0 but produced no file. Dumping full render log:");
+                                _logger.LogError($"\n--- STDOUT ---\n{output}\n--- STDERR ---\n{errorOut}\n");
+                            }
+
                             return false;
                         }
                     }
@@ -421,11 +431,12 @@ process.Exited += (sender, e) =>
                         _logger.LogError($"[Render] Error: Blender failed with non-zero exit code: {exitCode}");
                         
                         // Log captured output for debugging
-                        if (outputBuilder.Length > 0)
+                        if (outputBuilder.Length > 0 || errorBuilder.Length > 0)
                         {
                             var output = outputBuilder.ToString();
-                            var lastLines = output.Split('\n').TakeLast(20).ToArray();
-                            _logger.LogDebug($"Last 20 lines of output:\n{string.Join("\n", lastLines)}");
+                            var errorOut = errorBuilder.ToString();
+                            _logger.LogError($"[Blender Crash Log] Dumping full render log:");
+                            _logger.LogError($"\n--- STDOUT ---\n{output}\n--- STDERR ---\n{errorOut}\n");
                         }
                         
                         return false;
@@ -644,8 +655,24 @@ if engine == 'CYCLES':
         print('CPU rendering enabled as configured')
         
 elif engine == 'EEVEE':
-    scene.render.engine = 'BLENDER_EEVEE'
-    scene.eevee.taa_render_samples = samples
+    import sys
+    if bpy.app.version < (2, 80, 0):
+        print(f""ERROR: EEVEE engine requires Blender 2.80 or newer. This node is running Blender {bpy.app.version[0]}.{bpy.app.version[1]}.{bpy.app.version[2]}"")
+        sys.exit(1)
+        
+    try:
+        scene.render.engine = 'BLENDER_EEVEE_NEXT'
+    except TypeError:
+        scene.render.engine = 'BLENDER_EEVEE'
+        
+    try:
+        if hasattr(scene.eevee, 'taa_render_samples'):
+            scene.eevee.taa_render_samples = samples
+        elif hasattr(scene.eevee, 'taa_samples'):
+            scene.eevee.taa_samples = samples
+    except Exception as e:
+        print(f""Warning: Could not set EEVEE samples: {e}"")
+        
     print(f'Eevee engine with {samples} samples')
 
 # Set resolution
@@ -750,10 +777,23 @@ try:
         # For true animation rendering across frames
         print(f'Rendering animation frames {scene.frame_start}-{scene.frame_end}')
         scene.frame_set(frame_num)
+        
+        bpy.context.view_layer.update()
+        bpy.context.evaluated_depsgraph_get().update()
+        for obj in scene.objects:
+            obj.hide_render = False
+            
         bpy.ops.render.render(write_still=True, animation=False)
     else:
         # Single frame render
         print(f'Rendering single frame {frame_num}')
+        scene.frame_set(frame_num)
+        
+        bpy.context.view_layer.update()
+        bpy.context.evaluated_depsgraph_get().update()
+        for obj in scene.objects:
+            obj.hide_render = False
+            
         bpy.ops.render.render(write_still=True, animation=False)
     
     end_time = time.time()

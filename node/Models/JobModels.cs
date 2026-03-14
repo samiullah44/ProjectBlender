@@ -38,6 +38,9 @@ namespace BlendFarm.Node.Models
         
         [JsonPropertyName("isResume")]
         public bool? IsResume { get; set; }
+
+        [JsonPropertyName("inputType")]
+        public string? InputType { get; set; }
     }
 
     public class FrameUploadInfo

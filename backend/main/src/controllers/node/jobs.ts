@@ -10,7 +10,7 @@ import { S3Service } from '../../services/S3Service';
 import { AuthRequest } from '../../middleware/auth';
 import os from 'os';
 import { wsService } from '../../app';
-import { dequeueFramesForNode, nackFrame, requeueFramesFromOfflineNode, ackFrame, getQueueName, forceRequeueActiveJobs } from '../../services/FrameQueueService';
+import { dequeueFramesForNode, nackFrame, requeueFramesFromOfflineNode, ackFrame, getQueueName, forceRequeueActiveJobs, purgeJobFromAllQueues } from '../../services/FrameQueueService';
 
 const s3Service = new S3Service();
 
@@ -117,6 +117,7 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
             blendFileUrl,
             frameUploadUrls,
             settings: job.settings,
+            inputType: job.inputType,
             totalFrames: job.frames.total,
             selectedFrames: job.frames.selected || [], // NEW: Include selected frames
             assignedFramesCount: pendingAssignedFrames.length,
@@ -225,7 +226,18 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
       // 5. Fetch the ONE target Job from MongoDB to track progress & stats
       const job = await Job.findOne({ jobId: targetJobId });
       if (!job || ['completed', 'failed', 'cancelled'].includes(job.status)) {
-        throw new AppError(`Job ${targetJobId} is no longer active in MongoDB`, 400);
+        console.warn(`🗑️ Job ${targetJobId} is inactive/deleted. Discarding ${assignedBullFrames.length} stale frames from queue.`);
+        // ACK frames to remove them from the queue permanently
+        await Promise.all(assignedBullFrames.map(f =>
+          ackFrame(f.bullJobId, f.lockToken, f.queueName)
+        ));
+        
+        // Launch asynchronous sweeping to aggressively slaughter all ghost frames from this job globally
+        purgeJobFromAllQueues(targetJobId).catch(err => console.error('Failed to aggressively purge ghost frames:', err));
+
+        // Return null so the node immediately polls again without error
+        res.json({ jobId: null });
+        return;
       }
 
       // Build array of extracted frame indices
@@ -336,6 +348,7 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
           blendFileUrl,
           frameUploadUrls,
           settings: result.settings,
+          inputType: result.inputType,
           totalFrames: result.frames.total,
           selectedFrames: result.frames.selected || [],
           assignedFramesCount: assignedFrames.length,
@@ -357,6 +370,7 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
         blendFileUrl,
         frameUploadUrls,
         settings: result.settings,
+        inputType: result.inputType,
         totalFrames: result.frames.total,
         selectedFrames: result.frames.selected || [],
         assignedFramesCount: assignedFrames.length,

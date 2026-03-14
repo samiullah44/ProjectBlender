@@ -1229,20 +1229,60 @@ private string CalculateNodeTier(HardwareInfo hw)
                     }
                 }
 
-                // Download blend file (using direct S3 URL) - with caching
-                var blendFilePath = await DownloadBlendFileAsync(assignment.BlendFileUrl, assignment.JobId, renderToken);
-                if (string.IsNullOrEmpty(blendFilePath))
+                // Download source file (using direct S3 URL) - with caching
+                var sourceFilePath = await DownloadBlendFileAsync(assignment.BlendFileUrl, assignment.JobId, assignment.InputType, renderToken);
+                if (string.IsNullOrEmpty(sourceFilePath))
                 {
-                    _logger.LogError($"❌ Failed to download blend file for job {assignment.JobId}");
-                    await ReportFailureAsync(assignment.JobId, 0, "Failed to download blend file", null, renderToken);
+                    _logger.LogError($"❌ Failed to download source file for job {assignment.JobId}");
+                    await ReportFailureAsync(assignment.JobId, 0, "Failed to download source file", null, renderToken);
                     return;
                 }
                 
-                _logger.LogInformation($"📥 Blend file ready: {blendFilePath}");
+                _logger.LogInformation($"📥 Source file ready: {sourceFilePath}");
 
                 // Create job directory
                 var jobDirectory = Path.Combine(Path.GetTempPath(), "BlendFarm", "Jobs", assignment.JobId);
                 Directory.CreateDirectory(jobDirectory);
+
+                // Handle Zip Extraction
+                string blendFilePath = sourceFilePath;
+                string extractionDirectory = null;
+                if (assignment.InputType == "archive")
+                {
+                    extractionDirectory = Path.Combine(jobDirectory, "extracted");
+                    Directory.CreateDirectory(extractionDirectory);
+                    
+                    _logger.LogInformation($"📦 Extracting archive to {extractionDirectory}...");
+                    try
+                    {
+                        System.IO.Compression.ZipFile.ExtractToDirectory(sourceFilePath, extractionDirectory, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError($"❌ Failed to extract archive: {ex.Message}");
+                        await ReportFailureAsync(assignment.JobId, 0, $"Failed to extract project archive: {ex.Message}", null, renderToken);
+                        return;
+                    }
+
+                    // Find the .blend file recursively
+                    var blendFiles = System.IO.Directory.GetFiles(extractionDirectory, "*.blend", System.IO.SearchOption.AllDirectories);
+                    if (blendFiles.Length == 0)
+                    {
+                        _logger.LogError($"❌ No .blend file found in the extracted archive");
+                        await ReportFailureAsync(assignment.JobId, 0, "No .blend file found in the archive", null, renderToken);
+                        return;
+                    }
+                    
+                    blendFilePath = blendFiles[0];
+                    if (blendFiles.Length > 1)
+                    {
+                        _logger.LogWarning($"⚠️ Multiple .blend files found in archive. Using the first one: {blendFilePath}");
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"📂 Found blend file in archive: {blendFilePath}");
+                    }
+                }
 
                 // Get render settings from assignment
                 var settings = assignment.Settings ?? new RenderSettings();
@@ -1451,6 +1491,24 @@ private string CalculateNodeTier(HardwareInfo hw)
                 ClearCurrentJob();
                 _frameUploadUrls.Clear();
                 
+                // Cleanup extraction directory if it was an archive
+                if (assignment.InputType == "archive")
+                {
+                    try
+                    {
+                        var extractDir = Path.Combine(Path.GetTempPath(), "BlendFarm", "Jobs", assignment.JobId, "extracted");
+                        if (System.IO.Directory.Exists(extractDir))
+                        {
+                            System.IO.Directory.Delete(extractDir, true);
+                            _logger.LogDebug($"🗑️ Cleaned up extracted archive directory: {extractDir}");
+                        }
+                    }
+                    catch (Exception cleanupEx)
+                    {
+                        _logger.LogWarning($"⚠️ Could not clean up extraction directory: {cleanupEx.Message}");
+                    }
+                }
+
                 // CRITICAL: Force an immediate poll to fetch remaining frames for this job, or new jobs
                 _logger.LogInformation("🔄 Job batch finished, immediately polling for more work...");
                 CleanupOldJobFolders();
@@ -1458,10 +1516,13 @@ private string CalculateNodeTier(HardwareInfo hw)
             }
         }
 
-        private async Task<string> DownloadBlendFileAsync(string blendFileUrl, string jobId, CancellationToken cancellationToken)
+        private async Task<string> DownloadBlendFileAsync(string blendFileUrl, string jobId, string inputType, CancellationToken cancellationToken)
         {
             try
             {
+                var isArchive = inputType == "archive";
+                var ext = isArchive ? "zip" : "blend";
+                
                 // Check cache first
                 if (_blendFileCache.TryGetValue(jobId, out var cachedFile))
                 {
@@ -1469,7 +1530,7 @@ private string CalculateNodeTier(HardwareInfo hw)
                     if (File.Exists(cachedFile.filePath) && 
                         DateTime.UtcNow - cachedFile.downloadedAt < _cacheExpiry)
                     {
-                        _logger.LogInformation($"📂 Using cached blend file for job {jobId}");
+                        _logger.LogInformation($"📂 Using cached source file for job {jobId}");
                         return cachedFile.filePath;
                     }
                     else
@@ -1485,7 +1546,7 @@ private string CalculateNodeTier(HardwareInfo hw)
                 if (!Directory.Exists(cacheDir))
                     Directory.CreateDirectory(cacheDir);
 
-                var fileName = $"blendfile_{jobId}.blend";
+                var fileName = $"sourcefile_{jobId}.{ext}";
                 var localPath = Path.Combine(cacheDir, fileName);
 
                 // Check disk cache to prevent redundant downloads across restarts

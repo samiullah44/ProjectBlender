@@ -85,6 +85,7 @@ export interface IJob {
     blendFileName: string;
     name?: string;
     type: 'image' | 'animation';
+    inputType?: 'blend' | 'archive';
 
     settings: IJobSettings;
     frames: IJobFrames;

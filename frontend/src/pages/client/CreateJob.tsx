@@ -69,7 +69,7 @@ interface JobFormData {
 const validateJobForm = (data: Partial<JobFormData>, uploadedFile: File | null): string[] => {
   const errors: string[] = []
 
-  if (!uploadedFile) errors.push('Blender file is required')
+  if (!uploadedFile) errors.push('Blender file or Zip archive is required')
   if (!data.name?.trim()) errors.push('Job name is required')
   if (data.type === 'animation') {
     if (!data.startFrame || !data.endFrame) errors.push('Frame range is required for animation')
@@ -127,15 +127,19 @@ const CreateJob: React.FC = () => {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0]
-      if (file.size > (500 * 1024 * 1024)) {
-        toast.error('File size exceeds 500MB limit')
+      const isZip = file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip'
+      const maxSize = isZip ? 2 * 1024 * 1024 * 1024 : 500 * 1024 * 1024;
+      const displaySize = isZip ? '2GB' : '500MB';
+      
+      if (file.size > maxSize) {
+        toast.error(`File size exceeds ${displaySize} limit`)
         return
       }
       setUploadedFile(file)
       if (!formData.name.trim()) {
         setFormData(prev => ({
           ...prev,
-          name: file.name.replace('.blend', '')
+          name: file.name.replace('.blend', '').replace('.zip', '')
         }))
       }
       toast.success('File uploaded successfully')
@@ -147,10 +151,10 @@ const CreateJob: React.FC = () => {
     accept: {
       'application/x-blender': ['.blend'],
       'application/octet-stream': ['.blend'],
-      'application/zip': ['.blend']
+      'application/zip': ['.zip']
     },
     multiple: false,
-    maxSize: 500 * 1024 * 1024,
+    maxSize: 2 * 1024 * 1024 * 1024,
   })
 
   // UPDATED: Handle settings changes
@@ -226,6 +230,9 @@ const CreateJob: React.FC = () => {
     try {
       console.log('🔄 Calling createJobMultipart...')
 
+      // Switch to processing view immediately so the user can see realtime upload progress
+      setCurrentStep('processing')
+
       // Use multipart upload method
       const result = await createJobMultipart(uploadedFile, {
         name: formData.name,
@@ -242,7 +249,6 @@ const CreateJob: React.FC = () => {
 
       if (result.success) {
         console.log('✅ Job created successfully')
-        setCurrentStep('processing')
 
         // Get jobId from result (check multiple possible locations)
         const jobId = result.data?.jobId || result.data?.data?.jobId
@@ -362,13 +368,13 @@ const CreateJob: React.FC = () => {
                         Source Asset
                       </CardTitle>
                       <CardDescription className="pt-2 text-gray-400">
-                        Upload your Blender scene file to initiate the distributed rendering process
+                        Upload your Blender scene file or a .zip project archive to initiate the distributed rendering process
                       </CardDescription>
                     </div>
                     {/* Size Limit Badge */}
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
                       <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Max 500MB</span>
+                      <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase text-center">Max: 2GB (.zip) / 500MB (.blend)</span>
                     </div>
                   </div>
                 </CardHeader>
@@ -443,10 +449,10 @@ const CreateJob: React.FC = () => {
 
                           <div className="space-y-2">
                             <h4 className="text-2xl font-bold text-white tracking-tight">
-                              {isDragActive ? 'Release to Initiate' : 'Drag & Drop .blend'}
+                              {isDragActive ? 'Release to Initiate' : 'Drag & Drop .blend or .zip'}
                             </h4>
                             <p className="text-gray-400 text-sm max-w-[280px] leading-relaxed mx-auto">
-                              Securely upload your scene. We'll automatically identify textures and dependencies.
+                              Securely upload your scene or project archive. We'll automatically identify textures and dependencies in .zip.
                             </p>
                           </div>
 
