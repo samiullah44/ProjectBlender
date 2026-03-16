@@ -33,7 +33,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
 
 // --- Data Constants ---
-const HERO_IMAGES = ["/hero1.jpg", "/hero.jpg"]
+const HERO_IMAGES = ["/hero.jpg", "/hero1.jpg", "/hero2.jpg"]
 const FEATURE_IMAGE_1 = "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=1080&q=80"
 const NETWORK_IMAGE = "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=1080&q=80"
 

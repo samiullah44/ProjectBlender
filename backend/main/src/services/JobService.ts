@@ -830,8 +830,8 @@ export class JobService {
         const totalRenderTimeSec = (totals.totalRenderTime || 0) / 1000;
 
         return {
-            // Priority given to lifetime stats from User table if available
-            totalJobs: userStats?.jobsCreated ?? totals.totalJobs,
+            // Prioritize real-time database counts over cached User table stats
+            totalJobs: totals.totalJobs, 
             activeJobs: (statusCounts.pending || 0) + (statusCounts.processing || 0) + (statusCounts.paused || 0),
             processingJobs: statusCounts.processing || 0,
             pendingJobs: statusCounts.pending || 0,
@@ -842,9 +842,9 @@ export class JobService {
             completedToday: todayStats.completedToday,
             totalRenderTime: totalRenderTimeSec,
             totalCreditsUsed: totals.totalCreditsUsed,
-            totalFramesRendered: userStats?.framesRendered ?? totals.totalFramesRendered,
-            avgRenderTimePerFrame: (userStats?.framesRendered ?? totals.totalFramesRendered) > 0
-                ? totalRenderTimeSec / (userStats?.framesRendered ?? totals.totalFramesRendered)
+            totalFramesRendered: totals.totalFramesRendered, // Use real-time count
+            avgRenderTimePerFrame: totals.totalFramesRendered > 0
+                ? totalRenderTimeSec / totals.totalFramesRendered
                 : 0,
             framesRenderedToday: todayStats.framesRenderedToday,
             estimatedTotalCost: totals.estimatedTotalCost,
