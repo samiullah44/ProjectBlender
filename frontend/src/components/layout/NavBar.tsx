@@ -45,11 +45,16 @@ interface NavItem {
   }[]
 }
 
-const Navbar: React.FC = () => {
+interface NavbarProps {
+  hideWaitlist?: boolean
+}
+
+const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [scrolled, setScrolled] = useState(false)
+  const [isSubscribed, setIsSubscribed] = useState(false)
 
   const userMenuRef = useRef<HTMLDivElement>(null)
 
@@ -65,11 +70,26 @@ const Navbar: React.FC = () => {
   })
 
   useEffect(() => {
+    // Initial check
+    if (localStorage.getItem('waitlist_status') === 'subscribed') {
+      setIsSubscribed(true)
+    }
+
     const handleScroll = () => {
       setScrolled(window.scrollY > 20)
     }
+
+    const handleSubscribeEvent = () => {
+      setIsSubscribed(true)
+    }
+
     window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
+    window.addEventListener('waitlist-subscribed', handleSubscribeEvent)
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('waitlist-subscribed', handleSubscribeEvent)
+    }
   }, [])
 
   const handleLogout = () => {
@@ -87,7 +107,7 @@ const Navbar: React.FC = () => {
     },
     {
       label: 'Features',
-      href: '/#features',
+      href: '/features',
       icon: <Zap className="w-4 h-4" />,
       submenu: [
         {
@@ -108,29 +128,29 @@ const Navbar: React.FC = () => {
           description: 'Real-time rendering insights',
           icon: <BarChart3 className="w-4 h-4" />
         },
-        {
-          label: 'Cost Calculator',
-          href: '/features/pricing',
-          description: 'Estimate rendering costs',
-          icon: <CreditCard className="w-4 h-4" />
-        }
+        // {
+        //   label: 'Cost Calculator',
+        //   href: '/features/pricing',
+        //   description: 'Estimate rendering costs',
+        //   icon: <CreditCard className="w-4 h-4" />
+        // }
       ]
     },
     {
       label: 'How It Works',
       href: '/how-it-works',
       icon: <Settings className="w-4 h-4" />
-    },
-    {
-      label: 'Pricing',
-      href: '/pricing',
-      icon: <Wallet className="w-4 h-4" />
-    },
-    {
-      label: 'Docs',
-      href: '/docs',
-      icon: <FileText className="w-4 h-4" />
     }
+    // {
+    //   label: 'Pricing',
+    //   href: '/pricing',
+    //   icon: <Wallet className="w-4 h-4" />
+    // },
+    // {
+    //   label: 'Docs',
+    //   href: '/docs',
+    //   icon: <FileText className="w-4 h-4" />
+    // }
   ]
 
   const getModuleLinks = () => {
@@ -229,7 +249,7 @@ const Navbar: React.FC = () => {
         animate={{ y: 0 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
         className={cn(
-          'fixed top-0 w-full z-50 transition-all duration-300 backdrop-blur-xl border-b',
+          'sticky top-0 w-full z-50 transition-all duration-300 backdrop-blur-xl border-b',
           isProvider
             ? scrolled
               ? 'bg-[#0A0A0B]/95 border-purple-500/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)]'
@@ -546,16 +566,14 @@ const Navbar: React.FC = () => {
               ) : (
                 /* Auth Buttons for non-authenticated users */
                 <div className="flex items-center gap-3">
-                  <Link to="/login">
-                    <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white">
-                      Sign In
+                  {!hideWaitlist && !isSubscribed && (
+                    <Button
+                      onClick={() => window.dispatchEvent(new Event('open-waitlist'))}
+                      className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 font-semibold shadow-lg shadow-emerald-500/20"
+                    >
+                      Join Waitlist
                     </Button>
-                  </Link>
-                  <Link to="/register">
-                    <Button className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700">
-                      Get Started
-                    </Button>
-                  </Link>
+                  )}
                 </div>
               )}
             </div>
@@ -721,24 +739,22 @@ const Navbar: React.FC = () => {
                     </>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      <Link to="/login" onClick={() => setIsOpen(false)}>
+                      {!hideWaitlist && !isSubscribed && (
                         <Button
-                          variant="outline"
-                          className="w-full border-white/20 hover:bg-white/5"
+                          onClick={() => {
+                            window.dispatchEvent(new Event('open-waitlist'));
+                            setIsOpen(false);
+                          }}
+                          className={cn(
+                            "w-full bg-gradient-to-r transition-all duration-500 font-semibold shadow-lg",
+                            isProvider
+                              ? "from-purple-600 to-emerald-600 hover:from-purple-700 hover:to-emerald-700"
+                              : "from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 shadow-emerald-500/20"
+                          )}
                         >
-                          Sign In
+                          Join Waitlist
                         </Button>
-                      </Link>
-                      <Link to="/register" onClick={() => setIsOpen(false)}>
-                        <Button className={cn(
-                          "w-full bg-gradient-to-r transition-all duration-500",
-                          isProvider
-                            ? "from-purple-600 to-emerald-600 hover:from-purple-700 hover:to-emerald-700"
-                            : "from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700"
-                        )}>
-                          Get Started Free
-                        </Button>
-                      </Link>
+                      )}
                     </div>
                   )}
                 </div>
@@ -747,9 +763,6 @@ const Navbar: React.FC = () => {
           )}
         </AnimatePresence>
       </motion.nav>
-
-      {/* Spacer for fixed navbar */}
-      <div className="h-16 lg:h-20" />
     </>
   )
 }

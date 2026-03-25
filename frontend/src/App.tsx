@@ -1,5 +1,5 @@
 // App.tsx
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
@@ -9,11 +9,20 @@ import { Loader2 } from 'lucide-react'
 
 // Layouts and Core Components (Keep static)
 import Navbar from '@/components/layout/NavBar'
+import TopBar from '@/components/layout/TopBar'
+import Footer from '@/components/layout/Footer'
+import WaitlistPopup from '@/components/ui/WaitlistPopup'
 import ScrollToTop from '@/components/layout/ScrollToTop'
 import { ProtectedRoute } from '@/components/layout/ProtectedLayout'
 
 // Lazy loaded Public Pages
 const HomePage = React.lazy(() => import('@/pages/public/Home'))
+const FeaturesPage = React.lazy(() => import('@/pages/public/Features'))
+const FeaturesGPUPage = React.lazy(() => import('@/pages/public/FeaturesGPU'))
+const FeaturesNetworkPage = React.lazy(() => import('@/pages/public/FeaturesNetwork'))
+const FeaturesAnalyticsPage = React.lazy(() => import('@/pages/public/FeaturesAnalytics'))
+// const FeaturesCostPage = React.lazy(() => import('@/pages/public/FeaturesCost'))
+const HowItWorksPage = React.lazy(() => import('@/pages/public/HowItWorks'))
 const LoginPage = React.lazy(() => import('@/pages/public/Login'))
 const RegisterPage = React.lazy(() => import('@/pages/public/Register'))
 const OAuthCallback = React.lazy(() => import('@/pages/public/OAuthCallback'))
@@ -76,16 +85,106 @@ const PageLoader = () => (
   </div>
 )
 
-// Main Layout component with Navbar
+// Main Layout component with Navbar, Footer, and Popup
 const MainLayout = () => {
+  const [isWaitlistOpen, setIsWaitlistOpen] = useState(false)
+  const [showTopBar, setShowTopBar] = useState(false)
+
+  useEffect(() => {
+    const status = localStorage.getItem('waitlist_status')
+    const dismissedAt = localStorage.getItem('waitlist_dismissed_at')
+
+    if (status === 'subscribed') return;
+
+    if (status === 'dismissed') {
+      if (dismissedAt) {
+        const daysPassed = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
+        if (daysPassed < 2) {
+          setShowTopBar(true);
+          return;
+        }
+      } else {
+        setShowTopBar(true);
+        return;
+      }
+    }
+
+    let isTriggered = false;
+
+    // Trigger after 3 seconds if not seen
+    const timer = setTimeout(() => {
+      if (!isTriggered) {
+        setIsWaitlistOpen(true);
+        isTriggered = true;
+      }
+    }, 3000);
+
+    // Track scroll 30%
+    const handleScroll = () => {
+      if (!isTriggered && document.documentElement.scrollTop > document.documentElement.scrollHeight * 0.3) {
+        setIsWaitlistOpen(true);
+        isTriggered = true;
+        window.removeEventListener('scroll', handleScroll);
+      }
+    };
+
+    // Exit intent
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (!isTriggered && e.clientY <= 0) {
+        setIsWaitlistOpen(true);
+        isTriggered = true;
+        document.removeEventListener('mouseleave', handleMouseLeave);
+      }
+    };
+
+    // Custom Event listener for NavBar
+    const handleOpenWaitlist = () => {
+      setIsWaitlistOpen(true);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('open-waitlist', handleOpenWaitlist);
+    document.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('open-waitlist', handleOpenWaitlist);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+    };
+  }, []);
+
+  const handleCloseWaitlist = () => {
+    setIsWaitlistOpen(false);
+    const status = localStorage.getItem('waitlist_status');
+    if (status !== 'subscribed') {
+      localStorage.setItem('waitlist_status', 'dismissed');
+      localStorage.setItem('waitlist_dismissed_at', Date.now().toString());
+      setShowTopBar(true);
+    }
+  };
+
+  const handleSubscribe = () => {
+    localStorage.setItem('waitlist_status', 'subscribed');
+    setShowTopBar(false);
+    setIsWaitlistOpen(false);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-950">
-      <Navbar />
-      <main className="mx-auto">
+    <div className="min-h-screen bg-gray-950 flex flex-col">
+      <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
+      <Navbar hideWaitlist={showTopBar} />
+      <main className="mx-auto flex-1 w-full">
         <React.Suspense fallback={<PageLoader />}>
           <Outlet />
         </React.Suspense>
       </main>
+      <Footer />
+      <WaitlistPopup
+        isOpen={isWaitlistOpen}
+        onClose={handleCloseWaitlist}
+        onSubscribe={handleSubscribe}
+      />
     </div>
   )
 }
@@ -120,6 +219,12 @@ function App() {
             {/* Public Routes with Navbar */}
             <Route element={<MainLayout />}>
               <Route path="/" element={<HomePage />} />
+              <Route path="/features" element={<FeaturesPage />} />
+              <Route path="/features/gpu" element={<FeaturesGPUPage />} />
+              <Route path="/features/network" element={<FeaturesNetworkPage />} />
+              <Route path="/features/analytics" element={<FeaturesAnalyticsPage />} />
+              {/* <Route path="/features/pricing" element={<FeaturesCostPage />} /> */}
+              <Route path="/how-it-works" element={<HowItWorksPage />} />
               <Route path="/apply-node-provider" element={
                 <ProtectedRoute allowedRoles={['client', 'admin']}>
                   <ApplyNodeProvider />
