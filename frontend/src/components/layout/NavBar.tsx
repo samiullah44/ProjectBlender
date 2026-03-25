@@ -1,11 +1,10 @@
-// components/layout/Navbar.tsx
-import React, { useState, useEffect } from 'react'
+// components/layout/Navbar.tsx - UPDATED
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  
-  Menu, 
-  X, 
-  ChevronDown, 
+import {
+  Menu,
+  X,
+  ChevronDown,
   User,
   Shield,
   Server,
@@ -14,25 +13,23 @@ import {
   Home,
   BarChart3,
   Globe,
- 
   Zap,
   Wallet,
   FileText,
   Bell,
-  Search
+  Search,
+  CreditCard,
+  Cpu,
+  ArrowLeftRight,
+  HardDrive
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-
-// Mock user data - replace with actual authentication logic
-interface UserData {
-  id: string
-  name: string
-  email: string
-  role: 'client' | 'node_provider' | 'admin'
-  avatar?: string
-}
+import { useAuthStore } from '@/stores/authStore'
+import { toast } from 'react-hot-toast'
+import { NotificationBell } from './NotificationBell'
+import { useOnClickOutside } from '@/hooks/useOnClickOutside'
 
 interface NavItem {
   label: string
@@ -48,42 +45,58 @@ interface NavItem {
   }[]
 }
 
-const Navbar: React.FC = () => {
+interface NavbarProps {
+  hideWaitlist?: boolean
+}
+
+const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
- const [scrolled, setScrolled] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+  const [isSubscribed, setIsSubscribed] = useState(false)
 
-  const [currentUser, setCurrentUser] = useState<UserData | null>(null)
+  const userMenuRef = useRef<HTMLDivElement>(null)
+
+  const { user, isAuthenticated, logout, switchRole } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
 
-  // Mock authentication - replace with your actual auth logic
+  const activeRole = user?.primaryRole || user?.role;
+  const isProvider = activeRole === 'node_provider';
+
+  useOnClickOutside(userMenuRef, () => {
+    if (userMenuOpen) setUserMenuOpen(false)
+  })
+
   useEffect(() => {
-    // Check if user is logged in (from localStorage, context, or API)
-    const mockUser: UserData = {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@example.com',
-      role: 'client' // Change to 'admin' or 'node_provider' to test different views
+    // Initial check
+    if (localStorage.getItem('waitlist_status') === 'subscribed') {
+      setIsSubscribed(true)
     }
-    setCurrentUser(mockUser)
+
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20)
+    }
+
+    const handleSubscribeEvent = () => {
+      setIsSubscribed(true)
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    window.addEventListener('waitlist-subscribed', handleSubscribeEvent)
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('waitlist-subscribed', handleSubscribeEvent)
+    }
   }, [])
 
-useEffect(() => {
-  const handleScroll = () => {
-    setScrolled(window.scrollY > 20)
-  }
-  window.addEventListener('scroll', handleScroll)
-  return () => window.removeEventListener('scroll', handleScroll)
-}, [])
-
-
   const handleLogout = () => {
-    // Add your logout logic here
-    setCurrentUser(null)
+    logout()
     setUserMenuOpen(false)
     navigate('/')
+    toast.success('Logged out successfully')
   }
 
   const navItems: NavItem[] = [
@@ -94,14 +107,14 @@ useEffect(() => {
     },
     {
       label: 'Features',
-      href: '/#features',
+      href: '/features',
       icon: <Zap className="w-4 h-4" />,
       submenu: [
         {
           label: 'GPU Acceleration',
           href: '/features/gpu',
           description: 'NVIDIA RTX & CUDA support',
-          icon: <Zap className="w-4 h-4" />
+          icon: <Cpu className="w-4 h-4" />
         },
         {
           label: 'Global Network',
@@ -115,68 +128,89 @@ useEffect(() => {
           description: 'Real-time rendering insights',
           icon: <BarChart3 className="w-4 h-4" />
         },
-        {
-          label: 'Cost Calculator',
-          href: '/features/pricing',
-          description: 'Estimate rendering costs',
-          icon: <Wallet className="w-4 h-4" />
-        }
+        // {
+        //   label: 'Cost Calculator',
+        //   href: '/features/pricing',
+        //   description: 'Estimate rendering costs',
+        //   icon: <CreditCard className="w-4 h-4" />
+        // }
       ]
     },
     {
       label: 'How It Works',
       href: '/how-it-works',
       icon: <Settings className="w-4 h-4" />
-    },
-    {
-      label: 'Pricing',
-      href: '/pricing',
-      icon: <Wallet className="w-4 h-4" />
-    },
-    {
-      label: 'Docs',
-      href: '/docs',
-      icon: <FileText className="w-4 h-4" />
     }
+    // {
+    //   label: 'Pricing',
+    //   href: '/pricing',
+    //   icon: <Wallet className="w-4 h-4" />
+    // },
+    // {
+    //   label: 'Docs',
+    //   href: '/docs',
+    //   icon: <FileText className="w-4 h-4" />
+    // }
   ]
 
- // In your Navbar.tsx, update the getModuleLinks function:
-const getModuleLinks = () => {
-  const baseLinks = [
-    {
-      label: 'Client Dashboard',
-      href: '/client/dashboard', // Changed from '/dashboard'
-      icon: <User className="w-4 h-4" />,
-      color: 'text-blue-400',
-      bgColor: 'bg-blue-500/10',
-      roles: ['client', 'admin'] as ('client' | 'node_provider' | 'admin')[]
-    },
-    {
-      label: 'Node Provider',
-      href: '/node/dashboard', // Changed from '/node-dashboard'
-      icon: <Server className="w-4 h-4" />,
-      color: 'text-emerald-400',
-      bgColor: 'bg-emerald-500/10',
-      roles: ['node_provider', 'admin'] as ('client' | 'node_provider' | 'admin')[]
-    }
-  ]
+  const getModuleLinks = () => {
+    if (!isAuthenticated || !user) return []
 
-  // Only show admin link to admins
-  if (currentUser?.role === 'admin') {
-    baseLinks.push({
-      label: 'Admin Panel',
-      href: '/admin/dashboard', // Changed from '/admin'
-      icon: <Shield className="w-4 h-4" />,
-      color: 'text-purple-400',
-      bgColor: 'bg-purple-500/10',
-      roles: ['admin'] as ('client' | 'node_provider' | 'admin')[]
-    })
+    const baseLinks: any[] = []
+    const hasRole = (role: string) => user.roles?.includes(role as any) || user.role === role;
+    const activeRole = user.primaryRole || user.role;
+
+    if (hasRole('client') || hasRole('admin')) {
+      baseLinks.push({
+        label: 'Client Dashboard',
+        href: '/client/dashboard',
+        icon: <User className="w-4 h-4" />,
+        color: 'text-emerald-400',
+        bgColor: 'bg-emerald-500/10',
+        roles: ['client', 'admin']
+      })
+    }
+
+    if (hasRole('node_provider') || hasRole('admin')) {
+      baseLinks.push({
+        label: 'Node Dashboard',
+        href: '/node/dashboard',
+        icon: <Server className="w-4 h-4" />,
+        color: 'text-purple-400',
+        bgColor: 'bg-purple-500/10',
+        roles: ['node_provider', 'admin']
+      })
+    }
+
+    if (hasRole('admin')) {
+      baseLinks.push({
+        label: 'Admin Panel',
+        href: '/admin/dashboard',
+        icon: <Shield className="w-4 h-4" />,
+        color: 'text-red-400',
+        bgColor: 'bg-red-500/10',
+        roles: ['admin']
+      })
+      baseLinks.push({
+        label: 'Network Nodes',
+        href: '/admin/nodes',
+        icon: <HardDrive className="w-4 h-4" />,
+        color: 'text-cyan-400',
+        bgColor: 'bg-cyan-500/10',
+        roles: ['admin']
+      })
+    }
+
+    const moduleLinks = baseLinks.filter(link => {
+      // Admins see all their related dashboards in the Navbar for easy access
+      if (hasRole('admin')) return true;
+
+      if (!link.roles) return true;
+      return link.roles.includes(activeRole as any);
+    });
+
+    return moduleLinks;
   }
-
-  return baseLinks.filter(link => 
-    !currentUser || link.roles.includes(currentUser.role)
-  )
-}
 
   const userMenuItems = [
     {
@@ -188,6 +222,11 @@ const getModuleLinks = () => {
       label: 'Settings',
       href: '/settings',
       icon: <Settings className="w-4 h-4" />
+    },
+    {
+      label: 'Credits',
+      href: '/credits',
+      icon: <CreditCard className="w-4 h-4" />
     },
     {
       label: 'Notifications',
@@ -210,7 +249,14 @@ const getModuleLinks = () => {
         animate={{ y: 0 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
         className={cn(
-          'fixed top-0 w-full z-50 transition-all duration-300 bg-gray-950/95 backdrop-blur-xl border-b' 
+          'sticky top-0 w-full z-50 transition-all duration-300 backdrop-blur-xl border-b',
+          isProvider
+            ? scrolled
+              ? 'bg-[#0A0A0B]/95 border-purple-500/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)]'
+              : 'bg-[#0A0A0B]/80 border-purple-500/10'
+            : scrolled
+              ? 'bg-gray-950/95 border-gray-800'
+              : 'bg-gray-950/80 border-gray-900'
         )}
       >
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -218,10 +264,14 @@ const getModuleLinks = () => {
             {/* Logo */}
             <div className="flex items-center">
               <Link to="/" className="flex items-center gap-3 group">
-        
                 <div className="flex flex-col">
                   <span className="font-bold text-xl tracking-tight">
-                    <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                    <span className={cn(
+                      "bg-gradient-to-r bg-clip-text text-transparent transition-all duration-500",
+                      isProvider
+                        ? "bg-purple-500"
+                        : "from-emerald-400 to-cyan-400"
+                    )}>
                       Render
                     </span>
                     <span className="text-white">Farm</span>
@@ -248,7 +298,9 @@ const getModuleLinks = () => {
                       "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                       location.pathname === item.href
                         ? "text-white bg-white/5"
-                        : "text-gray-300 hover:text-white hover:bg-white/5"
+                        : isProvider
+                          ? "text-gray-300 hover:text-purple-400 hover:bg-purple-500/5"
+                          : "text-gray-300 hover:text-white hover:bg-white/5"
                     )}
                   >
                     {item.icon}
@@ -278,7 +330,10 @@ const getModuleLinks = () => {
                               to={subItem.href}
                               className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors group"
                             >
-                              <div className="p-2 rounded-lg bg-white/5 group-hover:bg-emerald-500/20 transition-colors">
+                              <div className={cn(
+                                "p-2 rounded-lg bg-white/5 transition-colors",
+                                isProvider ? "group-hover:bg-purple-500/20" : "group-hover:bg-emerald-500/20"
+                              )}>
                                 {subItem.icon}
                               </div>
                               <div className="flex-1">
@@ -303,122 +358,222 @@ const getModuleLinks = () => {
 
             {/* Right Side - Modules & Auth */}
             <div className="hidden lg:flex items-center gap-4">
-              {/* Search */}
+              {/* Search
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="search"
                   placeholder="Search..."
-                  className="pl-10 pr-4 py-2 w-40 rounded-lg bg-white/5 border border-white/10 text-sm placeholder-gray-400 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30"
+                  className="pl-10 pr-4 py-2 w-40 rounded-lg bg-white/5 border border-white/10 text-sm placeholder-gray-400 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 text-white"
                 />
-              </div>
+              </div> */}
 
-              {/* Module Links */}
-              <div className="flex items-center gap-2">
-                {moduleLinks.map((link) => (
-                  <Link
-                    key={link.label}
-                    to={link.href}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                      link.bgColor,
-                      link.color,
-                      "hover:opacity-90 border border-transparent hover:border-white/10"
-                    )}
-                  >
-                    {link.icon}
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
 
-              {/* Auth Section */}
-              {currentUser ? (
-                <div className="relative">
-                  <button
-                    onClick={() => setUserMenuOpen(!userMenuOpen)}
-                    className="flex items-center gap-3 p-1 rounded-lg hover:bg-white/5 transition-colors"
-                  >
-                    <div className="text-right hidden sm:block">
-                      <div className="text-sm font-medium text-white">
-                        {currentUser.name}
-                      </div>
-                      <div className="text-xs text-gray-400 capitalize">
-                        {currentUser.role.replace('_', ' ')}
-                      </div>
+
+              {isAuthenticated && user ? (
+                <>
+                  {/* Notifications */}
+                  <NotificationBell />
+
+                  {/* Credits Display */}
+                  <div className={cn(
+                    "px-3 py-1.5 rounded-lg border transition-all duration-300",
+                    isProvider
+                      ? "bg-purple-500/10 border-purple-500/20"
+                      : "bg-emerald-500/10 border-emerald-500/20"
+                  )}>
+                    <div className="flex items-center gap-2">
+                      <CreditCard className={cn(
+                        "w-4 h-4",
+                        isProvider ? "text-purple-400" : "text-emerald-400"
+                      )} />
+                      <span className={cn(
+                        "text-sm font-medium",
+                        isProvider ? "text-purple-400" : "text-emerald-400"
+                      )}>
+                        {user.credits?.toLocaleString()} credits
+                      </span>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold">
-                      {currentUser.name.charAt(0).toUpperCase()}
-                    </div>
-                    <ChevronDown className={cn(
-                      "w-4 h-4 text-gray-400 transition-transform duration-200",
-                      userMenuOpen && "rotate-180"
-                    )} />
-                  </button>
+                  </div>
 
-                  {/* User Dropdown */}
-                  <AnimatePresence>
-                    {userMenuOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute right-0 mt-2 w-64 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden"
-                      >
-                        <div className="p-4 border-b border-white/10">
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold text-lg">
-                              {currentUser.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="font-medium text-white">
-                                {currentUser.name}
+                  {/* Role Switcher */}
+                  {user.roles && user.roles.length > 1 && (
+                    <div className="flex items-center gap-2 bg-gray-900/50 p-1 rounded-lg border border-white/5 mx-2">
+                      {user.roles.includes('client') && (
+                        <button
+                          onClick={() => {
+                            switchRole('client').then(res => {
+                              if (res.success) navigate('/client/dashboard');
+                            });
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2",
+                            (user.primaryRole || user.role) === 'client'
+                              ? "bg-emerald-500 text-white shadow-lg"
+                              : "text-gray-400 hover:text-white hover:bg-white/5"
+                          )}
+                        >
+                          <User className="w-3.5 h-3.5" />
+                          Client
+                        </button>
+                      )}
+                      {user.roles.includes('node_provider') && (
+                        <button
+                          onClick={() => {
+                            switchRole('node_provider').then(res => {
+                              if (res.success) navigate('/node/dashboard');
+                            });
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2",
+                            (user.primaryRole || user.role) === 'node_provider'
+                              ? "bg-purple-600 text-white shadow-lg"
+                              : "text-gray-400 hover:text-white hover:bg-white/5"
+                          )}
+                        >
+                          <Server className="w-3.5 h-3.5" />
+                          Provider
+                        </button>
+                      )}
+                      {user.roles.includes('admin') && (
+                        <button
+                          onClick={() => {
+                            switchRole('admin').then(res => {
+                              if (res.success) navigate('/admin/dashboard');
+                            });
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2",
+                            (user.primaryRole || user.role) === 'admin'
+                              ? "bg-amber-600 text-white shadow-lg"
+                              : "text-gray-400 hover:text-white hover:bg-white/5"
+                          )}
+                        >
+                          <Shield className="w-3.5 h-3.5" />
+                          Admin
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Module Links */}
+                  {moduleLinks.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      {moduleLinks.map((link) => (
+                        <Link
+                          key={link.label}
+                          to={link.href}
+                          className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                            link.bgColor,
+                            link.color,
+                            "hover:opacity-90 border border-transparent hover:border-white/10"
+                          )}
+                        >
+                          {link.icon}
+                          {link.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* User Profile */}
+                  <div className="relative" ref={userMenuRef}>
+                    <button
+                      onClick={() => setUserMenuOpen(!userMenuOpen)}
+                      className="flex items-center gap-3 p-1 rounded-lg hover:bg-white/5 transition-colors"
+                    >
+                      <div className="text-right hidden sm:block">
+                        <div className="text-sm font-medium text-white">
+                          {user.name}
+                        </div>
+                        <div className="text-xs text-gray-400 capitalize">
+                          {user.role?.replace('_', ' ') || user.role}
+                        </div>
+                      </div>
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold transition-all duration-500",
+                        isProvider
+                          ? "bg-gradient-to-br from-purple-600 to-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+                          : "bg-gradient-to-br from-emerald-500 to-cyan-500"
+                      )}>
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                      <ChevronDown className={cn(
+                        "w-4 h-4 text-gray-400 transition-transform duration-200",
+                        userMenuOpen && "rotate-180"
+                      )} />
+                    </button>
+
+                    {/* User Dropdown */}
+                    <AnimatePresence>
+                      {userMenuOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute right-0 mt-2 w-64 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden"
+                          onClick={() => setUserMenuOpen(false)}
+                        >
+                          <div className="p-4 border-b border-white/10">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold text-lg">
+                                {user.name.charAt(0).toUpperCase()}
                               </div>
-                              <div className="text-sm text-gray-400">
-                                {currentUser.email}
+                              <div>
+                                <div className="font-medium text-white">
+                                  {user.name}
+                                </div>
+                                <div className="text-sm text-gray-400">
+                                  {user.email}
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <CreditCard className="w-3 h-3 text-emerald-400" />
+                                  <span className="text-xs text-emerald-400 font-medium">
+                                    {user.credits?.toLocaleString()} credits
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                        
-                        <div className="py-2">
-                          {userMenuItems.map((item) => (
-                            <Link
-                              key={item.label}
-                              to={item.href}
-                              className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
-                              onClick={() => setUserMenuOpen(false)}
+
+                          <div className="py-2">
+                            {userMenuItems.map((item) => (
+                              <Link
+                                key={item.label}
+                                to={item.href}
+                                className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                              >
+                                {item.icon}
+                                <span className="text-sm text-gray-300">{item.label}</span>
+                              </Link>
+                            ))}
+
+                            <button
+                              onClick={handleLogout}
+                              className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-500/10 text-red-400 transition-colors"
                             >
-                              {item.icon}
-                              <span className="text-sm text-gray-300">{item.label}</span>
-                            </Link>
-                          ))}
-                          
-                          <button
-                            onClick={handleLogout}
-                            className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-500/10 text-red-400 transition-colors"
-                          >
-                            <LogOut className="w-4 h-4" />
-                            <span className="text-sm">Logout</span>
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                              <LogOut className="w-4 h-4" />
+                              <span className="text-sm">Logout</span>
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </>
               ) : (
+                /* Auth Buttons for non-authenticated users */
                 <div className="flex items-center gap-3">
-                  <Link to="/login">
-                    <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white">
-                      Sign In
+                  {!hideWaitlist && !isSubscribed && (
+                    <Button
+                      onClick={() => window.dispatchEvent(new Event('open-waitlist'))}
+                      className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 font-semibold shadow-lg shadow-emerald-500/20"
+                    >
+                      Join Waitlist
                     </Button>
-                  </Link>
-                  <Link to="/signup">
-                    <Button className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700">
-                      Get Started
-                    </Button>
-                  </Link>
+                  )}
                 </div>
               )}
             </div>
@@ -468,7 +623,7 @@ const getModuleLinks = () => {
                           <ChevronDown className="w-4 h-4 text-gray-400" />
                         )}
                       </Link>
-                      
+
                       {/* Mobile Submenu */}
                       {item.submenu && (
                         <div className="ml-8 mt-1 space-y-1">
@@ -500,41 +655,60 @@ const getModuleLinks = () => {
 
                 {/* Mobile Auth & Modules */}
                 <div className="mt-8 pt-6 border-t border-white/10">
-                  {currentUser ? (
+                  {isAuthenticated && user ? (
                     <>
                       <div className="mb-6">
                         <div className="flex items-center gap-3 mb-4">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold">
-                            {currentUser.name.charAt(0).toUpperCase()}
+                          <div className={cn(
+                            "w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold transition-all duration-500",
+                            isProvider
+                              ? "bg-gradient-to-br from-purple-500 to-emerald-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+                              : "bg-gradient-to-br from-emerald-500 to-cyan-500"
+                          )}>
+                            {user.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <div className="font-medium text-white">
-                              {currentUser.name}
+                              {user.name}
                             </div>
                             <div className="text-sm text-gray-400 capitalize">
-                              {currentUser.role.replace('_', ' ')}
+                              {user.role?.replace('_', ' ') || user.role}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <CreditCard className={cn(
+                                "w-3 h-3",
+                                isProvider ? "text-purple-400" : "text-emerald-400"
+                              )} />
+                              <span className={cn(
+                                "text-xs font-medium",
+                                isProvider ? "text-purple-400" : "text-emerald-400"
+                              )}>
+                                {user.credits?.toLocaleString()} credits
+                              </span>
                             </div>
                           </div>
                         </div>
 
                         {/* Mobile Module Links */}
-                        <div className="grid grid-cols-1 gap-2 mb-6">
-                          {moduleLinks.map((link) => (
-                            <Link
-                              key={link.label}
-                              to={link.href}
-                              className={cn(
-                                "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium",
-                                link.bgColor,
-                                link.color
-                              )}
-                              onClick={() => setIsOpen(false)}
-                            >
-                              {link.icon}
-                              {link.label}
-                            </Link>
-                          ))}
-                        </div>
+                        {moduleLinks.length > 0 && (
+                          <div className="grid grid-cols-1 gap-2 mb-6">
+                            {moduleLinks.map((link) => (
+                              <Link
+                                key={link.label}
+                                to={link.href}
+                                className={cn(
+                                  "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium",
+                                  link.bgColor,
+                                  link.color
+                                )}
+                                onClick={() => setIsOpen(false)}
+                              >
+                                {link.icon}
+                                {link.label}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Mobile User Menu */}
                         <div className="space-y-1">
@@ -549,7 +723,7 @@ const getModuleLinks = () => {
                               <span className="text-gray-300">{item.label}</span>
                             </Link>
                           ))}
-                          
+
                           <button
                             onClick={() => {
                               handleLogout()
@@ -565,19 +739,22 @@ const getModuleLinks = () => {
                     </>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      <Link to="/login" onClick={() => setIsOpen(false)}>
-                        <Button 
-                          variant="outline" 
-                          className="w-full border-white/20 hover:bg-white/5"
+                      {!hideWaitlist && !isSubscribed && (
+                        <Button
+                          onClick={() => {
+                            window.dispatchEvent(new Event('open-waitlist'));
+                            setIsOpen(false);
+                          }}
+                          className={cn(
+                            "w-full bg-gradient-to-r transition-all duration-500 font-semibold shadow-lg",
+                            isProvider
+                              ? "from-purple-600 to-emerald-600 hover:from-purple-700 hover:to-emerald-700"
+                              : "from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 shadow-emerald-500/20"
+                          )}
                         >
-                          Sign In
+                          Join Waitlist
                         </Button>
-                      </Link>
-                      <Link to="/signup" onClick={() => setIsOpen(false)}>
-                        <Button className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700">
-                          Get Started Free
-                        </Button>
-                      </Link>
+                      )}
                     </div>
                   )}
                 </div>
@@ -586,9 +763,6 @@ const getModuleLinks = () => {
           )}
         </AnimatePresence>
       </motion.nav>
-
-      {/* Spacer for fixed navbar */}
-      <div className="h-16 lg:h-20" />
     </>
   )
 }

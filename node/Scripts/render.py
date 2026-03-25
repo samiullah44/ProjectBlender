@@ -1,4 +1,4 @@
-﻿# Script used by LogicReinc.BlendFarm.Server for rendering in Blender
+# Script used by LogicReinc.BlendFarm.Server for rendering in Blender
 # Assumes usage of structures from said assembly
 
 
@@ -218,8 +218,22 @@ def renderWithSettings(renderSettings, id, path):
             scn.render.fps = fps;
 
         if(engine == 1): #Eevee
+            import sys
+            if bpy.app.version < (2, 80, 0):
+                print(f"ERROR: EEVEE engine requires Blender 2.80 or newer. This node is running Blender {bpy.app.version[0]}.{bpy.app.version[1]}.{bpy.app.version[2]}")
+                sys.exit(1)
             print("Using EEVEE");
-            scn.render.engine = "BLENDER_EEVEE";
+            try:
+                scn.render.engine = "BLENDER_EEVEE_NEXT";
+            except TypeError:
+                scn.render.engine = "BLENDER_EEVEE";
+            try:
+                if hasattr(scn.eevee, 'taa_render_samples'):
+                    scn.eevee.taa_render_samples = samples;
+                elif hasattr(scn.eevee, 'taa_samples'):
+                    scn.eevee.taa_samples = samples;
+            except:
+                pass
         else:
             scn.render.engine = "CYCLES";
 
@@ -232,6 +246,11 @@ def renderWithSettings(renderSettings, id, path):
 
         # Render
         print("RENDER_START:" + str(id) + "\n", flush=True);
+
+        bpy.context.view_layer.update()
+        bpy.context.evaluated_depsgraph_get().update()
+        for obj in scn.objects:
+            obj.hide_render = False
 
         bpy.ops.render.render(animation=False, write_still=True, use_viewport=False, layer="", scene = scen)
 

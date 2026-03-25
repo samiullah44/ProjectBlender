@@ -9,6 +9,8 @@ using System.Net.Http;
 using System.IO.Compression;
 using Newtonsoft.Json;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
+using BlendFarm.Node.Models;
 
 namespace BlendFarm.Node.Services
 {
@@ -25,7 +27,7 @@ namespace BlendFarm.Node.Services
             _blenderPath = "blender";
             
             Directory.CreateDirectory(_scriptsDirectory);
-            _logger.LogInformation($"📁 Scripts directory: {_scriptsDirectory}");
+            _logger.LogInformation($"[System] Scripts directory: {_scriptsDirectory}");
         }
         
         /// <summary>
@@ -44,7 +46,7 @@ namespace BlendFarm.Node.Services
             if (!string.IsNullOrEmpty(blenderPath) && (File.Exists(blenderPath) || blenderPath == "blender"))
             {
                 _blenderPath = blenderPath;
-                _logger.LogInformation($"🎬 Blender path updated to: {blenderPath}");
+                _logger.LogInformation($"[System] Blender path updated to: {blenderPath}");
             }
         }
         
@@ -55,8 +57,8 @@ namespace BlendFarm.Node.Services
             _blenderPath = blenderPath;
             
             Directory.CreateDirectory(_scriptsDirectory);
-            _logger.LogInformation($"📁 Scripts directory: {_scriptsDirectory}");
-            _logger.LogInformation($"🎬 Using Blender at: {_blenderPath}");
+            _logger.LogInformation($"[System] Scripts directory: {_scriptsDirectory}");
+            _logger.LogInformation($"[System] Using Blender at: {_blenderPath}");
         }
         
         /// <summary>
@@ -72,35 +74,45 @@ namespace BlendFarm.Node.Services
             int resolutionX = 1920,
             int resolutionY = 1080,
             string outputFormat = "PNG",
+            string colorMode = "RGBA",
+            string colorDepth = "8",
+            int compression = 90,
+            string exrCodec = "ZIP",
+            string tiffCodec = "DEFLATE",
+            int tileSize = 256,
+            string denoiser = "NONE",
+            string? scene = null,
+            string? camera = null,
             bool useAnimationSettings = false,
             CancellationToken cancellationToken = default)
         {
             try
             {
-                _logger.LogInformation($"🎬 Starting render: {Path.GetFileName(blendFilePath)} Frame {frame}");
-                _logger.LogInformation($"⚙️  Settings: {samples} samples, {engine}, {device}, {resolutionX}x{resolutionY}, Format: {outputFormat}");
-                _logger.LogInformation($"📽️  Mode: {(useAnimationSettings ? "Animation" : "Single Frame")}");
+                _logger.LogInformation($"[Render] Starting render: {Path.GetFileName(blendFilePath)} Frame {frame}");
+                _logger.LogInformation($"[Render] Settings: {samples} samples, {engine}, {device}, {resolutionX}x{resolutionY}, Format: {outputFormat}");
+                _logger.LogInformation($"[Render] Mode: {(useAnimationSettings ? "Animation" : "Single Frame")}");
+                _logger.LogInformation($"[DEBUG] PythonRunnerService version: 1.0.1 (Robust Timeout)");
                 
                 // Get or install Blender if needed
                 var blenderExe = await GetOrInstallBlenderAsync();
                 if (string.IsNullOrEmpty(blenderExe))
                 {
-                    _logger.LogError("❌ Failed to get Blender installation");
+                    _logger.LogError("[System] Error: Failed to get Blender installation");
                     return false;
                 }
                 
-                _logger.LogInformation($"🎬 Using Blender: {blenderExe}");
+                _logger.LogInformation($"[System] Using Blender: {blenderExe}");
                 
                 // Get absolute output path
                 var absoluteOutputPath = GetAbsoluteOutputPath(outputPath);
-                _logger.LogInformation($"📁 Output will be saved to: {absoluteOutputPath}");
+                _logger.LogInformation($"[Render] Output will be saved to: {absoluteOutputPath}");
                 
                 // Check if output directory exists
                 var outputDir = Path.GetDirectoryName(absoluteOutputPath);
                 if (!Directory.Exists(outputDir))
                 {
                     Directory.CreateDirectory(outputDir);
-                    _logger.LogInformation($"📁 Created output directory: {outputDir}");
+                    _logger.LogInformation($"[System] Created output directory: {outputDir}");
                 }
                 
                 // Create Python script dynamically
@@ -119,6 +131,15 @@ namespace BlendFarm.Node.Services
                     resolutionX,
                     resolutionY,
                     outputFormat,
+                    colorMode,
+                    colorDepth,
+                    compression,
+                    exrCodec,
+                    tiffCodec,
+                    tileSize,
+                    denoiser,
+                    scene,
+                    camera,
                     useAnimationSettings,
                     cancellationToken);
             }
@@ -146,39 +167,57 @@ namespace BlendFarm.Node.Services
             int resolutionX,
             int resolutionY,
             string outputFormat,
+            string colorMode,
+            string colorDepth,
+            int compression,
+            string exrCodec,
+            string tiffCodec,
+            int tileSize,
+            string denoiser,
+            string? scene,
+            string? camera,
             bool useAnimationSettings,
             CancellationToken cancellationToken)
         {
             // Create config file with proper settings from parameters
             var config = new[]
             {
-                new
+                new RenderConfig
                 {
-                    frame = frame,
-                    output = outputPath,
-                    samples = samples,
-                    engine = engine,
-                    device = device,
-                    resolution_x = resolutionX,
-                    resolution_y = resolutionY,
-                    output_format = outputFormat,
-                    use_animation_settings = useAnimationSettings
+                    Frame = frame,
+                    Output = outputPath,
+                    Samples = samples,
+                    Engine = engine,
+                    Device = device,
+                    ResolutionX = resolutionX,
+                    ResolutionY = resolutionY,
+                    TileSize = tileSize,
+                    OutputFormat = outputFormat,
+                    ColorMode = colorMode,
+                    ColorDepth = colorDepth,
+                    Compression = compression,
+                    ExrCodec = exrCodec,
+                    TiffCodec = tiffCodec,
+                    Scene = scene,
+                    Camera = camera,
+                    Denoiser = denoiser,
+                    UseAnimationSettings = useAnimationSettings
                 }
             };
             
             var tempConfig = Path.GetTempFileName();
             tempConfig = Path.ChangeExtension(tempConfig, ".json");
-            File.WriteAllText(tempConfig, JsonConvert.SerializeObject(config, Formatting.Indented));
+            File.WriteAllText(tempConfig, System.Text.Json.JsonSerializer.Serialize(config, typeof(RenderConfig[]), NodeJsonContext.Default));
             
-            _logger.LogInformation($"📝 Created config file: {tempConfig}");
-            _logger.LogDebug($"⚙️  Config: {File.ReadAllText(tempConfig)}");
+            _logger.LogInformation($"[System] Created config file: {tempConfig}");
+            _logger.LogDebug($"[System] Config: {File.ReadAllText(tempConfig)}");
             
             try
             {
                 // Use correct Blender command line format
                 var arguments = $"-b \"{blendFile}\" -P \"{pythonScript}\" -- \"{tempConfig}\"";
                 
-                _logger.LogInformation($"🚀 Command: {blenderExe} {arguments}");
+                _logger.LogInformation($"[System] Command: {blenderExe} {arguments}");
                 
                 var process = new Process
                 {
@@ -198,29 +237,32 @@ namespace BlendFarm.Node.Services
                 
                 var outputBuilder = new StringBuilder();
                 var errorBuilder = new StringBuilder();
-                var hasError = false;
-                var processExited = false;
+                bool processExited = false;
+process.Exited += (sender, e) =>
+{
+    processExited = true;
+    _logger.LogDebug("Blender process exited");
+};
                 
                 process.OutputDataReceived += (sender, e) =>
                 {
                     if (!string.IsNullOrEmpty(e.Data))
                     {
                         outputBuilder.AppendLine(e.Data);
-                        _logger.LogDebug($"🎬 Output: {e.Data}");
+                        _logger.LogDebug($"[Render] Output: {e.Data}");
                         
                         // Check for specific messages
                         if (e.Data.Contains("ERROR") || e.Data.Contains("Error:"))
                         {
-                            hasError = true;
-                            _logger.LogError($"🔴 {e.Data}");
+                            _logger.LogWarning($"[Render] Potential Error in Blender: {e.Data}");
                         }
                         else if (e.Data.Contains("SUCCESS") || e.Data.Contains("Saved:"))
                         {
-                            _logger.LogInformation($"✅ {e.Data}");
+                            _logger.LogInformation($"[Render] {e.Data}");
                         }
                         else if (e.Data.Contains("Sample") || e.Data.Contains("Rendering") || e.Data.Contains("Time:"))
                         {
-                            _logger.LogInformation($"⏳ {e.Data}");
+                            _logger.LogInformation($"[Render] {e.Data}");
                         }
                     }
                 };
@@ -230,12 +272,7 @@ namespace BlendFarm.Node.Services
                     if (!string.IsNullOrEmpty(e.Data))
                     {
                         errorBuilder.AppendLine(e.Data);
-                        _logger.LogDebug($"🔴 Error: {e.Data}");
-                        
-                        if (!e.Data.Contains("Warning: region type"))
-                        {
-                            hasError = true;
-                        }
+                        _logger.LogDebug($"[Render] Blender stderr: {e.Data}");
                     }
                 };
                 
@@ -260,15 +297,26 @@ namespace BlendFarm.Node.Services
                 
                 // Calculate timeout based on samples and device
                 // More sophisticated timeout calculation
-                var baseTimeout = device.ToUpper() == "GPU" ? 30 : 120; // seconds per sample
-                var timeoutSeconds = Math.Max(30, samples * (baseTimeout / 10)); // Scale with samples
+                var baseTimeout = device.ToUpper().Contains("GPU") ? 60 : 120; // Increase GPU base
+                var timeoutSeconds = Math.Max(60, samples * (baseTimeout / 10)); // Scale with samples
                 
                 // Add extra time for high resolutions
                 var resolutionFactor = (resolutionX * resolutionY) / (1920 * 1080.0);
                 timeoutSeconds = (int)(timeoutSeconds * Math.Max(1.0, resolutionFactor * 0.5));
                 
+                // CRITICAL: Add a heavy buffer for GPU kernel loading which can take 5-10 minutes
+                if (device.ToUpper().Contains("GPU"))
+                {
+                    _logger.LogInformation($"[DEBUG] GPU detected, adding massive 1200s (20m) kernel loading buffer");
+                    timeoutSeconds += 1200; // Increase to 20 minutes to be absolutely sure
+                }
+                else
+                {
+                    _logger.LogInformation($"[DEBUG] Device is {device}, skipping extra GPU buffer");
+                }
+                
                 var timeout = TimeSpan.FromSeconds(timeoutSeconds);
-                _logger.LogInformation($"⏱️  Timeout set to: {timeout.TotalSeconds} seconds (samples: {samples}, resolution: {resolutionX}x{resolutionY})");
+                _logger.LogInformation($"[System] Final Timeout set to: {timeout.TotalSeconds} seconds");
                 
                 try
                 {
@@ -285,7 +333,7 @@ namespace BlendFarm.Node.Services
                     
                     if (completedTask == timeoutTask)
                     {
-                        _logger.LogError($"⚠️  Render timeout after {timeout.TotalSeconds} seconds");
+                        _logger.LogError($"[Render] Error: Render timeout after {timeout.TotalSeconds} seconds");
                         
                         if (!process.HasExited)
                         {
@@ -309,23 +357,24 @@ namespace BlendFarm.Node.Services
                     // Give time for all output to be captured
                     await Task.Delay(500);
                     
-                    _logger.LogInformation($"📊 Blender process exited with code: {exitCode}");
+                    _logger.LogInformation($"[Render] Blender process exited with code: {exitCode}");
                     
-                    if (exitCode == 0 && !hasError)
+                    // CRITICAL: We prioritize ExitCode 0 and File Existence. 
+                    // Blender/Python prints SUCCESS only if it really worked.
+                    if (exitCode == 0)
                     {
-                        _logger.LogInformation($"✅ Blender render completed successfully");
+                        _logger.LogInformation($"[Render] Blender render process reported success.");
                         
                         // Check output file
                         if (File.Exists(outputPath))
                         {
                             var fileInfo = new FileInfo(outputPath);
-                            _logger.LogInformation($"📊 Output file created: {fileInfo.FullName} ({fileInfo.Length / 1024} KB)");
+                            _logger.LogInformation($"[System] Output file verified: {fileInfo.FullName} ({fileInfo.Length / 1024} KB)");
                             return true;
                         }
                         else
                         {
-                            // Try to find output in alternative locations
-                            _logger.LogWarning($"⚠️  Output file not found at expected location: {outputPath}");
+                            _logger.LogWarning($"[System] Warning: Blender exited with 0 but file not found at: {outputPath}");
                             
                             // Check for any output file in output directory
                             var outputDir = Path.GetDirectoryName(outputPath);
@@ -350,33 +399,44 @@ namespace BlendFarm.Node.Services
                                     if (outputFiles.Length > 0)
                                     {
                                         var foundFile = outputFiles[0];
-                                        _logger.LogInformation($"📊 Found output file: {foundFile}");
+                                        _logger.LogInformation($"[System] Found alternative output file: {foundFile}");
                                         
                                         // If it's not already the expected name, copy it
                                         if (!foundFile.Equals(outputPath, StringComparison.OrdinalIgnoreCase))
                                         {
                                             File.Copy(foundFile, outputPath, true);
-                                            _logger.LogInformation($"📋 Copied to expected location: {outputPath}");
+                                            _logger.LogInformation($"[System] Copied to expected location: {outputPath}");
                                         }
                                         return true;
                                     }
                                 }
                             }
                             
-                            _logger.LogError($"❌ Output file not found anywhere");
+                            _logger.LogError($"[System] Error: Output file not found after Blender exit.");
+                            
+                            // 🐛 IMPORTANT VITAL DEBUGGING: Dump the actual output since Blender lied about exit code 0.
+                            if (outputBuilder.Length > 0 || errorBuilder.Length > 0)
+                            {
+                                var output = outputBuilder.ToString();
+                                var errorOut = errorBuilder.ToString();
+                                _logger.LogError($"[Blender Silent Failure] Blender exited with 0 but produced no file. Dumping full render log:");
+                                _logger.LogError($"\n--- STDOUT ---\n{output}\n--- STDERR ---\n{errorOut}\n");
+                            }
+
                             return false;
                         }
                     }
                     else
                     {
-                        _logger.LogError($"❌ Blender failed with exit code: {exitCode}");
+                        _logger.LogError($"[Render] Error: Blender failed with non-zero exit code: {exitCode}");
                         
                         // Log captured output for debugging
-                        if (outputBuilder.Length > 0)
+                        if (outputBuilder.Length > 0 || errorBuilder.Length > 0)
                         {
                             var output = outputBuilder.ToString();
-                            var lastLines = output.Split('\n').TakeLast(20).ToArray();
-                            _logger.LogDebug($"Last 20 lines of output:\n{string.Join("\n", lastLines)}");
+                            var errorOut = errorBuilder.ToString();
+                            _logger.LogError($"[Blender Crash Log] Dumping full render log:");
+                            _logger.LogError($"\n--- STDOUT ---\n{output}\n--- STDERR ---\n{errorOut}\n");
                         }
                         
                         return false;
@@ -463,6 +523,28 @@ device_type = config.get('device', 'GPU').upper()
 resolution_x = config.get('resolution_x', 1920)
 resolution_y = config.get('resolution_y', 1080)
 output_format = config.get('output_format', 'PNG').upper()
+color_mode = config.get('color_mode', 'RGBA').upper()
+color_depth = config.get('color_depth', '8').upper()
+raw_compression = config.get('compression', 90)
+
+# Normalize compression/quality:
+# - Preserve 0 as a valid value (meaning: lowest compression for PNG, lowest quality for JPEG)
+# - Treat missing/empty as default
+# - Clamp to [0, 100]
+try:
+    if raw_compression is None or raw_compression == '':
+        compression = 90
+    else:
+        compression = int(raw_compression)
+except Exception:
+    compression = 90
+compression = max(0, min(100, compression))
+exr_codec = config.get('exr_codec', 'ZIP').upper()
+tiff_codec = config.get('tiff_codec', 'DEFLATE').upper()
+scene_name = config.get('scene', '')
+camera_name = config.get('camera', '')
+denoiser = config.get('denoiser', 'NONE').upper()
+tile_size = config.get('tile_size', 256)
 use_animation_settings = config.get('use_animation_settings', False)
 
 print(f'=== Render Settings ===')
@@ -473,10 +555,29 @@ print(f'  Engine: {engine}')
 print(f'  Device: {device_type}')
 print(f'  Resolution: {resolution_x}x{resolution_y}')
 print(f'  Format: {output_format}')
+print(f'  Color: {color_mode} {color_depth}-bit')
+print(f'  Compression/Quality: {compression}')
+print(f'  Scene: {scene_name if scene_name else ""Default""}')
+print(f'  Camera: {camera_name if camera_name else ""Default""}')
+print(f'  Denoiser: {denoiser}')
+print(f'  Tile Size: {tile_size}')
 print(f'  Animation Mode: {use_animation_settings}')
 
 # Apply ALL settings
 scene = bpy.context.scene
+
+# Set explicit scene if requested
+if scene_name and scene_name in bpy.data.scenes:
+    scene = bpy.data.scenes[scene_name]
+    bpy.context.window.scene = scene
+    print(f'Switched to scene: {scene_name}')
+
+# Set explicit camera if requested
+if camera_name and camera_name in bpy.data.objects:
+    cam_obj = bpy.data.objects[camera_name]
+    if cam_obj.type == 'CAMERA':
+        scene.camera = cam_obj
+        print(f'Set active camera: {camera_name}')
 scene.frame_set(frame_num)
 
 # Set engine and device - FIXED: No conflicting overrides
@@ -484,44 +585,64 @@ if engine == 'CYCLES':
     scene.render.engine = 'CYCLES'
     scene.cycles.samples = samples
     
-    # Set denoising if available and if samples are high
-    if samples >= 32:
+    # Set denoising based on config
+    if denoiser != 'NONE':
         try:
             scene.cycles.use_denoising = True
-            scene.cycles.denoiser = 'OPENIMAGEDENOISE'
-            print('Enabled denoising with OpenImageDenoise')
-        except:
+            if denoiser == 'OPENIMAGEDENOISE':
+                scene.cycles.denoiser = 'OPENIMAGEDENOISE'
+            elif denoiser == 'OPTIX':
+                scene.cycles.denoiser = 'OPTIX'
+            else:
+                scene.cycles.denoiser = 'NLM'
+            print(f'Enabled denoising with {denoiser}')
+        except Exception as e:
             try:
                 scene.cycles.use_denoising = True
                 print('Enabled denoising (fallback)')
             except:
                 print('Could not enable denoising')
+    else:
+        scene.cycles.use_denoising = False
+        print('Denoising disabled')
     
-    # FIXED: Use device from config
-    if device_type == 'GPU':
+    # FIXED: Use device from config. Check if it starts with GPU.
+    if device_type.startswith('GPU'):
         try:
             # Try to enable GPU devices
             import addon_utils
             addon_utils.enable('cycles')
             
-            # Set compute device type
+            # Set compute device type based on availability and request
             if hasattr(bpy.context.preferences.addons['cycles'], 'preferences'):
                 prefs = bpy.context.preferences.addons['cycles'].preferences
                 
-                # Try CUDA first, then OPTIX, then CPU
-                for compute_device_type in ['CUDA', 'OPTIX', 'CPU']:
+                # Check available types: CUDA, OPTIX, HIP, METAL, ONEAPI
+                # Order: User preference first, then fallback to best available
+                requested = device_type
+                if requested == 'GPU': requested = 'OPTIX' # Default to Optix for generic GPU
+                
+                priorities = [requested, 'OPTIX', 'CUDA', 'HIP', 'METAL', 'ONEAPI']
+                
+                success = False
+                for compute_device_type in priorities:
                     try:
                         prefs.compute_device_type = compute_device_type
-                        print(f'Trying compute device type: {compute_device_type}')
-                        break
+                        print(f'Attempting compute device type: {compute_device_type}')
+                        # Refresh and check if any devices of this type exist
+                        prefs.get_devices()
+                        valid_devices = [d for d in prefs.devices if d.type == compute_device_type]
+                        if valid_devices:
+                            for device in valid_devices:
+                                device.use = True
+                                print(f'Enabled {compute_device_type} device: {device.name}')
+                            success = True
+                            break
                     except:
                         continue
                 
-                # Refresh and enable devices
-                prefs.get_devices()
-                for device in prefs.devices:
-                    device.use = True
-                    print(f'Enabled device: {device.name}')
+                if not success:
+                    print('Warning: No suitable GPU compute device found, using fallback if possible')
             
             scene.cycles.device = 'GPU'
             print('GPU rendering enabled')
@@ -534,14 +655,41 @@ if engine == 'CYCLES':
         print('CPU rendering enabled as configured')
         
 elif engine == 'EEVEE':
-    scene.render.engine = 'BLENDER_EEVEE'
-    scene.eevee.taa_render_samples = samples
+    import sys
+    if bpy.app.version < (2, 80, 0):
+        print(f""ERROR: EEVEE engine requires Blender 2.80 or newer. This node is running Blender {bpy.app.version[0]}.{bpy.app.version[1]}.{bpy.app.version[2]}"")
+        sys.exit(1)
+        
+    try:
+        scene.render.engine = 'BLENDER_EEVEE_NEXT'
+    except TypeError:
+        scene.render.engine = 'BLENDER_EEVEE'
+        
+    try:
+        if hasattr(scene.eevee, 'taa_render_samples'):
+            scene.eevee.taa_render_samples = samples
+        elif hasattr(scene.eevee, 'taa_samples'):
+            scene.eevee.taa_samples = samples
+    except Exception as e:
+        print(f""Warning: Could not set EEVEE samples: {e}"")
+        
     print(f'Eevee engine with {samples} samples')
 
 # Set resolution
 scene.render.resolution_x = resolution_x
 scene.render.resolution_y = resolution_y
 scene.render.resolution_percentage = 100
+
+# Set tile size
+try:
+    if hasattr(scene.render, 'tile_x'):
+        scene.render.tile_x = tile_size
+        scene.render.tile_y = tile_size
+    elif hasattr(scene.cycles, 'tile_size'):
+        scene.cycles.tile_size = tile_size
+    print(f'Tile size set to {tile_size}')
+except:
+    print('Could not set tile size (using default)')
 
 # Set animation settings if needed
 if use_animation_settings:
@@ -550,6 +698,33 @@ if use_animation_settings:
     scene.frame_end = frame_num
     scene.frame_current = frame_num
     print(f'Animation settings: Frame range {frame_num}-{frame_num}')
+
+# FIX CAMERA ISSUE: Ensure there is an active camera
+if not scene.camera:
+    print('WARNING: No active camera found in scene.')
+    camera_found = False
+    
+    # First, try to find any existing camera in the scene
+    for obj in scene.objects:
+        if obj.type == 'CAMERA':
+            scene.camera = obj
+            print(f'Assigned existing camera: {obj.name}')
+            camera_found = True
+            break
+            
+    # If no camera exists, create a default one
+    if not camera_found:
+        print('Creating a default fallback camera.')
+        cam_data = bpy.data.cameras.new('DefaultCamera')
+        cam_obj = bpy.data.objects.new('DefaultCamera', cam_data)
+        scene.collection.objects.link(cam_obj)
+        scene.camera = cam_obj
+        
+        # Position it reasonably (e.g., looking at origin)
+        cam_obj.location = (7.358, -6.925, 4.958)
+        
+        import math
+        cam_obj.rotation_euler = (math.radians(63.2), math.radians(0), math.radians(46.7))
 
 # Set output path
 if output_path.startswith('//'):
@@ -567,28 +742,27 @@ scene.render.filepath = output_path
 
 # Set output format based on configuration
 format_settings = scene.render.image_settings
+format_settings.color_mode = color_mode
+format_settings.color_depth = color_depth
+
 if output_format == 'PNG':
     format_settings.file_format = 'PNG'
-    format_settings.color_mode = 'RGBA'
-    format_settings.color_depth = '16'  # 16-bit PNG for better quality
-    format_settings.compression = 90    # High compression
+    format_settings.compression = compression
 elif output_format == 'JPEG' or output_format == 'JPG':
     format_settings.file_format = 'JPEG'
-    format_settings.color_mode = 'RGB'
-    format_settings.quality = 95        # High quality JPEG
-elif output_format == 'EXR':
+    format_settings.quality = compression
+elif output_format == 'OPEN_EXR' or output_format == 'EXR':
     format_settings.file_format = 'OPEN_EXR'
-    format_settings.color_mode = 'RGBA'
-    format_settings.color_depth = '32'
-    format_settings.exr_codec = 'ZIP'   # Compressed EXR
+    format_settings.exr_codec = exr_codec
 elif output_format == 'TIFF':
     format_settings.file_format = 'TIFF'
-    format_settings.color_mode = 'RGBA'
-    format_settings.color_depth = '16'
-    format_settings.tiff_codec = 'DEFLATE'  # Compressed TIFF
+    format_settings.tiff_codec = tiff_codec
+elif output_format == 'TARGA' or output_format == 'TGA':
+    format_settings.file_format = 'TARGA'
+elif output_format == 'BMP':
+    format_settings.file_format = 'BMP'
 else:
     format_settings.file_format = 'PNG'
-    format_settings.color_mode = 'RGBA'
     print(f'Warning: Unknown format {output_format}, defaulting to PNG')
 
 print(f'Output format set to: {format_settings.file_format}')
@@ -603,10 +777,23 @@ try:
         # For true animation rendering across frames
         print(f'Rendering animation frames {scene.frame_start}-{scene.frame_end}')
         scene.frame_set(frame_num)
+        
+        bpy.context.view_layer.update()
+        bpy.context.evaluated_depsgraph_get().update()
+        for obj in scene.objects:
+            obj.hide_render = False
+            
         bpy.ops.render.render(write_still=True, animation=False)
     else:
         # Single frame render
         print(f'Rendering single frame {frame_num}')
+        scene.frame_set(frame_num)
+        
+        bpy.context.view_layer.update()
+        bpy.context.evaluated_depsgraph_get().update()
+        for obj in scene.objects:
+            obj.hide_render = False
+            
         bpy.ops.render.render(write_still=True, animation=False)
     
     end_time = time.time()
@@ -651,7 +838,7 @@ except Exception as e:
 ";
     
             await File.WriteAllTextAsync(scriptPath, pythonScript);
-            _logger.LogInformation($"📝 Created/Updated Python script: {scriptPath}");
+            _logger.LogInformation($"[System] Created/Updated Python script: {scriptPath}");
             
             return scriptPath;
         }
@@ -666,18 +853,18 @@ except Exception as e:
             {
                 if (File.Exists(_blenderPath))
                 {
-                    _logger.LogInformation($"✅ Using provided Blender path: {_blenderPath}");
+                    _logger.LogInformation($"[System] Using provided Blender path: {_blenderPath}");
                     return _blenderPath;
                 }
             }
             
-            _logger.LogInformation("🔍 Looking for Blender installation...");
+            _logger.LogInformation("[System] Looking for Blender installation...");
             
             // 2. Check current directory for Blender installation
             var currentDirBlender = FindBlenderInCurrentDirectory();
             if (!string.IsNullOrEmpty(currentDirBlender))
             {
-                _logger.LogInformation($"✅ Found Blender in current directory: {currentDirBlender}");
+                _logger.LogInformation($"[System] Found Blender in current directory: {currentDirBlender}");
                 return currentDirBlender;
             }
             
@@ -685,7 +872,7 @@ except Exception as e:
             var pathBlender = await FindBlenderInPathAsync();
             if (!string.IsNullOrEmpty(pathBlender))
             {
-                _logger.LogInformation($"✅ Found Blender in PATH: {pathBlender}");
+                _logger.LogInformation($"[System] Found Blender in PATH: {pathBlender}");
                 return pathBlender;
             }
             
@@ -695,7 +882,7 @@ except Exception as e:
                 var installedBlender = FindInstalledBlenderInRegistry();
                 if (!string.IsNullOrEmpty(installedBlender))
                 {
-                    _logger.LogInformation($"✅ Found Blender via Registry: {installedBlender}");
+                    _logger.LogInformation($"[System] Found Blender via Registry: {installedBlender}");
                     return installedBlender;
                 }
             }
@@ -704,12 +891,12 @@ except Exception as e:
             var commonBlender = FindBlenderInCommonLocations();
             if (!string.IsNullOrEmpty(commonBlender))
             {
-                _logger.LogInformation($"✅ Found Blender in common location: {commonBlender}");
+                _logger.LogInformation($"[System] Found Blender in common location: {commonBlender}");
                 return commonBlender;
             }
             
             // 6. Download to current directory
-            _logger.LogWarning("⚠️  Blender not found. Downloading to current directory...");
+            _logger.LogWarning("[System] Warning: Blender not found. Downloading to current directory...");
             return await DownloadBlenderToCurrentDirectoryAsync();
         }
         
@@ -908,7 +1095,7 @@ except Exception as e:
             var existingBlender = FindBlenderInDirectory(downloadDir);
             if (!string.IsNullOrEmpty(existingBlender) && TestBlenderExecutable(existingBlender))
             {
-                _logger.LogInformation($"✅ Found existing Blender installation: {existingBlender}");
+                _logger.LogInformation($"[System] Found existing Blender installation: {existingBlender}");
                 return existingBlender;
             }
             
@@ -917,23 +1104,70 @@ except Exception as e:
             
             try
             {
-                _logger.LogInformation($"📥 Downloading Blender {version}...");
+                _logger.LogInformation($"[System] Downloading Blender {version}...");
                 
                 using (var httpClient = new HttpClient())
                 {
                     httpClient.Timeout = TimeSpan.FromMinutes(15);
-                    using (var stream = await httpClient.GetStreamAsync(downloadUrl))
-                    using (var fileStream = new FileStream(tempZip, FileMode.Create))
+                    using (var response = await httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
                     {
-                        await stream.CopyToAsync(fileStream);
+                        response.EnsureSuccessStatusCode();
+                        var totalBytes = response.Content.Headers.ContentLength ?? -1L;
+                        using (var stream = await response.Content.ReadAsStreamAsync())
+                        using (var fileStream = new FileStream(tempZip, FileMode.Create))
+                        {
+                            if (totalBytes > 0)
+                            {
+                                Console.WriteLine($"Blender Size: {totalBytes / 1024 / 1024.0:F2} MB");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Blender Size: Unknown (streaming download)");
+                            }
+                            
+                            var buffer = new byte[8192];
+                            long totalRead = 0;
+                            int bytesRead;
+                            var lastProgressUpdate = DateTime.Now;
+                            var progressUpdateInterval = TimeSpan.FromSeconds(0.5);
+                            
+                            while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                            {
+                                await fileStream.WriteAsync(buffer, 0, bytesRead);
+                                totalRead += bytesRead;
+                                
+                                if (DateTime.Now - lastProgressUpdate >= progressUpdateInterval)
+                                {
+                                    if (totalBytes > 0)
+                                    {
+                                        var progress = (double)totalRead / totalBytes * 100;
+                                        Console.Write($"\rDownloading Blender : [{progress:F1}% / 100%] ({totalRead / 1024 / 1024.0:F2} MB downloaded)   ");
+                                    }
+                                    else
+                                    {
+                                        Console.Write($"\rDownloading Blender : ({totalRead / 1024 / 1024.0:F2} MB downloaded)   ");
+                                    }
+                                    lastProgressUpdate = DateTime.Now;
+                                }
+                            }
+                            Console.WriteLine();
+                        }
                     }
                 }
                 
                 Directory.CreateDirectory(downloadDir);
                 
-                _logger.LogInformation($"📦 Extracting Blender...");
+                _logger.LogInformation($"[System] Extracting Blender...");
+                Console.Write("Extracting...   ");
                 
+                int extractedCount = 0;
+                using (var archive = ZipFile.OpenRead(tempZip))
+                {
+                    extractedCount = archive.Entries.Count;
+                }
                 ZipFile.ExtractToDirectory(tempZip, downloadDir, overwriteFiles: true);
+                Console.WriteLine($"\rExtracted {extractedCount} files        ");
+
                 
                 File.Delete(tempZip);
                 
@@ -941,17 +1175,17 @@ except Exception as e:
                 
                 if (!string.IsNullOrEmpty(blenderExe))
                 {
-                    _logger.LogInformation($"✅ Blender {version} installed to: {blenderExe}");
+                    _logger.LogInformation($"[System] Blender {version} installed to: {blenderExe}");
                     return blenderExe;
                 }
                 else
                 {
-                    _logger.LogError($"❌ Could not find blender.exe after extraction");
+                    _logger.LogError($"[System] Error: Could not find blender.exe after extraction");
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"❌ Failed to download/install Blender: {ex.Message}");
+                _logger.LogError($"[System] Error: Failed to download/install Blender: {ex.Message}");
             }
             
             return null;

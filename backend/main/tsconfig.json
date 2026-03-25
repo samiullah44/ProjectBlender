@@ -2,7 +2,10 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "moduleResolution": "node",
     "rootDir": "./src",
     "outDir": "./dist",
@@ -12,12 +15,21 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": false,  // Not needed for deployment
+    "declaration": false, // Not needed for deployment
     "sourceMap": true,
     "noUncheckedIndexedAccess": true,
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"],
+  "typeRoots": [
+    "./node_modules/@types",
+    "./src/types"
+  ],
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
   "ts-node": {
     "esm": false,
     "experimentalSpecifierResolution": "node"

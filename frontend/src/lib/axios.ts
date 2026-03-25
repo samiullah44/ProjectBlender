@@ -1,9 +1,10 @@
-// lib/axios.ts
+// lib/axios.ts - UPDATED
 import axios from 'axios'
+import { toast } from 'react-hot-toast'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
-const axiosInstance = axios.create({
+export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
@@ -29,11 +30,28 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized access
+    const { response } = error
+
+    // Handle 401 Unauthorized
+    if (response?.status === 401) {
+      // Clear auth state
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      // Don't redirect if we're already on login page
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login'
+      }
     }
+
+    // Handle 403 Forbidden
+    if (response?.status === 403) {
+      toast.error('You do not have permission to access this resource')
+    }
+
+    // Handle 429 Rate Limit
+    if (response?.status === 429) {
+      toast.error('Too many requests. Please try again later.')
+    }
+
     return Promise.reject(error)
   }
 )

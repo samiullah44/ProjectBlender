@@ -10,24 +10,35 @@
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
     
     <!-- Trim unused code (smaller file) -->
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>link</TrimMode>
     
     <!-- Reduce warnings -->
-    <NoWarn>CS8600;CS8601;CS8602;CS8603;CS8604;CS8618</NoWarn>
+    <NoWarn>CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CA1416;$(NoWarn)</NoWarn>
     
     <!-- App info -->
     <AssemblyName>BlendFarm.Node</AssemblyName>
     <!-- <ApplicationIcon>node.ico</ApplicationIcon> Optional: Add icon -->
   </PropertyGroup>
 
+  <!-- Define WINDOWS constant when building on Windows -->
+  <PropertyGroup Condition="$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CliWrap" Version="3.6.6" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+    <PackageReference Include="Spectre.Console" Version="0.54.0" />
+     <PackageReference Include="System.Management" Version="10.0.3" />
+      <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.0" />
     <PackageReference Include="Grpc.Net.Client" Version="2.58.0" />
     <PackageReference Include="Google.Protobuf" Version="3.25.1" />
     <PackageReference Include="Grpc.Tools" Version="2.59.0">
@@ -44,7 +55,7 @@
     
     <!-- Include any config files -->
     <None Update="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     
     <!-- Include icon if you have one -->

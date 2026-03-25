@@ -30,7 +30,7 @@
 //     ].filter(Boolean);
 
 //     if (!origin) return callback(null, true);
-    
+
 //     const isAllowed = allowedOrigins.some(allowed => {
 //       if (typeof allowed === 'string') {
 //         return origin === allowed;
@@ -82,7 +82,7 @@
 // // Health check endpoint
 // app.get('/health', (req, res) => {
 //   const wsService = req.app.get('wsService') as WebSocketService;
-  
+
 //   res.json({
 //     status: 'ok',
 //     timestamp: new Date().toISOString(),
@@ -135,14 +135,45 @@
 // backend/src/index.ts
 import { server } from './app';
 import { connectDatabase } from './config/database';
+import { closeQueue } from './services/FrameQueueService';
+import Redis from 'ioredis';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 
+// Check Redis connection ping utility
+async function checkRedisConnection() {
+  try {
+    const client = new Redis({
+      host: process.env.REDIS_HOST || '127.0.0.1',
+      port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT) : 6379,
+      password: process.env.REDIS_PASSWORD || undefined,
+      lazyConnect: true // Prevent immediate crash if down
+    });
+
+    await client.connect();
+    await client.ping();
+    await client.quit();
+
+    console.log('✅ Redis connected successfully');
+    return true;
+  } catch (err) {
+    console.error('❌ Redis connection failed. Is the server running?');
+    return false;
+  }
+}
+
 (async () => {
   try {
+    // Initialize BullMQ queues
+    const { initializeQueues } = require('./services/FrameQueueService');
+    initializeQueues();
+
     // Connect to MongoDB
     await connectDatabase();
+
+    // Check Redis
+    const redisConnected = await checkRedisConnection();
 
     // Start the server
     server.listen(PORT, HOST, () => {
@@ -153,6 +184,7 @@ const HOST = process.env.HOST || '0.0.0.0';
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`☁️ Storage: AWS S3 (${process.env.S3_BUCKET_NAME || 'not-configured'})`);
       console.log(`🔌 WebSocket: ws://${HOST}:${PORT}/ws`);
+      console.log(`🗄️  Redis: ${redisConnected ? 'Connected (Queue System Live)' : 'Disconnected (Queues Offline)'}`);
       console.log('='.repeat(50));
     });
   } catch (error) {
@@ -169,3 +201,13 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
+
+// Graceful shutdown
+const gracefulShutdown = async () => {
+  console.log('\n🔄 Received shutdown signal, closing queues...');
+  await closeQueue();
+  process.exit(0);
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);

@@ -1,7 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using BlendFarm.Node.Services;
+using BlendFarm.Node.Models;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -10,49 +12,49 @@ using System.Net.Http;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Runtime.InteropServices;
 
 namespace BlendFarm.Node
 {
     public static class BlenderFinder
     {
-        private static string _targetVersion = "4.1.0";
         
-        public static async Task<string> FindBlenderAsync(ILogger logger)
+        public static async Task<string> FindBlenderAsync(ILogger logger, string targetVersion)
         {
-            logger.LogInformation($"🔍 Searching for Blender {_targetVersion} installation...");
+            logger.LogInformation($"[System] Searching for Blender {targetVersion} installation...");
             
             // 1. First check manually if the SPECIFIC VERSION of Blender is in PATH
-            logger.LogInformation("Checking if requested Blender version is in PATH...");
-            var blenderInPath = await CheckSpecificBlenderVersionInPathAsync();
+            logger.LogInformation("[System] Checking if requested Blender version is in PATH...");
+            var blenderInPath = await CheckSpecificBlenderVersionInPathAsync(targetVersion);
             if (!string.IsNullOrEmpty(blenderInPath))
             {
-                logger.LogInformation($"✅ Blender {_targetVersion} found in PATH: {blenderInPath}");
+                logger.LogInformation($"[System]   -> Blender {targetVersion} found in PATH: {blenderInPath}");
                 return blenderInPath;
             }
             
             // 2. Check common installation directories for SPECIFIC VERSION
-            logger.LogInformation("Checking common installation directories for specific version...");
-            var installedBlender = FindSpecificVersionInstalledBlender();
+            logger.LogInformation("[System] Checking common installation directories for specific version...");
+            var installedBlender = FindSpecificVersionInstalledBlender(targetVersion);
             if (!string.IsNullOrEmpty(installedBlender))
             {
-                logger.LogInformation($"✅ Found installed Blender {_targetVersion}: {installedBlender}");
+                logger.LogInformation($"[System]   -> Found installed Blender {targetVersion}: {installedBlender}");
                 return installedBlender;
             }
             
             // 3. Check our custom installation directory for SPECIFIC VERSION
-            var customPathBlender = await CheckCustomInstallationForVersionAsync();
+            var customPathBlender = await CheckCustomInstallationForVersionAsync(targetVersion);
             if (!string.IsNullOrEmpty(customPathBlender))
             {
-                logger.LogInformation($"✅ Found Blender {_targetVersion} in custom location: {customPathBlender}");
+                logger.LogInformation($"[System]   -> Found Blender {targetVersion} in custom location: {customPathBlender}");
                 return customPathBlender;
             }
             
             // 4. Download SPECIFIC VERSION to current directory
-            logger.LogWarning($"⚠️  Blender {_targetVersion} not found. Downloading to current directory...");
-            return await DownloadBlenderToCurrentDirectoryAsync(logger);
+            logger.LogWarning($"[System] Warning: Blender {targetVersion} not found. Downloading to current directory...");
+            return await DownloadBlenderToCurrentDirectoryAsync(logger, targetVersion);
         }
         
-        private static async Task<string> CheckSpecificBlenderVersionInPathAsync()
+        private static async Task<string> CheckSpecificBlenderVersionInPathAsync(string targetVersion)
         {
             try
             {
@@ -78,7 +80,7 @@ namespace BlendFarm.Node
                 {
                     // Parse Blender version from output
                     var version = ParseBlenderVersion(output);
-                    if (version == _targetVersion)
+                    if (version == targetVersion)
                     {
                         // Get the actual path from where command
                         var whereProcess = new Process
@@ -102,7 +104,7 @@ namespace BlendFarm.Node
                     }
                     else
                     {
-                        Console.WriteLine($"Found Blender {version} in PATH, but looking for {_targetVersion}");
+                        Console.WriteLine($"Found Blender {version} in PATH, but looking for {targetVersion}");
                     }
                 }
             }
@@ -111,7 +113,7 @@ namespace BlendFarm.Node
             return null;
         }
         
-        private static string FindSpecificVersionInstalledBlender()
+        private static string FindSpecificVersionInstalledBlender(string targetVersion)
         {
             // Common installation paths for Blender
             var possiblePaths = new[]
@@ -142,11 +144,11 @@ namespace BlendFarm.Node
                     try
                     {
                         // First, check for exact version directory
-                        var versionDir = Path.Combine(basePath, $"blender-{_targetVersion}-windows-x64");
+                        var versionDir = Path.Combine(basePath, $"blender-{targetVersion}-windows-x64");
                         if (Directory.Exists(versionDir))
                         {
                             var blenderExe = Path.Combine(versionDir, "blender.exe");
-                            if (File.Exists(blenderExe) && TestBlenderExecutable(blenderExe, _targetVersion))
+                            if (File.Exists(blenderExe) && TestBlenderExecutable(blenderExe, targetVersion))
                                 return blenderExe;
                         }
                         
@@ -154,7 +156,7 @@ namespace BlendFarm.Node
                         var blenderExes = Directory.GetFiles(basePath, "blender.exe", SearchOption.AllDirectories);
                         foreach (var exe in blenderExes)
                         {
-                            if (TestBlenderExecutable(exe, _targetVersion))
+                            if (TestBlenderExecutable(exe, targetVersion))
                                 return exe;
                         }
                     }
@@ -168,7 +170,7 @@ namespace BlendFarm.Node
             return null;
         }
         
-        private static async Task<string> CheckCustomInstallationForVersionAsync()
+        private static async Task<string> CheckCustomInstallationForVersionAsync(string targetVersion)
         {
             var currentDir = Directory.GetCurrentDirectory();
             var customDir = Path.Combine(currentDir, "Blender");
@@ -176,58 +178,59 @@ namespace BlendFarm.Node
             if (Directory.Exists(customDir))
             {
                 // Check for exact version directory
-                var versionDir = Path.Combine(customDir, $"blender-{_targetVersion}-windows-x64");
+                var versionDir = Path.Combine(customDir, $"blender-{targetVersion}-windows-x64");
                 if (Directory.Exists(versionDir))
                 {
                     var blenderExe = Path.Combine(versionDir, "blender.exe");
-                    if (File.Exists(blenderExe) && await TestBlenderExecutableAsync(blenderExe, _targetVersion))
+                    if (File.Exists(blenderExe) && await TestBlenderExecutableAsync(blenderExe, targetVersion))
                         return blenderExe;
                 }
                 
-                // Search all blender.exe files and check versions
-                try
+                // Search all blender.exe files and prioritize target version
+                var foundExe = FindBlenderInDirectory(customDir, targetVersion);
+                if (!string.IsNullOrEmpty(foundExe) && await TestBlenderExecutableAsync(foundExe, targetVersion))
                 {
-                    var blenderExes = Directory.GetFiles(customDir, "blender.exe", SearchOption.AllDirectories);
-                    foreach (var exe in blenderExes)
-                    {
-                        if (await TestBlenderExecutableAsync(exe, _targetVersion))
-                            return exe;
-                    }
+                    return foundExe;
                 }
-                catch { }
             }
             
             return null;
         }
         
-        private static async Task<string> DownloadBlenderToCurrentDirectoryAsync(ILogger logger)
+        private static async Task<string> DownloadBlenderToCurrentDirectoryAsync(ILogger logger, string targetVersion)
         {
             var currentDir = Directory.GetCurrentDirectory();
             var downloadDir = Path.Combine(currentDir, "Blender");
-            var versionDir = Path.Combine(downloadDir, $"blender-{_targetVersion}-windows-x64");
+            var versionDir = Path.Combine(downloadDir, $"blender-{targetVersion}-windows-x64");
             
             // Check if already downloaded with correct version
             if (Directory.Exists(versionDir))
             {
                 var existingBlender = Path.Combine(versionDir, "blender.exe");
-                if (File.Exists(existingBlender) && await TestBlenderExecutableAsync(existingBlender, _targetVersion))
+                if (File.Exists(existingBlender) && await TestBlenderExecutableAsync(existingBlender, targetVersion))
                 {
-                    logger.LogInformation($"✅ Using existing Blender {_targetVersion} installation: {existingBlender}");
+                    logger.LogInformation($"[System]   -> Using existing Blender {targetVersion} installation: {existingBlender}");
                     return existingBlender;
                 }
             }
+            
+            // Determine version prefix for the release folder:
+            // Blender < 3.0 has 4-digit minor (e.g. "2.93"), >= 3.0 has 3-digit (e.g. "4.1")
+            var versionPrefix = (Version.TryParse(targetVersion, out var parsedVer) && parsedVer.Major < 3)
+                ? targetVersion.Substring(0, 4)
+                : targetVersion.Substring(0, 3);
             
             // Try different URLs for Blender download
             var urlsToTry = new[]
             {
                 // Primary URL - Direct download from blender.org
-                $"https://download.blender.org/release/Blender{_targetVersion.Substring(0, 3)}/blender-{_targetVersion}-windows-x64.zip",
+                $"https://download.blender.org/release/Blender{versionPrefix}/blender-{targetVersion}-windows-x64.zip",
                 
                 // Alternative URL structure
-                $"https://download.blender.org/release/Blender{_targetVersion.Substring(0, 3)}/blender-{_targetVersion}-windows64.zip",
+                $"https://download.blender.org/release/Blender{versionPrefix}/blender-{targetVersion}-windows64.zip",
                 
                 // Mirror URL
-                $"https://mirror.clarkson.edu/blender/release/Blender{_targetVersion.Substring(0, 3)}/blender-{_targetVersion}-windows-x64.zip",
+                $"https://mirror.clarkson.edu/blender/release/Blender{versionPrefix}/blender-{targetVersion}-windows-x64.zip",
                 
                 // If 5.0.1 fails, try 4.1.1 as fallback
                 "https://download.blender.org/release/Blender4.1/blender-4.1.1-windows-x64.zip"
@@ -239,7 +242,7 @@ namespace BlendFarm.Node
             {
                 try
                 {
-                    logger.LogInformation($"📥 Trying URL: {downloadUrl}");
+                    logger.LogInformation($"[Download] Trying URL: {downloadUrl}");
                     
                     using (var client = new HttpClient())
                     {
@@ -255,23 +258,22 @@ namespace BlendFarm.Node
                                 var buffer = new byte[8192];
                                 var isMoreToRead = true;
                                 
-                                logger.LogInformation($"✅ Downloading Blender {_targetVersion} from: {downloadUrl}");
-                                
+                                logger.LogInformation($"[Download] Downloading Blender {targetVersion} from: {downloadUrl}");
                                 using (var stream = await response.Content.ReadAsStreamAsync())
                                 using (var fs = new FileStream(tempZip, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
                                 {
                                     // Show initial progress
                                     if (totalBytes > 0)
                                     {
-                                        logger.LogInformation($"📦 File size: {FormatBytes(totalBytes)}");
+                                        Console.WriteLine($"Blender Size: {FormatBytes(totalBytes)}");
                                     }
                                     else
                                     {
-                                        logger.LogInformation($"📦 File size: Unknown (streaming download)");
+                                        Console.WriteLine($"Blender Size: Unknown (streaming download)");
                                     }
                                     
                                     var lastProgressUpdate = DateTime.Now;
-                                    var progressUpdateInterval = TimeSpan.FromSeconds(1);
+                                    var progressUpdateInterval = TimeSpan.FromSeconds(0.5);
                                     
                                     while (isMoreToRead)
                                     {
@@ -286,34 +288,28 @@ namespace BlendFarm.Node
                                             totalRead += read;
                                             
                                             // Show progress if we know total size
-                                            if (totalBytes > 0)
+                                            if (DateTime.Now - lastProgressUpdate >= progressUpdateInterval)
                                             {
-                                                var progress = (double)totalRead / totalBytes * 100;
-                                                
-                                                // Only update progress every second to avoid spam
-                                                if (DateTime.Now - lastProgressUpdate >= progressUpdateInterval)
+                                                if (totalBytes > 0)
                                                 {
-                                                    logger.LogInformation($"⏬ Download progress: {progress:F1}% ({FormatBytes(totalRead)} / {FormatBytes(totalBytes)})");
-                                                    lastProgressUpdate = DateTime.Now;
+                                                    var progress = (double)totalRead / totalBytes * 100;
+                                                    Console.Write($"\rDownloading Blender : [{progress:F1}% / 100%] ({FormatBytes(totalRead)} downloaded)   ");
                                                 }
-                                            }
-                                            else
-                                            {
-                                                // Show bytes downloaded if total size unknown
-                                                if (DateTime.Now - lastProgressUpdate >= progressUpdateInterval)
+                                                else
                                                 {
-                                                    logger.LogInformation($"⏬ Downloaded: {FormatBytes(totalRead)}");
-                                                    lastProgressUpdate = DateTime.Now;
+                                                    Console.Write($"\rDownloading Blender : ({FormatBytes(totalRead)} downloaded)   ");
                                                 }
+                                                lastProgressUpdate = DateTime.Now;
                                             }
                                         }
                                     }
                                     
+                                    Console.WriteLine();
                                     // Show final download complete message
-                                    logger.LogInformation($"✅ Download complete: {FormatBytes(totalRead)}");
+                                    logger.LogInformation($"[Download] Download complete: {FormatBytes(totalRead)}");
                                 }
                                 
-                                logger.LogInformation("📦 Extracting Blender...");
+                                logger.LogInformation("[System] Extracting Blender...");
                                 
                                 // Ensure directory exists
                                 Directory.CreateDirectory(downloadDir);
@@ -322,23 +318,23 @@ namespace BlendFarm.Node
                                 await ExtractZipWithProgressAsync(tempZip, downloadDir, logger);
                                 
                                 // Find blender.exe
-                                var blenderExe = FindBlenderInDirectory(downloadDir);
+                                var blenderExe = FindBlenderInDirectory(downloadDir, targetVersion);
                                 
-                                if (!string.IsNullOrEmpty(blenderExe) && await TestBlenderExecutableAsync(blenderExe, _targetVersion))
+                                if (!string.IsNullOrEmpty(blenderExe) && await TestBlenderExecutableAsync(blenderExe, targetVersion))
                                 {
-                                    logger.LogInformation($"✅ Blender {_targetVersion} installed to: {blenderExe}");
+                                    logger.LogInformation($"[System]   -> Blender {targetVersion} installed to: {blenderExe}");
                                     return blenderExe;
                                 }
                                 else if (!string.IsNullOrEmpty(blenderExe))
                                 {
                                     // Found Blender but wrong version
                                     var version = await GetBlenderVersionAsync(blenderExe);
-                                    logger.LogWarning($"⚠️  Found Blender {version}, but looking for {_targetVersion}");
+                                    logger.LogWarning($"[System] Warning: Found Blender {version}, but looking for {targetVersion}");
                                     // Continue to try next URL
                                 }
                                 else
                                 {
-                                    logger.LogWarning($"⚠️  Blender extracted but blender.exe not found");
+                                    logger.LogWarning($"[System] Warning: Blender extracted but blender.exe not found");
                                 }
                             }
                             else
@@ -364,8 +360,8 @@ namespace BlendFarm.Node
             }
             
             // If all URLs failed, try a manual approach
-            logger.LogError("❌ All download URLs failed. Trying alternative approach...");
-            return await DownloadBlenderManualFallbackAsync(logger, downloadDir);
+            logger.LogError("[Download] Error: All download URLs failed. Trying alternative approach...");
+            return await DownloadBlenderManualFallbackAsync(logger, downloadDir, targetVersion);
         }
         
         // Helper method to extract ZIP with progress
@@ -376,21 +372,11 @@ namespace BlendFarm.Node
                 using (var archive = ZipFile.OpenRead(zipPath))
                 {
                     var totalEntries = archive.Entries.Count;
-                    var processedEntries = 0;
                     
-                    logger.LogInformation($"📦 Extracting {totalEntries} files...");
+                    Console.Write("Extracting...   ");
                     
                     foreach (var entry in archive.Entries)
                     {
-                        processedEntries++;
-                        var progress = (double)processedEntries / totalEntries * 100;
-                        
-                        // Update progress every 10 files or 10% progress
-                        if (processedEntries % 10 == 0 || processedEntries == totalEntries)
-                        {
-                            logger.LogInformation($"📂 Extraction progress: {progress:F1}% ({processedEntries}/{totalEntries}) - {entry.FullName}");
-                        }
-                        
                         try
                         {
                             var destinationPath = Path.Combine(extractPath, entry.FullName);
@@ -414,7 +400,8 @@ namespace BlendFarm.Node
                         }
                     }
                     
-                    logger.LogInformation($"✅ Extraction complete: {totalEntries} files extracted");
+                    Console.WriteLine($"\rExtracted {totalEntries} files        ");
+                    logger.LogInformation($"[System]   -> Extraction complete: {totalEntries} files extracted");
                 }
             }
             catch (Exception ex)
@@ -440,30 +427,32 @@ namespace BlendFarm.Node
             return $"{size:0.##} {suffixes[suffixIndex]}";
         }
         
-        private static async Task<string> DownloadBlenderManualFallbackAsync(ILogger logger, string downloadDir)
+        private static async Task<string> DownloadBlenderManualFallbackAsync(ILogger logger, string downloadDir, string targetVersion)
         {
             try
             {
                 // Try using PowerShell to download
-                logger.LogInformation("🔄 Trying PowerShell download...");
+                logger.LogInformation("[Download] Trying PowerShell download...");
                 
-                var psScript = @"
-$url = 'https://download.blender.org/release/Blender5.0/blender-5.0.1-windows-x64.zip'
-$output = $env:TEMP + '\blender.zip'
-$installDir = '" + downloadDir.Replace("\\", "\\\\") + @"'
-
-# Download
-Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing
-
-# Extract
-Expand-Archive -Path $output -DestinationPath $installDir -Force
-
-# Find blender.exe
-$blenderExe = Get-ChildItem -Path $installDir -Filter 'blender.exe' -Recurse | Select-Object -First 1
-if ($blenderExe) {
-    $blenderExe.FullName
-}
-";
+                var psPrefix = (Version.TryParse(targetVersion, out var psFallbackVer) && psFallbackVer.Major < 3)
+                    ? targetVersion.Substring(0, 4)
+                    : targetVersion.Substring(0, 3);
+                var psScript =
+                    "$url = 'https://download.blender.org/release/Blender" + psPrefix + "/blender-" + targetVersion + "-windows-x64.zip'\n" +
+                    "$output = $env:TEMP + '\\blender.zip'\n" +
+                    "$installDir = '" + downloadDir.Replace("\\", "\\\\") + "'\n" +
+                    "\n" +
+                    "# Download\n" +
+                    "Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing\n" +
+                    "\n" +
+                    "# Extract\n" +
+                    "Expand-Archive -Path $output -DestinationPath $installDir -Force\n" +
+                    "\n" +
+                    "# Find blender.exe\n" +
+                    "$blenderExe = Get-ChildItem -Path $installDir -Filter 'blender.exe' -Recurse | Select-Object -First 1\n" +
+                    "if ($blenderExe) {\n" +
+                    "    $blenderExe.FullName\n" +
+                    "}\n";
                 
                 var tempScript = Path.GetTempFileName() + ".ps1";
                 File.WriteAllText(tempScript, psScript);
@@ -490,15 +479,15 @@ if ($blenderExe) {
                     var blenderExe = output.Trim();
                     if (File.Exists(blenderExe))
                     {
-                        if (await TestBlenderExecutableAsync(blenderExe, _targetVersion))
+                        if (await TestBlenderExecutableAsync(blenderExe, targetVersion))
                         {
-                            logger.LogInformation($"✅ Blender {_targetVersion} downloaded via PowerShell: {blenderExe}");
+                            logger.LogInformation($"[System] Blender {targetVersion} downloaded via PowerShell: {blenderExe}");
                             return blenderExe;
                         }
                         else
                         {
                             var version = await GetBlenderVersionAsync(blenderExe);
-                            logger.LogWarning($"Downloaded Blender {version}, but wanted {_targetVersion}");
+                            logger.LogWarning($"[System] Downloaded Blender {version}, but wanted {targetVersion}");
                         }
                     }
                 }
@@ -510,14 +499,14 @@ if ($blenderExe) {
             
             // Last resort: Manual instructions
             logger.LogError($@"
-❌ Failed to download Blender {_targetVersion} automatically.
+[Download] Error: Failed to download Blender {targetVersion} automatically.
 
-📋 MANUAL INSTALLATION REQUIRED:
+[MANUAL INSTALLATION REQUIRED]
 
-1. Please download Blender {_targetVersion} manually from:
+1. Please download Blender {targetVersion} manually from:
    https://www.blender.org/download/
 
-2. Choose: Blender {_targetVersion}
+2. Choose: Blender {targetVersion}
 
 3. Download the ZIP version (not installer)
 
@@ -525,7 +514,7 @@ if ($blenderExe) {
    {downloadDir}
 
 5. Make sure 'blender.exe' is in:
-   {downloadDir}\blender-{_targetVersion}-windows-x64\blender.exe
+   {downloadDir}\blender-{targetVersion}-windows-x64\blender.exe
 
 6. Run the node again
 ");
@@ -533,7 +522,7 @@ if ($blenderExe) {
             return null;
         }
         
-        private static string FindBlenderInDirectory(string directory)
+        private static string? FindBlenderInDirectory(string directory, string? targetVersion = null)
         {
             if (!Directory.Exists(directory))
                 return null;
@@ -547,6 +536,20 @@ if ($blenderExe) {
             try
             {
                 var files = Directory.GetFiles(directory, "blender.exe", SearchOption.AllDirectories);
+                if (files.Length == 0) return null;
+
+                if (!string.IsNullOrEmpty(targetVersion))
+                {
+                    // Prioritize path that contains the target version (e.g. "4.5.0")
+                    var bestMatch = files.FirstOrDefault(f => f.Contains(targetVersion));
+                    if (bestMatch != null) return bestMatch;
+                    
+                    // Fallback to major.minor (e.g. "4.5")
+                    var shortVersion = targetVersion.Split('.').Take(2).Aggregate((a, b) => $"{a}.{b}");
+                    bestMatch = files.FirstOrDefault(f => f.Contains(shortVersion));
+                    if (bestMatch != null) return bestMatch;
+                }
+
                 return files.FirstOrDefault();
             }
             catch
@@ -579,15 +582,15 @@ if ($blenderExe) {
                 if (process.ExitCode == 0 && output.Contains("Blender"))
                 {
                     var version = ParseBlenderVersion(output);
-                    return version == expectedVersion;
+                    if (version == expectedVersion)
+                        return true;
                 }
             }
-            catch
-            {
-                return false;
-            }
+            catch { }
             
-            return false;
+            // Fallback: check for a version-matching subfolder next to blender.exe
+            // e.g. blender-windows64/2.93/ tells us this is a 2.93.x installation
+            return CheckVersionSubfolder(path, expectedVersion);
         }
         
         private static async Task<bool> TestBlenderExecutableAsync(string path, string expectedVersion)
@@ -614,13 +617,45 @@ if ($blenderExe) {
                 if (process.ExitCode == 0 && output.Contains("Blender"))
                 {
                     var version = ParseBlenderVersion(output);
-                    return version == expectedVersion;
+                    if (version == expectedVersion)
+                        return true;
                 }
             }
-            catch
+            catch { }
+            
+            // Fallback: check for a version-matching subfolder next to blender.exe
+            // e.g. blender-windows64/2.93/ tells us this is a 2.93.x installation
+            return CheckVersionSubfolder(path, expectedVersion);
+        }
+        
+        /// <summary>
+        /// Checks if a subfolder whose name matches major.minor of <paramref name="expectedVersion"/>
+        /// exists in the same directory as <paramref name="blenderExePath"/>.
+        /// e.g. for "2.93.0" it looks for a subfolder called "2.93" next to blender.exe.
+        /// </summary>
+        private static bool CheckVersionSubfolder(string blenderExePath, string expectedVersion)
+        {
+            try
             {
-                return false;
+                var blenderDir = Path.GetDirectoryName(blenderExePath);
+                if (string.IsNullOrEmpty(blenderDir) || !Directory.Exists(blenderDir))
+                    return false;
+                
+                // Build major.minor prefix from expectedVersion ("2.93.0" → "2.93")
+                var parts = expectedVersion.Split('.');
+                if (parts.Length < 2) return false;
+                var majorMinor = $"{parts[0]}.{parts[1]}";
+                
+                // Look for a direct subfolder matching or starting with major.minor
+                var subDirs = Directory.GetDirectories(blenderDir);
+                foreach (var dir in subDirs)
+                {
+                    var dirName = Path.GetFileName(dir);
+                    if (dirName == majorMinor || dirName.StartsWith(majorMinor + "."))
+                        return true;
+                }
             }
+            catch { }
             
             return false;
         }
@@ -700,10 +735,57 @@ if ($blenderExe) {
     class Program
     {
         private static string _targetVersion = "5.0.1";
-        private static string _blenderPath = null;
-        
+        private static string? _blenderPath = null;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern IntPtr GetStdHandle(int nStdHandle);
+
+        [DllImport("kernel32.dll")]
+        static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+
+        [DllImport("kernel32.dll")]
+        static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+
+        const int STD_INPUT_HANDLE = -10;
+        const uint ENABLE_QUICK_EDIT_MODE = 0x0040;
+        const uint ENABLE_EXTENDED_FLAGS = 0x0080;
+
+        private static void DisableQuickEdit()
+        {
+            try
+            {
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    IntPtr consoleHandle = GetStdHandle(STD_INPUT_HANDLE);
+                    if (GetConsoleMode(consoleHandle, out uint mode))
+                    {
+                        // Clear the QuickEdit flag and ensure EXTENDED_FLAGS is set
+                        mode &= ~ENABLE_QUICK_EDIT_MODE;
+                        mode |= ENABLE_EXTENDED_FLAGS;
+
+                        if (!SetConsoleMode(consoleHandle, mode))
+                        {
+                            // Could not set mode
+                        }
+                    }
+                }
+            }
+            catch { /* Ignore if it fails */ }
+        }
+
         static async Task Main(string[] args)
         {
+            // Disable QuickEdit to prevent application hanging on mouse click
+            DisableQuickEdit();
+
+            // If started by Windows AutoStart, the default directory is System32. 
+            // We must switch to the EXE directory so relative paths work.
+            if (Directory.GetCurrentDirectory().Contains("System32", StringComparison.OrdinalIgnoreCase))
+            {
+                var exeDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppDomain.CurrentDomain.BaseDirectory;
+                try { Directory.SetCurrentDirectory(exeDir); } catch { }
+            }
+
             Console.Title = $"BlendFarm Node v1.0 (Blender {_targetVersion})";
             
             // Check if we should run a test
@@ -717,10 +799,10 @@ if ($blenderExe) {
             await RunAsServiceAsync();
         }
         
-        static async Task RunBlenderTestAsync()
+        static async Task RunBlenderTestAsync(string targetVersion = "4.5.0")
         {
-            Console.WriteLine($"🧪 Testing Blender {_targetVersion} + Python Integration...");
-            Console.WriteLine(new string('═', 50));
+            Console.WriteLine($"[TEST] Testing Blender {targetVersion} + Python Integration...");
+            Console.WriteLine(new string('-', 50));
             
             try
             {
@@ -728,7 +810,7 @@ if ($blenderExe) {
                 var testBlendFile = "test_scene.blend";
                 if (!File.Exists(testBlendFile))
                 {
-                    Console.WriteLine("❌ test_scene.blend not found!");
+                    Console.WriteLine("[TEST] Error: test_scene.blend not found!");
                     Console.WriteLine("   Creating a simple test file...");
                     
                     // Create a minimal test blend file using Blender
@@ -736,45 +818,45 @@ if ($blenderExe) {
                     
                     if (!File.Exists(testBlendFile))
                     {
-                        Console.WriteLine("⚠️  Please place a .blend file in this directory");
+                        Console.WriteLine("[TEST] Warning: Please place a .blend file in this directory");
                         Console.WriteLine("   Or run: blender -b -o //test_scene.blend -F BLEND -f 1");
                         return;
                     }
                 }
                 
-                Console.WriteLine($"✅ Found: {testBlendFile}");
+                Console.WriteLine($"[TEST] Found: {testBlendFile}");
                 
                 // Step 2: Check if Python scripts exist
                 if (!File.Exists("Scripts/render.py"))
                 {
-                    Console.WriteLine("❌ Scripts/render.py not found!");
+                    Console.WriteLine("[TEST] Error: Scripts/render.py not found!");
                     return;
                 }
                 
-                Console.WriteLine("✅ Found: Scripts/render.py");
+                Console.WriteLine("[TEST] Found: Scripts/render.py");
                 
                 // Step 3: Get or install SPECIFIC VERSION of Blender
-                _blenderPath = await GetOrInstallSpecificBlenderAsync();
+                _blenderPath = await GetOrInstallSpecificBlenderAsync(targetVersion);
                 if (string.IsNullOrEmpty(_blenderPath))
                 {
-                    Console.WriteLine($"❌ Failed to get Blender {_targetVersion}!");
+                    Console.WriteLine($"[TEST] Error: Failed to get Blender {targetVersion}!");
                     return;
                 }
                 
                 // Verify version
                 var actualVersion = await GetBlenderVersionAsync(_blenderPath);
-                Console.WriteLine($"✅ Blender {actualVersion} found at: {_blenderPath}");
+                Console.WriteLine($"[TEST] Blender {actualVersion} found at: {_blenderPath}");
                 
-                if (actualVersion != _targetVersion)
+                if (actualVersion != targetVersion)
                 {
-                    Console.WriteLine($"⚠️  Warning: Found Blender {actualVersion}, but wanted {_targetVersion}");
+                    Console.WriteLine($"[TEST] Warning: Found Blender {actualVersion}, but wanted {targetVersion}");
                 }
                 
                 // Step 4: Check .blend file compatibility with installed Blender version
                 var blendFileCompatible = await CheckBlendFileCompatibilityAsync(testBlendFile, _blenderPath);
                 if (!blendFileCompatible)
                 {
-                    Console.WriteLine("⚠️  .blend file may not be compatible with installed Blender version");
+                    Console.WriteLine("[TEST] Warning: .blend file may not be compatible with installed Blender version");
                     Console.WriteLine("   Consider creating a new .blend file with this Blender version");
                 }
                 
@@ -788,11 +870,11 @@ if ($blenderExe) {
                 var logger = loggerFactory.CreateLogger<PythonRunnerService>();
                 var runner = new PythonRunnerService(logger, _blenderPath);
                 
-                Console.WriteLine("\n🎬 Starting render test...");
-                Console.WriteLine(new string('═', 50));
+                Console.WriteLine("\n[TEST] Starting render test...");
+                Console.WriteLine(new string('-', 50));
                 
                 var outputFile = Path.Combine(Directory.GetCurrentDirectory(), $"test_output_{DateTime.Now:yyyyMMdd_HHmmss}.png");
-                Console.WriteLine($"📁 Output will be at: {outputFile}");
+                Console.WriteLine($"[TEST] Output will be at: {outputFile}");
                 
                 var success = await runner.RunRenderAsync(
                     blendFilePath: testBlendFile,
@@ -800,19 +882,19 @@ if ($blenderExe) {
                     outputPath: outputFile
                 );
                 
-                Console.WriteLine(new string('═', 50));
+                Console.WriteLine(new string('-', 50));
                 
                 if (success)
                 {
-                    Console.WriteLine($"✅ TEST PASSED! Output saved to: {outputFile}");
+                    Console.WriteLine($"[TEST] PASSED! Output saved to: {outputFile}");
                     
                     if (File.Exists(outputFile))
                     {
                         var fileInfo = new FileInfo(outputFile);
-                        Console.WriteLine($"📊 File size: {fileInfo.Length / 1024} KB");
+                        Console.WriteLine($"[TEST] File size: {fileInfo.Length / 1024} KB");
                     }
                     
-                    Console.WriteLine($"\n🎉 Your C# + Python node with Blender {actualVersion} is working!");
+                    Console.WriteLine($"\n[TEST] Your C# + Python node with Blender {actualVersion} is working!");
                     Console.WriteLine("Next steps:");
                     Console.WriteLine("1. Run without 'test' argument to start the full service");
                     Console.WriteLine("2. Add more jobs to JobQueueService");
@@ -820,15 +902,15 @@ if ($blenderExe) {
                 }
                 else
                 {
-                    Console.WriteLine("❌ TEST FAILED - Check logs above");
-                    Console.WriteLine("\n🔧 Troubleshooting:");
+                    Console.WriteLine("[TEST] FAILED - Check logs above");
+                    Console.WriteLine("\n[Troubleshooting]:");
                     Console.WriteLine($"1. Check if Blender can run manually:");
                     Console.WriteLine($"   \"{_blenderPath}\" --version");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"💥 Test failed with exception: {ex.Message}");
+                Console.WriteLine($"[TEST] Error: Test failed with exception: {ex.Message}");
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
             }
             
@@ -836,9 +918,9 @@ if ($blenderExe) {
             Console.ReadKey();
         }
         
-        static async Task<string> GetOrInstallSpecificBlenderAsync()
+        static async Task<string> GetOrInstallSpecificBlenderAsync(string targetVersion)
         {
-            Console.WriteLine($"\n🔍 Looking for Blender {_targetVersion} installation...");
+            Console.WriteLine($"\n[System] Looking for Blender {targetVersion} installation...");
             
             using var loggerFactory = LoggerFactory.Create(builder =>
             {
@@ -849,7 +931,7 @@ if ($blenderExe) {
             var logger = loggerFactory.CreateLogger("BlenderFinder");
             
             // Use the improved BlenderFinder
-            return await BlenderFinder.FindBlenderAsync(logger);
+            return await BlenderFinder.FindBlenderAsync(logger, targetVersion);
         }
         
         static async Task<string> GetBlenderVersionAsync(string blenderPath)
@@ -944,7 +1026,7 @@ if ($blenderExe) {
         
         static async Task RunAsServiceAsync()
         {
-            Console.WriteLine($"🚀 Starting BlendFarm Node as Service (Blender {_targetVersion})...");
+            Console.WriteLine($"[System] Starting BlendFarm Node as Service (Blender default 4.5.0)...");
             
             using var loggerFactory = LoggerFactory.Create(builder =>
             {
@@ -953,23 +1035,48 @@ if ($blenderExe) {
             });
             
             var logger = loggerFactory.CreateLogger<Program>();
+
+            var configLogger = loggerFactory.CreateLogger<ConfigurationManagerService>();
+            var configService = new ConfigurationManagerService(configLogger);
+
+            var autoStartLogger = loggerFactory.CreateLogger<AutoStartService>();
+            var autoStartService = new AutoStartService(autoStartLogger);
+
+            // Silent Path Refresh: Every time the node starts, if auto-start is enabled, 
+            // we refresh the registry key to point to the current location.
+            // This handles cases where the user moves the folder to a different drive.
+            if (configService.CurrentConfig.Permissions.AutoStart.Granted)
+            {
+                await autoStartService.RegisterAutoStartAsync();
+            }
+
+            if (Environment.UserInteractive)
+            {
+                var interactiveStartup = new InteractiveStartupService(configService, autoStartService);
+                bool proceed = await interactiveStartup.RunStartupInteractiveFlowAsync();
+                if (!proceed)
+                {
+                    return;
+                }
+            }
             
             // Find or download SPECIFIC VERSION of Blender
-            _blenderPath = await BlenderFinder.FindBlenderAsync(logger);
+            string defaultTargetVersion = "4.5.0";
+            _blenderPath = await BlenderFinder.FindBlenderAsync(logger, defaultTargetVersion);
             if (string.IsNullOrEmpty(_blenderPath))
             {
-                Console.WriteLine($"❌ Failed to find or install Blender {_targetVersion}. Service cannot start.");
+                Console.WriteLine($"[System] Error: Failed to find or install Blender {defaultTargetVersion}. Service cannot start.");
                 Console.WriteLine("Press any key to exit...");
                 Console.ReadKey();
                 return;
             }
             
             var actualVersion = await GetBlenderVersionAsync(_blenderPath);
-            Console.WriteLine($"🎬 Using Blender {actualVersion}: {_blenderPath}");
+            Console.WriteLine($"[System] Using Blender {actualVersion}: {_blenderPath}");
             
-            if (actualVersion != _targetVersion)
+            if (actualVersion != defaultTargetVersion)
             {
-                Console.WriteLine($"⚠️  Note: Using Blender {actualVersion} instead of requested {_targetVersion}");
+                Console.WriteLine($"[System] Warning: Using Blender {actualVersion} instead of requested {defaultTargetVersion}");
             }
             
             // Check if Scripts directory exists
@@ -977,41 +1084,169 @@ if ($blenderExe) {
             if (!Directory.Exists(scriptsDir))
             {
                 Directory.CreateDirectory(scriptsDir);
-                Console.WriteLine($"📁 Created Scripts directory: {scriptsDir}");
+                Console.WriteLine($"[System] Created Scripts directory: {scriptsDir}");
                 
                 // Create a simple render script
                 File.WriteAllText(Path.Combine(scriptsDir, "render.py"), 
                     "# Render script will be generated automatically");
             }
+            // Handle Persistent Friendly Name
+            var exePath = Environment.ProcessPath ?? AppDomain.CurrentDomain.BaseDirectory;
+            var baseDir = Path.GetDirectoryName(exePath) ?? AppDomain.CurrentDomain.BaseDirectory;
             
-            // Build the host - pass blender path as parameter
-            var host = Host.CreateDefaultBuilder()
-                .ConfigureServices((context, services) =>
-                {
-                    // Register PythonRunnerService with the found blender path
-                    services.AddSingleton<PythonRunnerService>(provider => 
-                        new PythonRunnerService(
-                            provider.GetRequiredService<ILogger<PythonRunnerService>>(), 
-                            _blenderPath));
-                    
-                    // Register NodeBackendService
-                    services.AddHostedService<NodeBackendService>();
-                    
-                    // Configure logging
-                    services.AddLogging(configure =>
-                    {
-                        configure.AddConsole();
-                        configure.SetMinimumLevel(LogLevel.Information);
-                    });
-                })
-                .UseConsoleLifetime()
+            // Ensure appsettings.json exists (David fallback)
+            EnsureAppSettingsExists(baseDir);
+
+            var config = new ConfigurationBuilder()
+                .SetBasePath(baseDir)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                 .Build();
 
-            Console.WriteLine("📋 Press Ctrl+C to stop the node");
-            Console.WriteLine($"🔧 Version: 1.0 | Blender: {actualVersion} | .NET 10.0.102");
-            Console.WriteLine(new string('═', 50));
+            string currentFriendlyName = config["NodeSettings:FriendlyName"] ?? "node_auto";
+            string finalFriendlyName = currentFriendlyName;
+
+            if (currentFriendlyName == "node_auto")
+            {
+                Console.Write("\n[Config] Enter a friendly name for this node (e.g. 'David-node') or leave empty for auto: ");
+                string inputName = Console.ReadLine();
+                if (!string.IsNullOrWhiteSpace(inputName))
+                {
+                    finalFriendlyName = inputName.Trim();
+                    SaveFriendlyName(finalFriendlyName);
+                    Console.WriteLine($"[Config] Friendly name '{finalFriendlyName}' saved to appsettings.json");
+                }
+            }
+
+            var identityLogger = loggerFactory.CreateLogger<NodeIdentityService>();
+            var identityService = new NodeIdentityService(finalFriendlyName == "node_auto" ? null : finalFriendlyName, identityLogger);
+            
+            // Try to load existing identity early so background services (like CleanupService) have access to it
+            identityService.TryLoadIdentity();
+
+            // Build the host - pass blender path as parameter
+           var host = Host.CreateDefaultBuilder()
+    .ConfigureServices((context, services) =>
+    {
+        // Register config service
+        services.AddSingleton(configService);
+        
+        // Register identity service
+        services.AddSingleton(identityService);
+
+        // Register AutoStart service
+        services.AddSingleton(autoStartService);
+
+        // Register PythonRunnerService
+        services.AddSingleton<PythonRunnerService>(provider => 
+            new PythonRunnerService(
+                provider.GetRequiredService<ILogger<PythonRunnerService>>(), 
+                _blenderPath));
+        
+        // Register SpeedtestService
+        services.AddSingleton<SpeedtestService>();
+        
+        // Register NodeBackendService - ILoggerFactory will be auto-injected
+        services.AddHostedService<NodeBackendService>();
+
+        // Register CleanupService
+        services.AddHostedService<CleanupService>();
+
+        // Register HttpClient
+        services.AddHttpClient();
+        
+        // Configure logging
+        services.AddLogging(configure =>
+        {
+            configure.AddConsole();
+            configure.SetMinimumLevel(LogLevel.Information);
+        });
+    })
+    .UseConsoleLifetime()
+    .Build();
+
+            Console.WriteLine("[System] Press Ctrl+C to stop the node");
+            Console.WriteLine($"[System] Version: 1.0 | Blender: {actualVersion} | .NET 10.0.102");
+            Console.WriteLine(new string('-', 50));
             
             await host.RunAsync();
+        }
+
+        private static void SaveFriendlyName(string name)
+        {
+            try
+            {
+                var exePath = Environment.ProcessPath ?? AppDomain.CurrentDomain.BaseDirectory;
+                var baseDir = Path.GetDirectoryName(exePath) ?? AppDomain.CurrentDomain.BaseDirectory;
+                var appSettingsPath = Path.Combine(baseDir, "appsettings.json");
+                if (!File.Exists(appSettingsPath)) return;
+
+                var json = File.ReadAllText(appSettingsPath);
+                dynamic config = Newtonsoft.Json.JsonConvert.DeserializeObject(json);
+                
+                if (config.NodeSettings == null) config.NodeSettings = new Newtonsoft.Json.Linq.JObject();
+                config.NodeSettings.FriendlyName = name;
+
+                string updatedJson = Newtonsoft.Json.JsonConvert.SerializeObject(config, Newtonsoft.Json.Formatting.Indented);
+                File.WriteAllText(appSettingsPath, updatedJson);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Config] Error: Failed to save friendly name to appsettings.json: {ex.Message}");
+            }
+        }
+
+        private static void EnsureAppSettingsExists(string baseDir)
+        {
+            var appSettingsPath = Path.Combine(baseDir, "appsettings.json");
+            if (File.Exists(appSettingsPath)) return;
+
+            try
+            {
+                Console.WriteLine("[Config] appsettings.json not found. Generating default configuration...");
+                var defaultConfig = new
+                {
+                    Logging = new
+                    {
+                        LogLevel = new
+                        {
+                            Default = "Information",
+                            Microsoft = "Warning",
+                            Microsoft_Hosting_Lifetime = "Information",
+                            System_Net_Http_HttpClient = "Warning"
+                        }
+                    },
+                    NodeSettings = new
+                    {
+                        NodeId = "node_auto",
+                        FriendlyName = "node_auto",
+                        MaxConcurrentJobs = 1,
+                        HeartbeatIntervalSeconds = 30,
+                        BlenderPath = "blender",
+                        EnableDebugLogging = true,
+                        DownloadRetryCount = 3,
+                        DownloadTimeoutMinutes = 15
+                    },
+                    Backend = new
+                    {
+                        Url = "http://localhost:3000",
+                        HealthCheckEndpoint = "/health",
+                        ApiTimeoutSeconds = 120,
+                        EnableSslVerification = true
+                    }
+                };
+
+                // Fix dot in keys which dynamic doesn't like well
+                string json = Newtonsoft.Json.JsonConvert.SerializeObject(defaultConfig, Newtonsoft.Json.Formatting.Indented)
+                    .Replace("Microsoft_Hosting_Lifetime", "Microsoft.Hosting.Lifetime")
+                    .Replace("System_Net_Http_HttpClient", "System.Net.Http.HttpClient");
+
+                File.WriteAllText(appSettingsPath, json);
+                Console.WriteLine($"[Config] Generated: {appSettingsPath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Config] Error: Failed to generate default appsettings.json: {ex.Message}");
+            }
         }
         
         static async Task CreateTestBlendFileAsync()

@@ -1,155 +1,98 @@
+// backend/src/controllers/JobController.ts
 import { Request, Response } from 'express';
-import multer from 'multer';
-// import { v4 as uuidv4 } from 'uuid';
-import { Job } from '../models/Job';
-import { Node } from '../models/Node';
-import { AppError } from '../middleware/error';
+import mongoose from 'mongoose';
+import { JobService } from '../services/JobService';
 import { S3Service } from '../services/S3Service';
-
-const s3Service = new S3Service();
-
-// Configure multer for memory storage
-const storage = multer.memoryStorage();
-export const upload = multer({ 
-  storage,
-  limits: { fileSize: 500 * 1024 * 1024 }
-});
+import { AppError } from '../middleware/error';
+import { CreateJobRequest, JobFilterOptions, PaginationOptions } from '../types/job.types';
+import archiver from 'archiver';
+// Removed unused authMiddleware import
 
 export class JobController {
-  // Get WebSocket service from app
-  private static getWsService(req: Request) {
+  private jobService: JobService;
+  private s3Service: S3Service;
+
+  constructor(jobService: JobService, s3Service: S3Service) {
+    this.jobService = jobService;
+    this.s3Service = s3Service;
+  }
+
+  // Set WebSocket service from app
+  private getWsService(req: Request) {
     return req.app.get('wsService');
   }
 
-  // Create job from blend file upload with S3 integration
-  static async createJob(req: Request, res: Response): Promise<void> {
+  // Create new job
+  async createJob(req: Request, res: Response): Promise<void> {
     try {
+      const user = (req as any).user;
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+
       if (!req.file) {
         throw new AppError('No file uploaded', 400);
       }
-      
-      const { 
-        projectId = 'default-project',
-        userId = 'default-user',
-        type = 'animation', // 'image' or 'animation'
-        engine = 'CYCLES',
-        device = 'GPU',
-        samples = 128,
-        resolutionX = 1920,
-        resolutionY = 1080,
-        startFrame = 1,
-        endFrame = 10,
-        selectedFrame = 1, // NEW: For single image rendering - selected frame
-        framesPerNode = 1,
-        // Image rendering specific parameters
-        denoiser = 'OPTIX', // 'NONE', 'OPTIX', 'OPENIMAGEDENOISE', 'NLM'
-        tileSize = 256,
-        outputFormat = 'PNG' // 'PNG', 'JPEG', 'EXR', 'TIFF'
-      } = req.body;
-      
-      const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Calculate total frames
-      let totalFrames = 1; // Default for image
-      let selectedFrames: number[] = [];
-      
-      if (type === 'animation') {
-        totalFrames = parseInt(endFrame as string) - parseInt(startFrame as string) + 1;
-        selectedFrames = Array.from({ length: totalFrames }, (_, i) => parseInt(startFrame as string) + i);
-      } else if (type === 'image') {
-        // For image rendering, use the selected frame or default to frame 1
-        const frame = parseInt(selectedFrame as string) || 1;
-        totalFrames = 1;
-        selectedFrames = [frame];
-      }
-      
-      // Upload blend file to S3 in uploads folder using the new method
-      const blendFileKey = await s3Service.uploadBlendFile(req.file, jobId);
-      const blendFileUrl = await s3Service.generateBlendFileDownloadUrl(blendFileKey);
-      
-      const job = new Job({
-        jobId,
-        projectId,
-        userId,
-        blendFileKey, // Store S3 key (uploads/{jobId}/filename.blend)
-        blendFileUrl, // Store pre-signed URL
-        blendFileName: req.file.originalname,
-        type: type as 'image' | 'animation',
+
+      const createJobRequest: CreateJobRequest = {
+        blendFile: req.file,
+        userId: user.userId,
+        projectId: req.body.projectId,
+        type: req.body.type || 'animation',
         settings: {
-          engine,
-          device,
-          samples: parseInt(samples as string),
-          resolutionX: parseInt(resolutionX as string),
-          resolutionY: parseInt(resolutionY as string),
-          tileSize: parseInt(tileSize as string),
-          denoiser: type === 'image' ? denoiser : undefined,
-          outputFormat,
-          selectedFrame: type === 'image' ? parseInt(selectedFrame as string) || 1 : undefined
+          engine: req.body.engine,
+          device: req.body.device,
+          samples: parseInt(req.body.samples) || 128,
+          resolutionX: parseInt(req.body.resolutionX) || 1920,
+          resolutionY: parseInt(req.body.resolutionY) || 1080,
+          tileSize: parseInt(req.body.tileSize) || 256,
+          denoiser: req.body.denoiser,
+          outputFormat: req.body.outputFormat || 'PNG',
+          colorMode: req.body.colorMode || 'RGBA',
+          colorDepth: req.body.colorDepth || '8',
+          compression: (() => {
+            const raw = (req.body as any).compression;
+            if (raw === undefined || raw === null || raw === '') return 90;
+            const n = typeof raw === 'number' ? raw : parseInt(raw, 10);
+            if (Number.isNaN(n)) return 90;
+            return Math.min(100, Math.max(0, n));
+          })(),
+          exrCodec: req.body.exrCodec || 'ZIP',
+          tiffCodec: req.body.tiffCodec || 'DEFLATE',
+          creditsPerFrame: parseFloat(req.body.creditsPerFrame) || 1,
+          blenderVersion: req.body.blenderVersion || '4.5.0',
+          selectedFrame: parseInt(req.body.selectedFrame)
         },
-        frames: {
-          start: type === 'animation' ? parseInt(startFrame as string) : (parseInt(selectedFrame as string) || 1),
-          end: type === 'animation' ? parseInt(endFrame as string) : (parseInt(selectedFrame as string) || 1),
-          total: totalFrames,
-          selected: selectedFrames, // NEW: Store which frames are selected
-          rendered: [],
-          failed: [],
-          assigned: []
-        },
-        assignedNodes: new Map(),
-        status: 'pending',
-        progress: 0,
-        outputUrls: [],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-      
-      await job.save();
-      
-      console.log(`🎬 New ${type} job created: ${jobId} with ${totalFrames} frame${totalFrames > 1 ? 's' : ''}`);
-      console.log(`📁 Blend file uploaded to S3: ${blendFileKey}`);
-      if (type === 'image') {
-        console.log(`🖼️  Image settings: ${resolutionX}x${resolutionY}, ${samples} samples, ${denoiser} denoiser, Frame: ${selectedFrame}`);
+        startFrame: parseInt(req.body.startFrame) || 1,
+        endFrame: parseInt(req.body.endFrame) || 10,
+        selectedFrame: parseInt(req.body.selectedFrame) || 1,
+        name: req.body.name || req.file.originalname,
+        description: req.body.description,
+        tags: req.body.tags ? JSON.parse(req.body.tags) : [],
+        priority: req.body.priority || 'normal',
+        requireApproval: req.body.requireApproval === 'true'
+      };
+
+      // Ensure wsService is available on the jobService BEFORE creating the job
+      // so the job_created notification reaches connected nodes immediately.
+      const wsService = this.getWsService(req);
+      if (wsService && !this.jobService['wsService']) {
+        this.jobService.setWebSocketService(wsService);
       }
-      
-      // Broadcast new job creation via WebSocket
-      const wsService = JobController.getWsService(req);
-      if (wsService) {
-        wsService.broadcastSystemUpdate({
-          type: 'job_created',
-          data: { 
-            jobId: job.jobId, 
-            type: job.type, 
-            status: job.status,
-            blendFileName: job.blendFileName,
-            totalFrames: job.frames.total
-          }
-        });
-      }
-      
-      res.json({
-        success: true,
-        jobId: job.jobId,
-        message: 'Job created successfully',
-        type: job.type,
-        totalFrames: job.frames.total,
-        selectedFrames: job.frames.selected, // NEW: Return selected frames
-        blendFileUrl: job.blendFileUrl,
-        settings: job.settings,
-        fileStructure: {
-          blendFile: blendFileKey,
-          uploadsFolder: `uploads/${jobId}/`,
-          rendersFolder: `renders/${jobId}/`
-        }
-      });
-      
+
+      const result = await this.jobService.createJob(createJobRequest);
+
+      res.status(201).json(result);
     } catch (error) {
       console.error('Job creation error:', error);
       if (error instanceof AppError) {
-        res.status(error.statusCode || 500).json({ 
+        res.status(error.statusCode || 500).json({
+          success: false,
           error: error.message
         });
       } else {
-        res.status(500).json({ 
+        res.status(500).json({
+          success: false,
           error: 'Failed to create job',
           details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -157,475 +100,338 @@ export class JobController {
     }
   }
 
-  // Generate pre-signed URL for node to upload rendered frame directly to S3
-  static async generateFrameUploadUrl(req: Request, res: Response): Promise<void> {
+  // Get job by ID
+  async getJob(req: Request, res: Response): Promise<void> {
     try {
-      const { jobId, frame } = req.params;
-      
-      if (typeof jobId !== 'string' || !jobId.trim()) {
-        throw new AppError('Invalid job ID', 400);
+      const { jobId } = req.params;
+      const user = (req as any).user;
+
+      if (!user) {
+        throw new AppError('Authentication required', 401);
       }
-      
-      const frameNumber = parseInt(frame as string);
-      
-      if (isNaN(frameNumber) || !Number.isInteger(frameNumber) || frameNumber < 1) {
-        throw new AppError('Frame must be a positive integer', 400);
+
+      const job = await this.jobService.getJobById(jobId as string, user.userId, user.role);
+
+      if (!job) {
+        throw new AppError('Job not found', 404);
       }
-      
-      // Generate pre-signed URL for node to upload directly to S3 using the new method
-      const { uploadUrl, s3Key } = await s3Service.generateFrameUploadUrl(jobId, frameNumber);
-      
+
       res.json({
         success: true,
-        uploadUrl,
-        s3Key,
-        frame: frameNumber,
-        expiresIn: 3600,
-        fileStructure: {
-          s3Key: s3Key,
-          rendersFolder: `renders/${jobId}/`,
-          fileName: `frame_${frameNumber.toString().padStart(4, '0')}.png`
-        }
+        job
       });
-      
-    } catch (error) {
-      console.error('Generate upload URL error:', error);
-      res.status(500).json({
-        error: 'Failed to generate upload URL',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  }
-
-  // Report frame completion (no file upload - file goes directly to S3)
-  static async completeFrame(req: Request, res: Response): Promise<void> {
-    try {
-      const { jobId } = req.params;
-      const { frame, nodeId, renderTime, fileSize, s3Key } = req.body;
-      
-      const job = await Job.findOne({ jobId });
-      if (!job) {
-        throw new AppError('Job not found', 404);
-      }
-      
-      const frameNumber = parseInt(frame as string);
-      
-      // Check if frame is already rendered
-      if (job.frames.rendered.includes(frameNumber)) {
-        res.json({ 
-          success: true, 
-          message: 'Frame already recorded as completed',
-          progress: job.progress,
-          status: job.status
-        });
-        return;
-      }
-      
-      // Generate download URL for the rendered frame using the new method
-      const downloadUrl = await s3Service.generateFrameDownloadUrl(s3Key as string);
-      
-      // Update frame status using atomic operation - ensure frame is removed from failed/assigned when completed
-      const updatedJob = await Job.findOneAndUpdate(
-        { 
-          jobId,
-          'frames.rendered': { $ne: frameNumber } // Only update if not already rendered
-        },
-        {
-          $addToSet: {
-            'frames.rendered': frameNumber,
-            'outputUrls': {
-              frame: frameNumber,
-              url: downloadUrl,
-              s3Key: s3Key,
-              fileSize: fileSize,
-              uploadedAt: new Date()
-            }
-          },
-          $pull: {
-            'frames.failed': frameNumber,    // Remove from failed if it was there
-            'frames.assigned': frameNumber   // Remove from assigned
-          },
-          $set: {
-            updatedAt: new Date()
-          }
-        },
-        { new: true }
-      );
-      
-      if (!updatedJob) {
-        throw new AppError('Failed to update frame status', 500);
-      }
-      
-      // Remove frame from assigned nodes
-      const assignedNodesMap = updatedJob.assignedNodes as unknown as Map<string, number[]>;
-      const nodeFrames = assignedNodesMap?.get(nodeId) || [];
-      const updatedNodeFrames = nodeFrames.filter(f => f !== frameNumber);
-      
-      let isNodeDone = false;
-      
-      if (updatedNodeFrames.length === 0) {
-        assignedNodesMap?.delete(nodeId);
-        isNodeDone = true;
-      } else {
-        assignedNodesMap?.set(nodeId, updatedNodeFrames);
-      }
-      
-      // Calculate progress
-      const totalFrames = updatedJob.frames.total;
-      const renderedFrames = updatedJob.frames.rendered.length;
-      const failedFrames = updatedJob.frames.failed.length;
-      const progress = Math.round((renderedFrames / totalFrames) * 100);
-      
-      // Update job status
-      let status = updatedJob.status;
-      if (renderedFrames === totalFrames) {
-        status = 'completed';
-        updatedJob.completedAt = new Date();
-        console.log(`🎉 Job ${jobId} completed! All ${totalFrames} frames rendered.`);
-        
-        // Mark all nodes that worked on this job as online
-        const allNodeIds = Array.from(assignedNodesMap.keys());
-        if (allNodeIds.length > 0) {
-          await Node.updateMany(
-            { nodeId: { $in: allNodeIds } },
-            { 
-              $set: { 
-                status: 'online',
-                currentJob: undefined,
-                currentProgress: undefined,
-                updatedAt: new Date()
-              }
-            }
-          );
-          console.log(`🔄 Marked ${allNodeIds.length} nodes as online after job completion`);
-        }
-      } else if (renderedFrames + failedFrames === totalFrames) {
-        status = 'failed';
-      } else {
-        status = 'processing';
-      }
-      
-      // Save updates
-      updatedJob.status = status;
-      updatedJob.progress = progress;
-      updatedJob.assignedNodes = assignedNodesMap as any;
-      await updatedJob.save();
-      
-      // Update node status if it's done
-      if (isNodeDone) {
-        await Node.updateOne(
-          { nodeId },
-          {
-            $set: {
-              status: 'online',
-              currentJob: undefined,
-              currentProgress: undefined,
-              updatedAt: new Date()
-            },
-            $inc: { jobsCompleted: 1 }
-          }
-        );
-        console.log(`🔄 Node ${nodeId} marked as online (all frames completed)`);
-      }
-      
-      console.log(`✅ Frame ${frame} completed for job ${jobId} by node ${nodeId} (Progress: ${progress}%)`);
-      console.log(`📁 Frame stored at: ${s3Key}`);
-      
-      // Broadcast job update via WebSocket
-      const wsService = JobController.getWsService(req);
-      if (wsService) {
-        await wsService.broadcastJobUpdate(jobId);
-        
-        // Also broadcast node update
-        wsService.broadcastNodeUpdate(nodeId, {
-          status: isNodeDone ? 'online' : 'busy',
-          currentJob: isNodeDone ? undefined : updatedJob.jobId,
-          jobsCompleted: isNodeDone ? 1 : 0,
-          lastUpdate: new Date().toISOString()
-        });
-      }
-      
-      res.json({ 
-        success: true, 
-        message: 'Frame completion recorded',
-        progress: progress,
-        status: status,
-        renderedFrames: renderedFrames,
-        totalFrames: totalFrames,
-        frameUrl: downloadUrl,
-        s3Key: s3Key,
-        remainingFrames: updatedNodeFrames.length,
-        isNodeDone: isNodeDone
-      });
-      
-    } catch (error) {
-      console.error('Complete frame error:', error);
-      if (error instanceof AppError) {
-        res.status(error.statusCode || 500).json({ 
-          error: error.message
-        });
-      } else {
-        res.status(500).json({ 
-          error: 'Failed to record frame completion',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    }
-  }
-
-  // Report frame failure (updated for S3) - Fixed to prevent race conditions
-  static async failFrame(req: Request, res: Response): Promise<void> {
-    try {
-      const { jobId } = req.params;
-      const { frame, nodeId, error: errorMessage, s3Key } = req.body;
-      
-      const job = await Job.findOne({ jobId });
-      if (!job) {
-        throw new AppError('Job not found', 404);
-      }
-      
-      const frameNumber = parseInt(frame as string);
-      
-      // Check if frame is already rendered - don't mark as failed if it's already completed
-      if (job.frames.rendered.includes(frameNumber)) {
-        res.json({ 
-          success: true, 
-          message: 'Frame already completed, not marking as failed',
-          progress: job.progress,
-          status: job.status
-        });
-        return;
-      }
-      
-      // Use atomic operation to prevent race conditions
-      const updatedJob = await Job.findOneAndUpdate(
-        { 
-          jobId,
-          'frames.rendered': { $ne: frameNumber }, // Only update if not already rendered
-          'frames.failed': { $ne: frameNumber }    // Only update if not already failed
-        },
-        {
-          $addToSet: {
-            'frames.failed': frameNumber
-          },
-          $pull: {
-            'frames.assigned': frameNumber   // Remove from assigned
-          },
-          $set: {
-            updatedAt: new Date()
-          }
-        },
-        { new: true }
-      );
-      
-      if (!updatedJob) {
-        // Frame was already processed or doesn't exist
-        res.json({ 
-          success: true, 
-          message: 'Frame already processed or job not found',
-          progress: job.progress,
-          status: job.status
-        });
-        return;
-      }
-      
-      // Remove frame from assigned nodes
-      const assignedNodesMap = updatedJob.assignedNodes as unknown as Map<string, number[]>;
-      const nodeFrames = assignedNodesMap?.get(nodeId) || [];
-      const updatedNodeFrames = nodeFrames.filter(f => f !== frameNumber);
-      
-      if (updatedNodeFrames.length === 0) {
-        assignedNodesMap?.delete(nodeId);
-      } else {
-        assignedNodesMap?.set(nodeId, updatedNodeFrames);
-      }
-      
-      // Update progress and status
-      const totalFrames = updatedJob.frames.total;
-      const renderedFrames = updatedJob.frames.rendered.length;
-      const failedFrames = updatedJob.frames.failed.length;
-      const progress = Math.round((renderedFrames / totalFrames) * 100);
-      
-      let status = updatedJob.status;
-      if (failedFrames === totalFrames) {
-        status = 'failed';
-      } else if (renderedFrames + failedFrames === totalFrames) {
-        status = 'failed';
-      } else {
-        status = 'processing';
-      }
-      
-      // Save updates
-      updatedJob.status = status;
-      updatedJob.progress = progress;
-      updatedJob.assignedNodes = assignedNodesMap as any;
-      await updatedJob.save();
-      
-      console.log(`❌ Frame ${frame} failed for job ${jobId} by node ${nodeId}: ${errorMessage}`);
-      
-      // Broadcast job update via WebSocket
-      const wsService = JobController.getWsService(req);
-      if (wsService) {
-        await wsService.broadcastJobUpdate(jobId);
-      }
-      
-      res.json({ 
-        success: true, 
-        message: 'Frame failure recorded',
-        progress: progress,
-        status: status,
-        s3Key: s3Key
-      });
-      
-    } catch (error) {
-      console.error('Fail frame error:', error);
-      if (error instanceof AppError) {
-        res.status(error.statusCode || 500).json({ 
-          error: error.message
-        });
-      } else {
-        res.status(500).json({ 
-          error: 'Failed to record frame failure',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    }
-  }
-
-  // Get job details with S3 URLs
-  static async getJob(req: Request, res: Response): Promise<void> {
-    try {
-      const { jobId } = req.params;
-      
-      const job = await Job.findOne({ jobId });
-      
-      if (!job) {
-        throw new AppError('Job not found', 404);
-      }
-      
-      // Generate fresh download URL for blend file using the new method
-      const blendFileUrl = await s3Service.generateBlendFileDownloadUrl(job.blendFileKey);
-      
-      // Calculate pending frames
-      const totalFrames = job.frames.total;
-      const renderedFrames = job.frames.rendered.length;
-      const failedFrames = job.frames.failed.length;
-      const pendingFrames = totalFrames - renderedFrames - failedFrames;
-      
-      // Generate fresh URLs for all rendered frames using the new method
-      const outputUrlsWithFreshUrls = await Promise.all(
-        job.outputUrls.map(async (output) => ({
-          ...output,
-          freshUrl: await s3Service.generateFrameDownloadUrl(output.s3Key)
-        }))
-      );
-      
-      res.json({
-        jobId: job.jobId,
-        projectId: job.projectId,
-        userId: job.userId,
-        blendFileName: job.blendFileName,
-        blendFileUrl: blendFileUrl,
-        type: job.type,
-        settings: job.settings,
-        status: job.status,
-        progress: job.progress,
-        frames: {
-          start: job.frames.start,
-          end: job.frames.end,
-          total: totalFrames,
-          rendered: renderedFrames,
-          failed: failedFrames,
-          pending: pendingFrames,
-          selected: job.frames.selected || [] // NEW: Include selected frames
-        },
-        outputUrls: outputUrlsWithFreshUrls,
-        createdAt: job.createdAt,
-        updatedAt: job.updatedAt,
-        completedAt: job.completedAt,
-        fileStructure: {
-          blendFile: job.blendFileKey,
-          uploadsFolder: `uploads/${job.jobId}/`,
-          rendersFolder: `renders/${job.jobId}/`
-        }
-      });
-      
     } catch (error) {
       console.error('Get job error:', error);
       if (error instanceof AppError) {
-        res.status(error.statusCode || 500).json({ 
+        res.status(error.statusCode || 500).json({
+          success: false,
           error: error.message
         });
       } else {
-        res.status(500).json({ 
-          error: 'Failed to get job status',
+        res.status(500).json({
+          success: false,
+          error: 'Failed to get job',
           details: error instanceof Error ? error.message : 'Unknown error'
         });
       }
     }
   }
 
-  // Cancel job (with optional S3 cleanup)
-  static async cancelJob(req: Request, res: Response): Promise<void> {
+  // Stream all rendered frames for a job as a ZIP archive
+  async downloadJobFramesZip(req: Request, res: Response): Promise<void> {
     try {
       const { jobId } = req.params;
-      const { cleanupS3 = false } = req.body;
-      
-      const job = await Job.findOne({ jobId });
-      
+      const user = (req as any).user;
+
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+
+      // Large ZIPs can take a long time; disable request/response timeouts.
+      // (Note: upstream proxies/load balancers may still impose their own limits.)
+      try {
+        (req as any).setTimeout?.(0);
+        res.setTimeout?.(0);
+      } catch {}
+
+      const job = await this.jobService.getJobById(jobId as string, user.userId, user.role);
+
       if (!job) {
         throw new AppError('Job not found', 404);
       }
-      
-      // Only allow cancelling if job is pending or processing
-      if (job.status === 'completed' || job.status === 'failed') {
-        throw new AppError('Cannot cancel a completed or failed job', 400);
+
+      const outputs = job.outputUrls || [];
+      const outputsWithKeys = outputs.filter((o: any) => o && o.s3Key);
+
+      if (!outputsWithKeys.length) {
+        throw new AppError('No rendered frames available for this job', 400);
       }
-      
-      job.status = 'cancelled';
-      job.updatedAt = new Date();
-      await job.save();
-      
-      console.log(`❌ Cancelled job: ${jobId}`);
-      
-      // Broadcast job update via WebSocket
-      const wsService = JobController.getWsService(req);
-      if (wsService) {
-        await wsService.broadcastJobUpdate(jobId);
-      }
-      
-      // Optional: Clean up S3 files
-      if (cleanupS3) {
+
+      const safeJobId = job.jobId || jobId;
+
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="job_${safeJobId}_frames.zip"`
+      );
+      res.setHeader('X-Frames-Total', String(outputsWithKeys.length));
+      res.setHeader('Cache-Control', 'no-store');
+
+      const archive = archiver('zip', {
+        zlib: { level: 0 } // Images are already compressed; avoid extra CPU
+      });
+
+      archive.on('error', (err: Error) => {
+        console.error('ZIP archive error:', err);
+        if (!res.headersSent) {
+          res.status(500).end('Failed to generate ZIP archive');
+        } else {
+          res.end();
+        }
+      });
+
+      archive.pipe(res);
+
+      // Append each frame from S3 into the archive
+      for (const output of outputsWithKeys) {
+        const key: string = output.s3Key;
+        const frameNumber: number = output.frame ?? 0;
+        const ext = key.includes('.') ? key.split('.').pop() || 'png' : 'png';
+        const fileName = `frame_${String(frameNumber).padStart(4, '0')}.${ext}`;
+
         try {
-          // Delete blend file using the new method
-          await s3Service.deleteFile(job.blendFileKey);
-          
-          // Delete rendered frames
-          for (const output of job.outputUrls) {
-            await s3Service.deleteFile(output.s3Key);
-          }
-          
-          console.log(`🗑️  Cleaned up S3 files for job ${jobId}`);
-        } catch (s3Error) {
-          console.error('Failed to cleanup S3 files:', s3Error);
-          // Don't fail the cancellation if S3 cleanup fails
+          const stream = await this.s3Service.getObjectStream(key);
+          archive.append(stream, { name: fileName });
+        } catch (err) {
+          console.warn(`Failed to append frame ${frameNumber} (${key}) to ZIP:`, err);
+          // Skip this frame but continue with others
         }
       }
-      
-      res.json({ 
-        success: true, 
-        message: 'Job cancelled successfully',
-        cleanupPerformed: cleanupS3
-      });
-      
+
+      archive.finalize();
     } catch (error) {
-      console.error('Cancel job error:', error);
+      console.error('Download job frames ZIP error:', error);
       if (error instanceof AppError) {
-        res.status(error.statusCode || 500).json({ 
+        if (!res.headersSent) {
+          res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.message
+          });
+        }
+      } else {
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            error: 'Failed to download frames ZIP',
+            details: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+    }
+  }
+
+  // Allow user to re-render selected frames (up to 2 attempts per job)
+  async rerenderFrames(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const user = (req as any).user;
+
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+
+      const frames: number[] = Array.isArray(req.body.frames) ? req.body.frames : [];
+      if (!frames.length) {
+        throw new AppError('No frames specified for re-render', 400);
+      }
+
+      const job = await this.jobService.getJobById(jobId as string, user.userId, user.role);
+      if (!job) {
+        throw new AppError('Job not found', 404);
+      }
+
+      if (job.status !== 'completed') {
+        throw new AppError('Re-render is only allowed for completed jobs', 400);
+      }
+
+      const currentCount = job.userRerenderCount ?? 0;
+      const maxCount = job.userRerenderMax ?? 2;
+      if (currentCount >= maxCount) {
+        throw new AppError('Maximum re-render attempts reached for this job', 400);
+      }
+
+      const jobStart = job.frames.start;
+      const jobEnd = job.frames.end;
+      const invalidFrames = frames.filter(f => !Number.isInteger(f) || f < jobStart || f > jobEnd);
+      if (invalidFrames.length) {
+        throw new AppError(`Invalid frame numbers: ${invalidFrames.join(', ')}`, 400);
+      }
+
+      // Only allow re-render of frames that have been rendered at least once
+      const renderedSet = new Set(job.frames.rendered);
+      const framesToRerender = frames.filter(f => renderedSet.has(f));
+      if (!framesToRerender.length) {
+        throw new AppError('Selected frames are not rendered yet', 400);
+      }
+
+      await this.jobService.rerenderFrames(job, framesToRerender, user.userId, req);
+
+      res.json({
+        success: true,
+        message: 'Frames queued for re-render',
+        jobId: job.jobId,
+        frames: framesToRerender,
+        remainingRerenders: maxCount - (currentCount + 1)
+      });
+    } catch (error) {
+      console.error('Re-render frames error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
           error: error.message
         });
       } else {
-        res.status(500).json({ 
+        res.status(500).json({
+          success: false,
+          error: 'Failed to re-render frames',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+  }
+
+  // List jobs with filtering
+  async listJobs(req: Request, res: Response): Promise<void> {
+    try {
+      const user = (req as any).user;
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+
+      const filters: JobFilterOptions = {
+        userId: req.query.userId as string,
+        projectId: req.query.projectId as string,
+        status: req.query.status as string,
+        type: req.query.type as 'image' | 'animation',
+        priority: req.query.priority as string,
+        tags: req.query.tags ? JSON.parse(req.query.tags as string) : undefined,
+        startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+        endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+        search: req.query.search as string,
+        approved: req.query.approved ? req.query.approved === 'true' : undefined
+      };
+
+      const pagination: PaginationOptions = {
+        page: parseInt(req.query.page as string) || 1,
+        limit: parseInt(req.query.limit as string) || 50,
+        sortBy: req.query.sortBy as string || 'createdAt',
+        sortOrder: req.query.sortOrder as 'asc' | 'desc' || 'desc'
+      };
+
+      const result = await this.jobService.listJobs(
+        filters,
+        pagination,
+        user.userId,
+        user.role
+      );
+
+      res.json({
+        success: true,
+        ...result
+      });
+    } catch (error) {
+      console.error('List jobs error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
+          error: error.message
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to list jobs',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+  }
+
+  // Update job
+  async updateJob(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const user = (req as any).user;
+
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+
+      const updates = req.body;
+      const job = await this.jobService.updateJob(jobId as string, updates, user.userId, user.role);
+
+      if (!job) {
+        throw new AppError('Job not found or access denied', 404);
+      }
+
+      res.json({
+        success: true,
+        message: 'Job updated successfully',
+        job
+      });
+    } catch (error) {
+      console.error('Update job error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
+          error: error.message
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to update job',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+  }
+
+  // Cancel job
+  async cancelJob(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const user = (req as any).user;
+
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+
+      const cleanupS3 = req.body.cleanupS3 === true;
+      const success = await this.jobService.cancelJob(
+        jobId as string,
+        user.userId,
+        user.role,
+        cleanupS3
+      );
+
+      if (!success) {
+        throw new AppError('Job not found or access denied', 404);
+      }
+
+      res.json({
+        success: true,
+        message: 'Job cancelled successfully',
+        cleanupPerformed: cleanupS3
+      });
+    } catch (error) {
+      console.error('Cancel job error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
+          error: error.message
+        });
+      } else {
+        res.status(500).json({
+          success: false,
           error: 'Failed to cancel job',
           details: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -633,267 +439,264 @@ export class JobController {
     }
   }
 
-  // List all jobs
-  static async listJobs(req: Request, res: Response): Promise<void> {
-    try {
-      const { projectId, status, limit = '50', page = '1' } = req.query;
-      
-      const query: any = {};
-      if (projectId) query.projectId = projectId;
-      if (status) query.status = status;
-      
-      const limitNum = parseInt(limit as string);
-      const pageNum = parseInt(page as string);
-      const skip = (pageNum - 1) * limitNum;
-      
-      const [jobs, total] = await Promise.all([
-        Job.find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limitNum),
-        Job.countDocuments(query)
-      ]);
-      
-      const simplifiedJobs = jobs.map(job => ({
-        jobId: job.jobId,
-        projectId: job.projectId,
-        status: job.status,
-        type: job.type,
-        progress: job.progress,
-        blendFileName: job.blendFileName,
-        frames: {
-          total: job.frames.total,
-          rendered: job.frames.rendered.length,
-          failed: job.frames.failed.length,
-          selected: job.frames.selected || [] // NEW: Include selected frames
-        },
-        outputCount: job.outputUrls.length,
-        createdAt: job.createdAt,
-        updatedAt: job.updatedAt,
-        fileStructure: {
-          uploadsFolder: `uploads/${job.jobId}/`,
-          rendersFolder: `renders/${job.jobId}/`
-        }
-      }));
-      
-      res.json({
-        jobs: simplifiedJobs,
-        pagination: {
-          total,
-          page: pageNum,
-          limit: limitNum,
-          pages: Math.ceil(total / limitNum)
-        }
-      });
-      
-    } catch (error) {
-      console.error('Get jobs error:', error);
-      res.status(500).json({ 
-        error: 'Failed to fetch jobs',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  }
-
-  // NEW: Select specific frame(s) for rendering (for image type)
-  static async selectFrames(req: Request, res: Response): Promise<void> {
+  // Approve job (admin only)
+  async approveJob(req: Request, res: Response): Promise<void> {
     try {
       const { jobId } = req.params;
-      const { frames } = req.body; // Array of frame numbers to render
-      
-      if (!Array.isArray(frames) || frames.length === 0) {
-        throw new AppError('Frames must be a non-empty array', 400);
+      const user = (req as any).user;
+
+      if (!user) {
+        throw new AppError('Authentication required', 401);
       }
-      
-      const job = await Job.findOne({ jobId });
-      if (!job) {
-        throw new AppError('Job not found', 404);
+
+      // We pass the role to the service, which determines if they have permission
+      // based on the current job status and ownership
+      const success = await this.jobService.approveJob(jobId as string, user.userId, user.role);
+
+      if (!success) {
+        throw new AppError('Job not found or access denied', 404);
       }
-      
-      // Validate frames are within range
-      const minFrame = job.frames.start;
-      const maxFrame = job.frames.end;
-      
-      for (const frame of frames) {
-        const frameNum = parseInt(frame);
-        if (isNaN(frameNum) || frameNum < minFrame || frameNum > maxFrame) {
-          throw new AppError(`Frame ${frame} is out of range (${minFrame}-${maxFrame})`, 400);
-        }
-      }
-      
-      // Update selected frames
-      job.frames.selected = frames;
-      job.frames.total = frames.length;
-      job.updatedAt = new Date();
-      
-      // Remove any rendered/failed frames that are no longer selected
-      job.frames.rendered = job.frames.rendered.filter(f => frames.includes(f));
-      job.frames.failed = job.frames.failed.filter(f => frames.includes(f));
-      job.frames.assigned = job.frames.assigned.filter(f => frames.includes(f));
-      
-      // Clear assigned nodes for frames that are no longer selected
-      const assignedNodesMap = job.assignedNodes as unknown as Map<string, number[]>;
-      for (const [nodeId, nodeFrames] of assignedNodesMap.entries()) {
-        const updatedFrames = nodeFrames.filter(f => frames.includes(f));
-        if (updatedFrames.length === 0) {
-          assignedNodesMap.delete(nodeId);
-        } else {
-          assignedNodesMap.set(nodeId, updatedFrames);
-        }
-      }
-      
-      // Recalculate progress
-      job.progress = Math.round((job.frames.rendered.length / job.frames.total) * 100);
-      
-      await job.save();
-      
-      console.log(`🎯 Updated selected frames for job ${jobId}: ${frames.join(', ')}`);
-      
-      // Broadcast job update via WebSocket
-      const wsService = JobController.getWsService(req);
-      if (wsService) {
-        await wsService.broadcastJobUpdate(jobId);
-      }
-      
+
       res.json({
         success: true,
-        message: 'Frames updated successfully',
-        frames: {
-          selected: job.frames.selected,
-          total: job.frames.total,
-          rendered: job.frames.rendered.length,
-          failed: job.frames.failed.length
-        }
+        message: 'Job approved successfully'
       });
-      
     } catch (error) {
-      console.error('Select frames error:', error);
+      console.error('Approve job error:', error);
       if (error instanceof AppError) {
-        res.status(error.statusCode || 500).json({ 
+        res.status(error.statusCode || 500).json({
+          success: false,
           error: error.message
         });
       } else {
-        res.status(500).json({ 
-          error: 'Failed to update frames',
+        res.status(500).json({
+          success: false,
+          error: 'Failed to approve job',
           details: error instanceof Error ? error.message : 'Unknown error'
         });
       }
     }
   }
 
-  // Dashboard statistics endpoint
-  static async getDashboardStats(req: Request, res: Response): Promise<void> {
+  // Get job statistics
+  async getJobStats(req: Request, res: Response): Promise<void> {
     try {
-      const { userId, startDate, endDate } = req.query;
-      
-      const start = startDate ? new Date(startDate as string) : new Date();
-      start.setHours(0, 0, 0, 0);
-      
-      const end = endDate ? new Date(endDate as string) : new Date();
-      end.setHours(23, 59, 59, 999);
-      
-      const query: any = { createdAt: { $gte: start, $lte: end } };
-      if (userId) query.userId = userId;
-      
-      // Get job statistics
-      const [jobs, activeJobs, completedJobs, failedJobs] = await Promise.all([
-        Job.find(query),
-        Job.countDocuments({ ...query, status: { $in: ['pending', 'processing'] } }),
-        Job.countDocuments({ ...query, status: 'completed' }),
-        Job.countDocuments({ ...query, status: 'failed' })
-      ]);
-      
-      // Calculate total render time and credits
-      let totalRenderTime = 0;
-      let totalCreditsUsed = 0;
-      let totalFramesRendered = 0;
-      
-      jobs.forEach(job => {
-        if (job.frameAssignments) {
-          job.frameAssignments.forEach((assignment: any) => {
-            if (assignment.status === 'rendered' && assignment.renderTime) {
-              totalRenderTime += assignment.renderTime;
-            }
-          });
-        }
-        
-        if (job.outputUrls) {
-          totalFramesRendered += job.outputUrls.length;
-        }
-        
-        if (job.totalCreditsDistributed) {
-          totalCreditsUsed += job.totalCreditsDistributed;
-        }
-      });
-      
-      // Get today's completed jobs
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(today);
-      todayEnd.setHours(23, 59, 59, 999);
-      
-      const completedToday = await Job.countDocuments({
-        status: 'completed',
-        createdAt: { $gte: today, $lte: todayEnd }
-      });
-      
+      const user = (req as any).user;
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+
+      const stats = await this.jobService.getJobStats(user.userId, user.role);
+
       res.json({
         success: true,
-        stats: {
-          totalJobs: jobs.length,
-          activeJobs,
-          completedJobs,
-          failedJobs,
-          completedToday,
-          totalRenderTime,
-          totalCreditsUsed,
-          totalFramesRendered,
-          avgRenderTimePerFrame: totalFramesRendered > 0 ? totalRenderTime / totalFramesRendered : 0
-        },
-        timeframe: {
-          start,
-          end
+        stats
+      });
+    } catch (error) {
+      console.error('Get job stats error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
+          error: error.message
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to get job statistics',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+  }
+
+  // Get user-specific job statistics
+  async getUserJobStats(req: Request, res: Response): Promise<void> {
+    try {
+      const user = (req as any).user;
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+
+      const stats = await this.jobService.getUserJobStats(user.userId);
+
+      res.json({
+        success: true,
+        stats
+      });
+    } catch (error) {
+      console.error('Get user job stats error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
+          error: error.message
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to get user job statistics',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+  }
+
+  // Generate frame upload URL
+  async generateFrameUploadUrl(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId, frame } = req.params as { jobId: string, frame: string };
+
+      if (!jobId || !frame) {
+        throw new AppError('Job ID and frame number are required', 400);
+      }
+
+      const frameNumber = parseInt(frame);
+      if (isNaN(frameNumber) || frameNumber < 1) {
+        throw new AppError('Frame must be a positive integer', 400);
+      }
+
+      // Resolve extension based on job settings if possible
+      let extension = 'png';
+      try {
+        const job = await this.jobService.getJobByIdMinimal(jobId);
+        if (job && job.settings?.outputFormat) {
+          const format = job.settings.outputFormat.toUpperCase();
+          if (format === 'JPEG' || format === 'JPG') extension = 'jpg';
+          else if (format === 'OPEN_EXR' || format === 'EXR') extension = 'exr';
+          else if (format === 'TIFF') extension = 'tif';
+          else if (format === 'TARGA' || format === 'TGA') extension = 'tga';
+          else if (format === 'BMP') extension = 'bmp';
+        }
+      } catch (err) {
+        console.warn('Failed to fetch job settings for extension resolution, defaulting to png');
+      }
+
+      const { uploadUrl, s3Key } = await this.s3Service.generateFrameUploadUrl(jobId, frameNumber, extension);
+
+      res.json({
+        success: true,
+        uploadUrl,
+        s3Key,
+        frame: frameNumber,
+        expiresIn: 3600,
+        fileStructure: {
+          s3Key,
+          rendersFolder: `renders/${jobId}/`,
+          fileName: `frame_${frameNumber.toString().padStart(4, '0')}.${extension}`
         }
       });
-      
     } catch (error) {
-      console.error('Dashboard stats error:', error);
+      console.error('Generate upload URL error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
+          error: error.message
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to generate upload URL',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+  }
+
+  // Complete frame
+  async completeFrame(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const { nodeId, frame, renderTime, fileSize, s3Key } = req.body;
+
+      if (!req.body.jobId) {
+          req.body.jobId = jobId;
+      }
+      
+      // If nodeId is not in params but in body, we need to adapt for NodeController.frameCompleted
+      if (!req.params.nodeId && nodeId) {
+          req.params.nodeId = nodeId;
+      }
+
+      // Import NodeController dynamically to avoid circular dependency if any
+      const { NodeController } = require('./node');
+      await NodeController.frameCompleted(req, res);
+    } catch (error) {
+      console.error('Complete frame error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
+          error: error.message
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to record frame completion',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+  }
+
+  // Get job status for node
+  async getJobStatusForNode(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+
+      if (!jobId) {
+        throw new AppError('Job ID is required', 400);
+      }
+
+      const job = await this.jobService.getJobByIdMinimal(jobId as string);
+
+      if (!job) {
+        res.json({
+          success: true,
+          status: 'not_found'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        status: job.status,
+        jobId: job.jobId
+      });
+    } catch (error) {
+      console.error('Get job status error:', error);
       res.status(500).json({
-        error: 'Failed to fetch dashboard statistics',
+        success: false,
+        error: 'Failed to get job status',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }
-  
-  // Health check endpoint
-  static async healthCheck(req: Request, res: Response): Promise<void> {
+
+  // Health check
+  async healthCheck(req: Request, res: Response): Promise<void> {
     try {
-      // Test S3 connection using the new method
-      const bucketInfo = s3Service.getBucketInfo();
-      
-      // Get WebSocket service stats
-      const wsService = JobController.getWsService(req);
-      const wsStats = wsService ? {
-        connectedClients: wsService.getConnectionCount(),
-        activeSubscriptions: wsService.getSubscriptionCount()
-      } : { connectedClients: 0, activeSubscriptions: 0 };
-      
+      const wsService = this.getWsService(req);
+      const bucketInfo = this.s3Service.getBucketInfo();
+
       res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
+        service: 'job',
+        version: '1.0.0',
         s3: {
           bucketName: bucketInfo.bucketName,
           region: bucketInfo.region,
           publicUrlBase: bucketInfo.publicUrlBase,
           status: 'connected'
         },
-        websocket: wsStats
+        websocket: wsService ? {
+          connectedClients: wsService.getConnectionCount(),
+          activeSubscriptions: wsService.getSubscriptionCount()
+        } : { connectedClients: 0, activeSubscriptions: 0 }
       });
     } catch (error) {
       res.status(500).json({
         status: 'unhealthy',
         timestamp: new Date().toISOString(),
-        error: 'S3 connection failed',
+        error: 'Service check failed',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }

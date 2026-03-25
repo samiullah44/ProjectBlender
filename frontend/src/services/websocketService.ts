@@ -25,28 +25,28 @@ class WebSocketService {
     }
 
     this.isConnecting = true
-    
+
     // Get the backend URL from environment or use current host
     const backendUrl = import.meta.env.VITE_API_URL || window.location.origin
     const wsUrl = backendUrl.replace('http', 'ws') + '/ws'
-    
+
     console.log('🔌 Connecting to WebSocket:', wsUrl)
-    
+
     this.socket = new WebSocket(wsUrl)
 
     this.socket.onopen = () => {
       console.log('✅ WebSocket connected')
       this.isConnecting = false
       this.reconnectAttempts = 0
-      
+
       // Start heartbeat
       this.startHeartbeat()
-      
+
       // Resubscribe to all jobs
       this.jobSubscriptions.forEach((_, jobId) => {
         this.subscribeToJobInternal(jobId)
       })
-      
+
       toast.success('Real-time updates connected')
     }
 
@@ -82,8 +82,11 @@ class WebSocketService {
 
   private handleMessage(data: any) {
     console.log('📨 WebSocket message:', data.type)
-    
+
     switch (data.type) {
+      case 'notification:new':
+        this.handleNotification(data)
+        break
       case 'job_update':
         this.handleJobUpdate(data)
         break
@@ -93,8 +96,13 @@ class WebSocketService {
       case 'system_update':
         this.handleSystemUpdate(data)
         break
+      case 'auth_success':
+        console.log('WebSocket authenticated successfully')
+        break
       case 'connected':
         console.log('WebSocket connection established')
+        // Send auth message if user is logged in
+        this.authenticateIfPossible()
         break
       case 'pong':
         // Heartbeat response
@@ -108,17 +116,70 @@ class WebSocketService {
     }
   }
 
+  private authenticateIfPossible() {
+    try {
+      const authStorage = localStorage.getItem('auth-storage')
+      if (authStorage) {
+        const { state } = JSON.parse(authStorage)
+        if (state.user?.id) {
+          this.authenticate(state.user.id)
+        }
+      }
+    } catch (error) {
+      console.error('Error authenticating websocket:', error)
+    }
+  }
+
+  authenticate(userId: string) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.send({
+        type: 'auth',
+        userId: userId
+      })
+      console.log('🔐 Sent WebSocket authentication for user:', userId)
+    } else {
+      console.warn('WebSocket not ready for authentication, will retry on connect')
+    }
+  }
+
+  private handleNotification(data: any) {
+    const notification = data.data.notification
+    console.log('🔔 New notification received:', notification)
+
+    // Update notification store - importing dynamically to avoid circular dependencies if any
+    import('@/stores/notificationStore').then(({ useNotificationStore }) => {
+      useNotificationStore.getState().addNotification({
+        ...notification,
+        _id: notification._id || Date.now().toString(),
+        createdAt: notification.createdAt || new Date().toISOString()
+      })
+    })
+
+    // Show toast
+    toast.success(notification.title, {
+      icon: '🔔',
+      duration: 5000
+    })
+
+    // If application approved, refresh user profile to update roles
+    if (notification.type === 'application_approved') {
+      import('@/stores/authStore').then(({ useAuthStore }) => {
+        useAuthStore.getState().getProfile()
+      })
+    }
+  }
+
   private handleJobUpdate(data: any) {
     const jobId = data.event?.split(':')[1]
     if (!jobId) return
 
     const job = data.data
     console.log('📊 Job update received:', jobId, job.status, job.progress)
-    
+
     // Check for status transition to completed
     const previousStatus = this.jobStatusCache.get(jobId)
     const currentStatus = job.status
-    
+
     // Update job in store
     jobStore.getState().updateJobProgress(jobId, job)
 
@@ -130,7 +191,7 @@ class WebSocketService {
     if (currentStatus === 'completed' && previousStatus !== 'completed') {
       toast.success(`🎉 Job "${job.blendFileName || job.jobId}" completed!`)
     }
-    
+
     // Update status cache
     this.jobStatusCache.set(jobId, currentStatus)
   }
@@ -138,7 +199,7 @@ class WebSocketService {
   private handleNodeUpdate(data: any) {
     // Handle node updates if needed
     console.log('Node update:', data)
-    
+
     // Notify node subscribers
     const nodeId = data.event?.split(':')[1]
     if (nodeId) {
@@ -150,7 +211,7 @@ class WebSocketService {
   private handleSystemUpdate(data: any) {
     // Handle system updates if needed
     console.log('System update:', data)
-    
+
     // Notify all system subscribers
     this.systemSubscriptions.forEach(callback => {
       try {
@@ -181,7 +242,7 @@ class WebSocketService {
       // Subscribe on WebSocket
       this.subscribeToJobInternal(jobId)
     }
-    
+
     this.jobSubscriptions.get(jobId)!.push(callback)
 
     // Return unsubscribe function
@@ -201,7 +262,7 @@ class WebSocketService {
   // ADD THIS METHOD BACK - for system updates
   subscribeToSystem(callback: (data: any) => void) {
     this.systemSubscriptions.push(callback)
-    
+
     // Return unsubscribe function
     return () => {
       const index = this.systemSubscriptions.indexOf(callback)
@@ -216,7 +277,7 @@ class WebSocketService {
     if (!this.nodeSubscriptions.has(nodeId)) {
       this.nodeSubscriptions.set(nodeId, [])
     }
-    
+
     this.nodeSubscriptions.get(nodeId)!.push(callback)
 
     // Return unsubscribe function
@@ -259,9 +320,9 @@ class WebSocketService {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++
       const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000)
-      
+
       console.log(`🔄 Attempting reconnect in ${delay}ms (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
-      
+
       setTimeout(() => {
         console.log('🔌 Reconnecting...')
         this.connect()
