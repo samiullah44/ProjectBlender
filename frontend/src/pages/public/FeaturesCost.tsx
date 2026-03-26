@@ -79,7 +79,7 @@ const FeaturesCost = () => {
                <div className="bg-gradient-to-br from-purple-900/40 to-indigo-900/40 p-8 rounded-2xl border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.15)] relative overflow-hidden text-left transform md:-translate-y-4">
                  <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500 blur-[80px] opacity-20" />
                  <div className="text-purple-400 font-bold uppercase tracking-widest text-sm mb-4 flex items-center gap-2">
-                   <CreditCard className="w-4 h-4" /> RenderFarm Direct
+                   <CreditCard className="w-4 h-4" /> RenderOnNodes Direct
                  </div>
                  <div className="text-5xl font-bold text-white mb-2">~$12.00</div>
                  <p className="text-purple-300 mb-6">per equivalent job</p>

@@ -7,26 +7,23 @@ const Footer: React.FC = () => {
     <footer className="bg-[#0B0F19] border-t border-white/5 pt-16 pb-8">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-          
+
           {/* Brand & Description */}
           <div className="col-span-1 md:col-span-2">
-            <Link to="/" className="flex items-center gap-2 mb-4">
+            <Link to="/" className="flex items-center gap-3 mb-4 group">
               <span className="font-bold text-xl tracking-tight">
                 <span className="text-indigo-400">Render</span>
-                <span className="text-white">Farm</span>
+                <span className="text-white">OnNodes</span>
               </span>
             </Link>
             <p className="text-gray-400 text-sm mb-6 max-w-sm leading-relaxed">
               We are building the world's most accessible, high-performance distributed rendering network. Harness the power of idle GPUs globally.
             </p>
             <div className="flex items-center gap-4">
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+              <a href="https://x.com/RenderOnNodes" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
                 <Twitter className="w-4 h-4" />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
-                <Github className="w-4 h-4" />
-              </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+              <a href="https://www.linkedin.com/company/rebderonnodes/" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
                 <Linkedin className="w-4 h-4" />
               </a>
             </div>
@@ -75,7 +72,7 @@ const Footer: React.FC = () => {
         {/* Bottom Bar */}
         <div className="border-t border-white/5 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-gray-500">
-            &copy; {new Date().getFullYear()} RenderFarm Network. All rights reserved.
+            &copy; {new Date().getFullYear()} RenderOnNodes Network. All rights reserved.
           </p>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

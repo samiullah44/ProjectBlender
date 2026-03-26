@@ -85,7 +85,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
 
     window.addEventListener('scroll', handleScroll)
     window.addEventListener('waitlist-subscribed', handleSubscribeEvent)
-    
+
     return () => {
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('waitlist-subscribed', handleSubscribeEvent)
@@ -274,7 +274,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                     )}>
                       Render
                     </span>
-                    <span className="text-white">Farm</span>
+                    <span className="text-white">OnNodes</span>
                   </span>
                   <span className="text-xs text-gray-400 font-medium tracking-wide">
                     DISTRIBUTED RENDERING
@@ -566,14 +566,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
               ) : (
                 /* Auth Buttons for non-authenticated users */
                 <div className="flex items-center gap-3">
-                  {!hideWaitlist && !isSubscribed && (
-                    <Button
-                      onClick={() => window.dispatchEvent(new Event('open-waitlist'))}
-                      className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 font-semibold shadow-lg shadow-emerald-500/20"
-                    >
-                      Join Waitlist
-                    </Button>
-                  )}
+
                 </div>
               )}
             </div>
@@ -739,22 +732,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                     </>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      {!hideWaitlist && !isSubscribed && (
-                        <Button
-                          onClick={() => {
-                            window.dispatchEvent(new Event('open-waitlist'));
-                            setIsOpen(false);
-                          }}
-                          className={cn(
-                            "w-full bg-gradient-to-r transition-all duration-500 font-semibold shadow-lg",
-                            isProvider
-                              ? "from-purple-600 to-emerald-600 hover:from-purple-700 hover:to-emerald-700"
-                              : "from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 shadow-emerald-500/20"
-                          )}
-                        >
-                          Join Waitlist
-                        </Button>
-                      )}
+
                     </div>
                   )}
                 </div>

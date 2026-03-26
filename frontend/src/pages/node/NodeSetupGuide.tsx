@@ -38,7 +38,7 @@ const SETUP_STEPS: SetupStep[] = [
             'Right-click the downloaded BlendFarmNode.zip and select "Properties".',
             'At the bottom, check the "Unblock" checkbox and click "OK".',
             'If you see a "Windows protected your PC" blue screen: Click "More info" and then click "Run anyway".',
-            'Extract the contents to C:\\RenderFarm\\ after unblocking.',
+            'Extract the contents to C:\\RenderOnNodes\\ after unblocking.',
         ],
         color: 'text-red-400',
         glow: 'shadow-red-500/20',
@@ -66,11 +66,11 @@ const SETUP_STEPS: SetupStep[] = [
         title: 'Blender Auto-Download',
         subtitle: 'Handled automatically',
         description:
-            'The node detects the required Blender version from each job and downloads it automatically to `C:\\RenderFarm\\Blender\\`. No manual Blender installation is needed.',
+            'The node detects the required Blender version from each job and downloads it automatically to `C:\\RenderOnNodes\\Blender\\`. No manual Blender installation is needed.',
         details: [
             'First run will download ~250 MB — takes 1–2 minutes on a good connection.',
             'Multiple Blender versions are cached, so future jobs start instantly.',
-            'You can pre-populate `C:\\RenderFarm\\Blender\\` with a Blender folder to skip the download.',
+            'You can pre-populate `C:\\RenderOnNodes\\Blender\\` with a Blender folder to skip the download.',
         ],
         color: 'text-orange-400',
         glow: 'shadow-orange-500/20',
@@ -381,7 +381,7 @@ const NodeSetupGuide: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div className="bg-gray-950 rounded-xl p-4 border border-gray-800">
                             <p className="text-gray-500 mb-1 text-xs font-medium uppercase tracking-wider">Install Dir</p>
-                            <code className="text-cyan-400 font-mono">C:\RenderFarm\</code>
+                            <code className="text-cyan-400 font-mono">C:\RenderOnNodes\</code>
                         </div>
                         <div className="bg-gray-950 rounded-xl p-4 border border-gray-800">
                             <p className="text-gray-500 mb-1 text-xs font-medium uppercase tracking-wider">Auto-Start</p>

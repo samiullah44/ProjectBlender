@@ -107,7 +107,7 @@ const Features = () => {
       {/* Core Features Grid */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 mb-32">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-5xl font-bold mb-4">The RenderFarm Solution</h2>
+          <h2 className="text-3xl md:text-5xl font-bold mb-4">The RenderOnNodes Solution</h2>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">We've built a revolutionary decentralized architecture to solve the rendering bottleneck.</p>
         </div>
 

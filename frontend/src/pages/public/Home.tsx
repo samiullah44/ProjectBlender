@@ -186,7 +186,7 @@ const ProjectConceptSection: React.FC = () => {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-emerald-400">Rendering Intelligence</span>
             </h2>
             <p className="text-gray-400 text-lg leading-relaxed">
-              RenderFarm isn't just a platform; it's a decentralized ecosystem. We bridge the gap between <span className="text-white font-medium">3D Artists</span> who need massive computational power and <span className="text-white font-medium">Hardware Owners</span> with idle high-end GPUs.
+              RenderOnNodes isn't just a platform; it's a decentralized ecosystem. We bridge the gap between <span className="text-white font-medium">3D Artists</span> who need massive computational power and <span className="text-white font-medium">Hardware Owners</span> with idle high-end GPUs.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
@@ -286,7 +286,7 @@ const DualCTASection: React.FC = () => {
         <div className="text-center mb-16">
           <Badge variant="outline" className="text-blue-400 border-blue-500/30 mb-4 px-4 py-1">Join the Ecosystem</Badge>
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">Choose Your Path</h2>
-          <p className="text-gray-400 max-w-2xl mx-auto text-lg">Whether you need massive computing power or want to monetize your idle hardware, RenderFarm has you covered.</p>
+          <p className="text-gray-400 max-w-2xl mx-auto text-lg">Whether you need massive computing power or want to monetize your idle hardware, RenderOnNodes has you covered.</p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
