@@ -36,7 +36,7 @@ const WaitlistPopup: React.FC<WaitlistPopupProps> = ({ isOpen, onClose, onSubscr
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5001/api/newsletter/subscribe', {
+      const response = await fetch('https://www.renderonnodes.com/api/api/newsletter/subscribe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

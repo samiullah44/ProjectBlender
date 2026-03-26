@@ -21,5 +21,10 @@ export default defineConfig({
       }
     },
     chunkSizeWarningLimit: 1000,
+  },
+  server: {
+    host: true, // allow network access
+    port: 5173,
+    allowedHosts: ['www.renderonnodes.com'] // allow your domain
   }
 })

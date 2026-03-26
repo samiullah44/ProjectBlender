@@ -1,4 +1,4 @@
-name: Auto Deploy Backend to EC2
+name: Auto Deploy Frontend & Newsletter to EC2 (Zero Downtime)
 
 on:
   push:
@@ -19,34 +19,57 @@ jobs:
           script: |
             set -e
 
-            cd ~
+            cd ~/render
 
-            if [ ! -d "render/.git" ]; then
-              echo "Cloning repo via SSH..."
-              rm -rf render
-              git clone git@github.com:MWahhabMirzaVectorLabsFZELLC/renderNodes.git render
+            echo "Pulling latest changes from repo..."
+            if [ ! -d ".git" ]; then
+              echo "Cloning repo for the first time..."
+              git clone git@github-rendernodes:MWahhabMirzaVectorLabsFZELLC/renderNodes.git .
             else
-              cd render
-              git remote set-url origin git@github.com:MWahhabMirzaVectorLabsFZELLC/renderNodes.git
               git fetch origin
               git reset --hard origin/main
             fi
 
-            echo "Installing backend dependencies..."
-            cd ~/render/backend/main
+            # -------------------------
+            # Backend Newsletter
+            # -------------------------
+            echo "Installing newsletter dependencies..."
+            cd backend/newsletter
             npm install
 
-            # Build only if build script exists
+            echo "Building newsletter..."
             if npm run | grep -q "build"; then
               npm run build
             fi
 
-            echo "Restarting PM2..."
-            if pm2 describe render-server > /dev/null 2>&1; then
-              pm2 restart render-server
+            echo "Reloading newsletter PM2 (zero downtime)..."
+            if pm2 describe render-newsletter-server > /dev/null 2>&1; then
+              pm2 reload render-newsletter-server
             else
-              pm2 start npm --name render-server -- start
+              pm2 start npm --name render-newsletter-server -- start
+            fi
+            pm2 save
+
+            cd ~/render
+
+            # -------------------------
+            # Frontend
+            # -------------------------
+            echo "Installing frontend dependencies..."
+            cd frontend
+            npm install
+
+            echo "Building frontend..."
+            if npm run | grep -q "build"; then
+              npm run build
             fi
 
+            echo "Reloading frontend PM2 (zero downtime)..."
+            if pm2 describe render-client > /dev/null 2>&1; then
+              pm2 reload render-client
+            else
+              pm2 start npm --name render-client -- run dev -- --host
+            fi
             pm2 save
-            echo "✅ Deployment successful"
+
+            echo "✅ Deployment of Frontend & Newsletter complete (Zero Downtime)"
