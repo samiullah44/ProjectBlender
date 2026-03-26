@@ -348,25 +348,6 @@ const DualCTASection: React.FC = () => {
   )
 }
 
-const StatsSection: React.FC = () => {
-  return (
-    <motion.section initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="py-20 bg-gradient-to-b from-black to-gray-900">
-      <div className="container mx-auto px-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-          {stats.map((stat, index) => (
-            <motion.div key={index} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: index * 0.1 }} className="text-center">
-              <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
-                {stat.value}
-              </div>
-              <div className="text-sm text-gray-400 uppercase tracking-wider">{stat.label}</div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </motion.section>
-  )
-}
-
 const FeaturesSection: React.FC = () => {
   return (
     <section id="features" className="py-32">
@@ -465,35 +446,6 @@ const FeaturesSection: React.FC = () => {
   )
 }
 
-const HomeFooter: React.FC = () => {
-  return (
-    <footer className="py-12 border-t border-white/10">
-      <div className="container mx-auto px-6">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <Cpu className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold">
-              <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Blender</span>
-              <span className="text-white">Farm</span>
-            </span>
-            <div className="text-xs text-gray-500 ml-4">© 2024 BlenderFarm. All rights reserved.</div>
-          </div>
-
-          <div className="flex gap-8 text-sm text-gray-400">
-            <a href="#" className="hover:text-white transition-colors">Privacy</a>
-            <a href="#" className="hover:text-white transition-colors">Terms</a>
-            <a href="#" className="hover:text-white transition-colors">Security</a>
-            <a href="#" className="hover:text-white transition-colors">Status</a>
-            <a href="#" className="hover:text-white transition-colors">Docs</a>
-          </div>
-        </div>
-      </div>
-    </footer>
-  )
-}
-
 // --- Main Component ---
 const HomePage: React.FC = () => {
   return (
@@ -504,9 +456,7 @@ const HomePage: React.FC = () => {
       <ProjectConceptSection />
       <WorkflowSection />
       <DualCTASection />
-      <StatsSection />
       <FeaturesSection />
-      <HomeFooter />
     </div>
   )
 }
