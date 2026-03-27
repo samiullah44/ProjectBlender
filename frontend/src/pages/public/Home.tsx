@@ -31,6 +31,7 @@ import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
+import SEO from '../components/SEO'
 
 // --- Data Constants ---
 const HERO_IMAGES = ["/hero.jpg", "/hero1.jpg", "/hero3.png", "/hero2.png"]
@@ -450,6 +451,11 @@ const FeaturesSection: React.FC = () => {
 const HomePage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-black text-white">
+      <SEO
+        title="Distributed GPU Render Farm"
+        description="Join RenderOnNodes to contribute GPU power to the decentralized render network. Earn rewards as a node operator or submit rendering jobs at scale."
+        canonical="/"
+      />
       {/* Navigation - No changes here */}
 
       <HeroSection />
