@@ -31,7 +31,7 @@ import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
-import SEO from '../components/SEO'
+import SEO from '../../components/SEO'
 
 // --- Data Constants ---
 const HERO_IMAGES = ["/hero.jpg", "/hero1.jpg", "/hero3.png", "/hero2.png"]
