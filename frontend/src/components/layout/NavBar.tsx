@@ -566,7 +566,24 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
               ) : (
                 /* Auth Buttons for non-authenticated users */
                 <div className="flex items-center gap-3">
-
+                  <Link to="/login">
+                    <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white">
+                      Sign In
+                    </Button>
+                  </Link>
+                  <Link to="/register">
+                    <Button className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700">
+                      Get Started
+                    </Button>
+                  </Link>
+                  {!hideWaitlist && !isSubscribed && (
+                    <Button
+                      onClick={() => window.dispatchEvent(new Event('open-waitlist'))}
+                      className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 font-semibold shadow-lg shadow-emerald-500/20 ml-2"
+                    >
+                      Join Waitlist
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -732,7 +749,31 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                     </>
                   ) : (
                     <div className="flex flex-col gap-3">
-
+                      <Link
+                        to="/login"
+                        className="w-full text-center py-3 text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors font-medium"
+                        onClick={() => setIsOpen(false)}
+                      >
+                        Sign In
+                      </Link>
+                      <Link
+                        to="/register"
+                        className="w-full text-center py-3 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors font-medium"
+                        onClick={() => setIsOpen(false)}
+                      >
+                        Get Started
+                      </Link>
+                      {!hideWaitlist && !isSubscribed && (
+                        <Button
+                          onClick={() => {
+                            window.dispatchEvent(new Event('open-waitlist'));
+                            setIsOpen(false);
+                          }}
+                          className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 transition-all duration-500 font-semibold shadow-emerald-500/20 shadow-lg"
+                        >
+                          Join Waitlist
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
