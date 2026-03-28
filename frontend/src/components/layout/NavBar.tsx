@@ -1,4 +1,4 @@
-// components/layout/Navbar.tsx - UPDATED
+// components/layout/Navbar.tsx - FIXED & UPDATED
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -30,6 +30,10 @@ import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
 import { NotificationBell } from './NotificationBell'
 import { useOnClickOutside } from '@/hooks/useOnClickOutside'
+import { useRenderNetwork } from '@/hooks/useRenderNetwork'
+
+// We no longer import WalletMultiButton as we are removing it from the header per user request
+// import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 
 interface NavItem {
   label: string
@@ -61,6 +65,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
   const { user, isAuthenticated, logout, switchRole } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
+  const { creditedAmount, isRefreshing } = useRenderNetwork()
 
   const activeRole = user?.primaryRole || user?.role;
   const isProvider = activeRole === 'node_provider';
@@ -128,12 +133,6 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
           description: 'Real-time rendering insights',
           icon: <BarChart3 className="w-4 h-4" />
         },
-        // {
-        //   label: 'Cost Calculator',
-        //   href: '/features/pricing',
-        //   description: 'Estimate rendering costs',
-        //   icon: <CreditCard className="w-4 h-4" />
-        // }
       ]
     },
     {
@@ -141,16 +140,6 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
       href: '/how-it-works',
       icon: <Settings className="w-4 h-4" />
     }
-    // {
-    //   label: 'Pricing',
-    //   href: '/pricing',
-    //   icon: <Wallet className="w-4 h-4" />
-    // },
-    // {
-    //   label: 'Docs',
-    //   href: '/docs',
-    //   icon: <FileText className="w-4 h-4" />
-    // }
   ]
 
   const getModuleLinks = () => {
@@ -222,11 +211,6 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
       label: 'Settings',
       href: '/settings',
       icon: <Settings className="w-4 h-4" />
-    },
-    {
-      label: 'Credits',
-      href: '/credits',
-      icon: <CreditCard className="w-4 h-4" />
     },
     {
       label: 'Notifications',
@@ -358,43 +342,10 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
 
             {/* Right Side - Modules & Auth */}
             <div className="hidden lg:flex items-center gap-4">
-              {/* Search
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="search"
-                  placeholder="Search..."
-                  className="pl-10 pr-4 py-2 w-40 rounded-lg bg-white/5 border border-white/10 text-sm placeholder-gray-400 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 text-white"
-                />
-              </div> */}
-
-
-
               {isAuthenticated && user ? (
                 <>
                   {/* Notifications */}
                   <NotificationBell />
-
-                  {/* Credits Display */}
-                  <div className={cn(
-                    "px-3 py-1.5 rounded-lg border transition-all duration-300",
-                    isProvider
-                      ? "bg-purple-500/10 border-purple-500/20"
-                      : "bg-emerald-500/10 border-emerald-500/20"
-                  )}>
-                    <div className="flex items-center gap-2">
-                      <CreditCard className={cn(
-                        "w-4 h-4",
-                        isProvider ? "text-purple-400" : "text-emerald-400"
-                      )} />
-                      <span className={cn(
-                        "text-sm font-medium",
-                        isProvider ? "text-purple-400" : "text-emerald-400"
-                      )}>
-                        {user.credits?.toLocaleString()} credits
-                      </span>
-                    </div>
-                  </div>
 
                   {/* Role Switcher */}
                   {user.roles && user.roles.length > 1 && (
@@ -529,9 +480,9 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                                   {user.email}
                                 </div>
                                 <div className="flex items-center gap-2 mt-1">
-                                  <CreditCard className="w-3 h-3 text-emerald-400" />
-                                  <span className="text-xs text-emerald-400 font-medium">
-                                    {user.credits?.toLocaleString()} credits
+                                  <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span className="text-xs font-semibold text-emerald-400">
+                                    {isRefreshing ? 'Syncing...' : `${(creditedAmount > 0 ? creditedAmount : (user?.tokenBalance || 0)).toFixed(2)} mRNDR`}
                                   </span>
                                 </div>
                               </div>
@@ -539,6 +490,19 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                           </div>
 
                           <div className="py-2">
+                            <button
+                              onClick={() => {
+                                window.dispatchEvent(new Event('open-deposit-modal'));
+                                setUserMenuOpen(false);
+                              }}
+                              className="flex items-center gap-3 w-full px-4 py-3 hover:bg-emerald-500/10 transition-colors text-left group border-b border-white/5 pb-4 mb-2"
+                            >
+                              <div className="p-1.5 bg-emerald-500/20 rounded-md group-hover:scale-110 transition-transform">
+                                <CreditCard className="w-4 h-4 text-emerald-400" />
+                              </div>
+                              <span className="text-sm font-semibold text-emerald-400 shadow-sm">Deposit mRNDR Tokens</span>
+                            </button>
+
                             {userMenuItems.map((item) => (
                               <Link
                                 key={item.label}
@@ -564,7 +528,6 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                   </div>
                 </>
               ) : (
-                /* Auth Buttons for non-authenticated users */
                 <div className="flex items-center gap-3">
                   <Link to="/login">
                     <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white">
@@ -614,7 +577,6 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
               className="lg:hidden bg-gray-900/95 backdrop-blur-xl border-b border-white/5 overflow-hidden"
             >
               <div className="container mx-auto px-4 py-6">
-                {/* Mobile Navigation */}
                 <div className="space-y-2">
                   {navItems.map((item) => (
                     <div key={item.label}>
@@ -634,7 +596,6 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                         )}
                       </Link>
 
-                      {/* Mobile Submenu */}
                       {item.submenu && (
                         <div className="ml-8 mt-1 space-y-1">
                           {item.submenu.map((subItem) => (
@@ -663,7 +624,6 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                   ))}
                 </div>
 
-                {/* Mobile Auth & Modules */}
                 <div className="mt-8 pt-6 border-t border-white/10">
                   {isAuthenticated && user ? (
                     <>
@@ -686,20 +646,19 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                             </div>
                             <div className="flex items-center gap-2 mt-1">
                               <CreditCard className={cn(
-                                "w-3 h-3",
+                                "w-3.5 h-3.5",
                                 isProvider ? "text-purple-400" : "text-emerald-400"
                               )} />
                               <span className={cn(
-                                "text-xs font-medium",
+                                "text-xs font-semibold",
                                 isProvider ? "text-purple-400" : "text-emerald-400"
                               )}>
-                                {user.credits?.toLocaleString()} credits
+                                {isRefreshing ? 'Syncing...' : `${(creditedAmount > 0 ? creditedAmount : (user?.tokenBalance || 0)).toFixed(2)} mRNDR`}
                               </span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Mobile Module Links */}
                         {moduleLinks.length > 0 && (
                           <div className="grid grid-cols-1 gap-2 mb-6">
                             {moduleLinks.map((link) => (
@@ -720,8 +679,18 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                           </div>
                         )}
 
-                        {/* Mobile User Menu */}
                         <div className="space-y-1">
+                          <button
+                            onClick={() => {
+                              window.dispatchEvent(new Event('open-deposit-modal'));
+                              setIsOpen(false);
+                            }}
+                            className="flex items-center gap-3 w-full px-4 py-3 rounded-lg hover:bg-emerald-500/10 bg-emerald-500/5 transition-colors text-left mb-2 border border-emerald-500/20"
+                          >
+                            <CreditCard className="w-4 h-4 text-emerald-400" />
+                            <span className="text-emerald-400 font-medium text-sm font-semibold">Deposit mRNDR Tokens</span>
+                          </button>
+
                           {userMenuItems.map((item) => (
                             <Link
                               key={item.label}
@@ -730,7 +699,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                               onClick={() => setIsOpen(false)}
                             >
                               {item.icon}
-                              <span className="text-gray-300">{item.label}</span>
+                              <span className="text-gray-300 text-sm">{item.label}</span>
                             </Link>
                           ))}
 
@@ -742,7 +711,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                             className="flex items-center gap-3 w-full px-4 py-3 rounded-lg hover:bg-red-500/10 text-red-400 transition-colors"
                           >
                             <LogOut className="w-4 h-4" />
-                            <span>Logout</span>
+                            <span className="text-sm">Logout</span>
                           </button>
                         </div>
                       </div>

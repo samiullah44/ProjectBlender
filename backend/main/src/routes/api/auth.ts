@@ -153,6 +153,7 @@ router.get('/profile', authenticate, AuthController.getProfile);
 router.put('/profile', authenticate, AuthController.updateProfile);
 router.post('/apply-node-provider', authenticate, AuthController.applyAsNodeProvider);
 router.put('/primary-role', authenticate, AuthController.updatePrimaryRole);
+router.post('/sync-deposit', authenticate, AuthController.syncDeposit);
 
 // Admin routes
 router.post('/add-credits', authenticate, authorize('admin'), AuthController.addCredits);

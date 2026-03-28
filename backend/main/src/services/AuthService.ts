@@ -160,6 +160,8 @@ export class AuthService {
           name: user.name,
           role: user.role,
           credits: user.credits,
+          tokenBalance: user.tokenBalance || 0,
+          depositTokenAddress: user.depositTokenAddress,
           isVerified: user.isVerified
         }
       };
@@ -227,6 +229,8 @@ export class AuthService {
           name: user.name,
           role: user.role,
           credits: user.credits,
+          tokenBalance: user.tokenBalance || 0,
+          depositTokenAddress: user.depositTokenAddress,
           isVerified: user.isVerified,
           provider: user.provider
         }
@@ -522,6 +526,38 @@ export class AuthService {
     }
     await user.deductCredits(amount);
     return user;
+  }
+
+  // Sync crypto deposit to database
+  async syncDeposit(userId: string, depositTokenAddress: string, amount: number): Promise<AuthResponse> {
+    try {
+      const user = await User.findById(userId);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      // Add to database token balance (Real tokens)
+      user.tokenBalance += amount;
+      
+      // Permanently attach their generated PDA Escrow Token Account to their profile
+      if (depositTokenAddress && user.depositTokenAddress !== depositTokenAddress) {
+        user.depositTokenAddress = depositTokenAddress;
+      }
+
+      await user.save();
+
+      return {
+        success: true,
+        message: 'Token deposit synced successfully',
+        user: {
+          tokenBalance: user.tokenBalance,
+          depositTokenAddress: user.depositTokenAddress
+        }
+      };
+    } catch (error: any) {
+      console.error('Sync deposit error:', error);
+      return { success: false, error: 'Failed to sync deposit' };
+    }
   }
 
   // backend/src/services/authService.ts - AUTOMATED applyForNodeProvider

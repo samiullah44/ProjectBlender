@@ -14,6 +14,7 @@ import Footer from '@/components/layout/Footer'
 import WaitlistPopup from '@/components/ui/WaitlistPopup'
 import ScrollToTop from '@/components/layout/ScrollToTop'
 import { ProtectedRoute } from '@/components/layout/ProtectedLayout'
+import { DepositModal } from '@/components/ui/DepositModal'
 
 // Lazy loaded Public Pages
 const HomePage = React.lazy(() => import('@/pages/public/Home'))
@@ -319,6 +320,9 @@ function App() {
       {import.meta.env.VITE_NODE_ENV === 'development' && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}
+
+      {/* Global Modals */}
+      <DepositModal />
 
     </QueryClientProvider>
   )

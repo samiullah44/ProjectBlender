@@ -14,6 +14,8 @@ interface User {
     roles?: ('client' | 'node_provider' | 'admin')[]
     primaryRole?: 'client' | 'node_provider' | 'admin'
     credits: number
+    tokenBalance: number
+    depositTokenAddress?: string
     isVerified: boolean
     provider?: 'google' | 'github' | 'local'
     nodeProvider?: {

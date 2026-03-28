@@ -201,6 +201,8 @@ export class AuthController {
           roles: user.roles,
           primaryRole: user.primaryRole,
           credits: user.credits,
+          tokenBalance: user.tokenBalance,
+          depositTokenAddress: user.depositTokenAddress,
           isVerified: user.isVerified,
           provider: user.provider,
           stats: user.stats,
@@ -369,6 +371,34 @@ export class AuthController {
       res.status(500).json({
         success: false,
         error: 'Failed to add credits'
+      });
+    }
+  }
+
+  // Sync on-chain deposit
+  static async syncDeposit(req: AuthRequest, res: Response) {
+    try {
+      const { depositTokenAddress, amount } = req.body;
+
+      if (!depositTokenAddress || typeof amount !== 'number' || amount <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Valid token address and properly formatted amount required'
+        });
+      }
+
+      const result = await authService.syncDeposit(req.user.userId, depositTokenAddress, amount);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Sync deposit error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to sync deposit'
       });
     }
   }

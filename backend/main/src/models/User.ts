@@ -13,6 +13,9 @@ export interface IUser extends Document {
   roles: ('client' | 'node_provider' | 'admin')[];
   role?: 'client' | 'node_provider' | 'admin'; // Kept for backward compatibility
   credits: number;
+  // NEW: Store the specific generated PDA token account
+  depositTokenAddress?: string;
+  tokenBalance: number;
 
   // OAuth fields
   provider?: 'google' | 'github' | 'local';
@@ -122,6 +125,16 @@ const userSchema = new Schema<IUser>(
     credits: {
       type: Number,
       default: 1000
+    },
+    depositTokenAddress: {
+      type: String,
+      sparse: true,
+      index: true
+    },
+    tokenBalance: {
+      type: Number,
+      default: 0,
+      min: 0
     },
     provider: {
       type: String,
