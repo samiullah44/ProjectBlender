@@ -203,6 +203,7 @@ export class AuthController {
           credits: user.credits,
           tokenBalance: user.tokenBalance,
           depositTokenAddress: user.depositTokenAddress,
+          solanaSeed: user.solanaSeed,
           isVerified: user.isVerified,
           provider: user.provider,
           stats: user.stats,

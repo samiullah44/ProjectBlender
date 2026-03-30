@@ -665,6 +665,10 @@
       ],
       "args": [
         {
+          "name": "user_id",
+          "type": "pubkey"
+        },
+        {
           "name": "amount",
           "type": "u64"
         }
@@ -1006,6 +1010,10 @@
       ],
       "args": [
         {
+          "name": "user_id",
+          "type": "pubkey"
+        },
+        {
           "name": "job_id",
           "type": "u64"
         },
@@ -1322,6 +1330,10 @@
             "type": "u64"
           },
           {
+            "name": "user_id",
+            "type": "pubkey"
+          },
+          {
             "name": "user",
             "type": "pubkey"
           },
@@ -1470,6 +1482,10 @@
         "fields": [
           {
             "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "user_id",
             "type": "pubkey"
           },
           {

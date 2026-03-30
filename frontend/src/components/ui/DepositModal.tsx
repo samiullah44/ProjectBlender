@@ -19,18 +19,18 @@ export const DepositModal = () => {
   const { depositToAccount, fetchCreditBalance, pdaAddress } = useRenderNetwork();
   const { getProfile } = useAuthStore();
 
-  // We'll keep the auto-step transition ONLY if the user just clicked the button in this session
-  const [justConnected, setJustConnected] = useState(false);
+  // Track the 'connected' state to detect a new connection
+  const [prevConnected, setPrevConnected] = useState(connected);
   
   useEffect(() => {
-    if (connected && step === 1 && justConnected) {
+    if (connected && !prevConnected && step === 1) {
       const timer = setTimeout(() => {
         setStep(2);
-        setJustConnected(false);
       }, 600);
       return () => clearTimeout(timer);
     }
-  }, [connected, step, justConnected]);
+    setPrevConnected(connected);
+  }, [connected, step, prevConnected]);
 
   useEffect(() => {
     const handleOpen = () => {
@@ -138,7 +138,7 @@ export const DepositModal = () => {
                   <p className="text-gray-400 text-sm">
                     Select the Solana wallet you want to deposit from.
                   </p>
-                  <div className="wallet-adapter-wrapper scale-110 mt-4" onClick={() => setJustConnected(true)}>
+                  <div className="wallet-adapter-wrapper scale-110 mt-4">
                     <WalletMultiButton />
                   </div>
                   {connected && (

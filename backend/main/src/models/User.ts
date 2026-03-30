@@ -16,6 +16,7 @@ export interface IUser extends Document {
   // NEW: Store the specific generated PDA token account
   depositTokenAddress?: string;
   tokenBalance: number;
+  solanaSeed?: string;
 
   // OAuth fields
   provider?: 'google' | 'github' | 'local';
@@ -136,6 +137,12 @@ const userSchema = new Schema<IUser>(
       default: 0,
       min: 0
     },
+    solanaSeed: {
+      type: String,
+      sparse: true,
+      index: true
+    },
+
     provider: {
       type: String,
       enum: ['google', 'github', 'local'],

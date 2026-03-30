@@ -1,6 +1,8 @@
 import * as mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { User, IUser } from '../models/User';
+
 import { Application } from '../models/Application';
 import { OTP } from '../models/OTP';
 import { ResetToken } from '../models/ResetToken';
@@ -70,8 +72,10 @@ export class AuthService {
           framesRendered: 0,
           totalSpent: 0,
           totalEarned: 0
-        }
+        },
+        solanaSeed: crypto.randomBytes(32).toString('hex')
       });
+
 
       await tempUser.save();
 
@@ -162,8 +166,10 @@ export class AuthService {
           credits: user.credits,
           tokenBalance: user.tokenBalance || 0,
           depositTokenAddress: user.depositTokenAddress,
+          solanaSeed: user.solanaSeed,
           isVerified: user.isVerified
         }
+
       };
 
     } catch (error: any) {
@@ -231,9 +237,11 @@ export class AuthService {
           credits: user.credits,
           tokenBalance: user.tokenBalance || 0,
           depositTokenAddress: user.depositTokenAddress,
+          solanaSeed: user.solanaSeed,
           isVerified: user.isVerified,
           provider: user.provider
         }
+
       };
 
     } catch (error: any) {
@@ -424,8 +432,17 @@ export class AuthService {
     if (!user) {
       throw new Error('User not found');
     }
+
+    // Auto-generate solanaSeed for existing users if missing
+    if (!user.solanaSeed) {
+      user.solanaSeed = crypto.randomBytes(32).toString('hex');
+      await user.save();
+      console.log(`✅ Generated Solana Identity Seed for existing user: ${user.email}`);
+    }
+
     return user;
   }
+
 
   // Update user profile
   async updateProfile(userId: string, updates: any): Promise<AuthResponse> {
@@ -551,8 +568,10 @@ export class AuthService {
         message: 'Token deposit synced successfully',
         user: {
           tokenBalance: user.tokenBalance,
-          depositTokenAddress: user.depositTokenAddress
+          depositTokenAddress: user.depositTokenAddress,
+          solanaSeed: user.solanaSeed
         }
+
       };
     } catch (error: any) {
       console.error('Sync deposit error:', error);

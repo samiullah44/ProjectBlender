@@ -1,6 +1,8 @@
 // backend/src/services/OAuthService.ts
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { User } from '../models/User';
+
 import { env } from '../config/env';
 
 export interface OAuthProfile {
@@ -34,19 +36,23 @@ export class OAuthService {
                         framesRendered: 0,
                         totalSpent: 0,
                         totalEarned: 0
-                    }
+                    },
+                    solanaSeed: crypto.randomBytes(32).toString('hex')
                 });
+
 
                 await user.save();
                 console.log(`✅ New ${profile.provider} user created: ${user.email}`);
-            } else if (!user.provider) {
-                // Link existing account to OAuth provider
-                user.provider = profile.provider;
-                user.providerId = profile.providerId;
-                user.isVerified = true;
-                await user.save();
                 console.log(`✅ Existing user linked to ${profile.provider}: ${user.email}`);
             }
+
+            // Auto-generate solanaSeed for existing users if missing
+            if (!user.solanaSeed) {
+                user.solanaSeed = crypto.randomBytes(32).toString('hex');
+                await user.save();
+                console.log(`✅ Generated Solana Identity Seed for existing OAuth user: ${user.email}`);
+            }
+
 
             // Update last login
             user.lastLoginAt = new Date();
@@ -65,9 +71,11 @@ export class OAuthService {
                     name: user.name,
                     role: user.role,
                     credits: user.credits,
+                    solanaSeed: user.solanaSeed,
                     isVerified: user.isVerified,
                     provider: user.provider
                 }
+
             };
 
         } catch (error: any) {

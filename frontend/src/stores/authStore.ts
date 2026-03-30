@@ -16,7 +16,9 @@ interface User {
     credits: number
     tokenBalance: number
     depositTokenAddress?: string
+    solanaSeed?: string
     isVerified: boolean
+
     provider?: 'google' | 'github' | 'local'
     nodeProvider?: {
         // nodeId?: string

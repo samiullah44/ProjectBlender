@@ -6,6 +6,8 @@ import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
 
 import { idl, RENDER_NETWORK_PROGRAM_ID, SEED_USER_ACCOUNT } from '../idl/render_network';
+import { useAuthStore } from '../stores/authStore';
+
 
 // Ensure the IDL is correctly typed for Anchor
 const programId = new PublicKey(RENDER_NETWORK_PROGRAM_ID);
@@ -21,21 +23,29 @@ export function useRenderNetwork() {
   const [creditedAmount, setCreditedAmount] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const { user } = useAuthStore();
+  
   // Initialize Anchor Provider and Program
   const program = useMemo(() => {
+
     if (!wallet) return null;
     const provider = new AnchorProvider(connection, wallet, AnchorProvider.defaultOptions());
     return new Program(idl as Idl, provider);
   }, [connection, wallet]);
 
   const pdaAddress = useMemo(() => {
-    if (!wallet) return null;
+    if (!wallet || !user?.solanaSeed) return null;
+    
+    // User Identity Seed (from Database) - convert hex string to Buffer for PublicKey
+    const userIdPubkey = new PublicKey(Buffer.from(user.solanaSeed, 'hex'));
+
     const [pda] = PublicKey.findProgramAddressSync(
-      [Buffer.from(SEED_USER_ACCOUNT), wallet.publicKey.toBuffer()],
+      [Buffer.from(SEED_USER_ACCOUNT), userIdPubkey.toBuffer()],
       programId
     );
     return pda;
-  }, [wallet?.publicKey]);
+  }, [wallet?.publicKey, user?.solanaSeed]);
+
 
   // Fetch the current user's "Credit Account" PDA balance
   const fetchCreditBalance = async () => {
@@ -46,16 +56,27 @@ export function useRenderNetwork() {
 
     try {
       setIsRefreshing(true);
+
+      if (!user?.solanaSeed) {
+        console.log("No solanaSeed found for current user. Skipping balance fetch.");
+        setCreditedAmount(0);
+        return;
+      }
+      
+      const userIdPubkey = new PublicKey(Buffer.from(user.solanaSeed, 'hex'));
+
+
       const [userAccountPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from(SEED_USER_ACCOUNT), wallet.publicKey.toBuffer()],
+        [Buffer.from(SEED_USER_ACCOUNT), userIdPubkey.toBuffer()],
         programId
       );
+
 
       // Fetch the account data (this will throw if it doesn't exist yet - which is normal for new users)
       const accountData: any = await (program.account as any).userAccount.fetch(userAccountPda);
       
-      // Assume 6 decimals for the Token Mint
-      const formattedAmount = accountData.creditedAmount.toNumber() / 1e6;
+      // Assume 6 decimals for the Token Mint - Use string conversion to avoid 53-bit precision crash
+      const formattedAmount = Number(accountData.creditedAmount.toString()) / 1e6;
       setCreditedAmount(formattedAmount);
     } catch (err: any) {
       // If the account doesn't exist yet, it simply means they haven't deposited anything.
@@ -88,11 +109,19 @@ export function useRenderNetwork() {
     // Convert tokens to raw units (6 decimals)
     const rawAmount = new BN(amountInTokens * 1e6);
 
-    // 1. Derive User's Credit PDA
+    if (!user?.solanaSeed) {
+        throw new Error("Your account is not fully initialized. Please try logging out and back in to generate your Solana Identity Seed.");
+    }
+
+    // 1. Derive User's Credit PDA (Using identity seed) - convert hex string to Buffer for PublicKey
+    const userIdPubkey = new PublicKey(Buffer.from(user.solanaSeed, 'hex'));
+
+
     const [userAccountPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from(SEED_USER_ACCOUNT), wallet.publicKey.toBuffer()],
+      [Buffer.from(SEED_USER_ACCOUNT), userIdPubkey.toBuffer()],
       programId
     );
+
 
     // 2. Determine necessary ATAs
     // Source: User's Wallet ATA
@@ -108,9 +137,9 @@ export function useRenderNetwork() {
     console.log("Credit PDA ATA:", pdaDepositAta.toBase58());
 
     try {
-      // 3. Build the Anchor RPC method
+      // 3. Build the Anchor RPC method (Pass user_id as argument)
       const tx = await program.methods
-        .depositToAccount(rawAmount)
+        .depositToAccount(userIdPubkey, rawAmount)
         .accounts({
           userAccount: userAccountPda,
           user: wallet.publicKey,
@@ -122,6 +151,7 @@ export function useRenderNetwork() {
           systemProgram: SystemProgram.programId,
         })
         .rpc();
+
 
       console.log("Deposit Transaction successful! Signature:", tx);
       return { tx, pdaDepositAta: pdaDepositAta.toBase58() };
