@@ -404,6 +404,32 @@ export class AuthController {
     }
   }
 
+  // Update Solana identity seed (solanaSeed)
+  static async updateSolanaSeed(req: AuthRequest, res: Response) {
+    try {
+      const { solanaSeed } = req.body;
+      if (!solanaSeed) {
+        return res.status(400).json({
+          success: false,
+          error: 'Solana seed is required'
+        });
+      }
+
+      const result = await authService.updateSolanaSeed(req.user.userId, solanaSeed);
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Update solana seed error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update solana seed'
+      });
+    }
+  }
+
   // Health check
   static async healthCheck(req: Request, res: Response) {
     res.json({

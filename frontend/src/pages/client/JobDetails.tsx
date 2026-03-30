@@ -42,6 +42,7 @@ import { axiosInstance } from '@/lib/axios'
 import { useQueryClient } from '@tanstack/react-query'
 import { jobKeys, useJob, useCancelJob } from '@/hooks/useJobs'
 import jobStore from '@/stores/jobStore'
+import { useRenderNetwork } from '@/hooks/useRenderNetwork'
 import FrameGrid from '@/components/dashboard/FrameGrid'
 import SmartImage from '@/components/ui/SmartImage'
 
@@ -78,6 +79,7 @@ const JobDetails: React.FC = () => {
   } = useJob(jobId)
 
   const cancelJobMutation = useCancelJob()
+  const { cancelJobOnchain } = useRenderNetwork()
 
   // Memoized version of frames for the gallery and distribution grid
   const cachedFrames = useMemo(() => {
@@ -182,10 +184,19 @@ const JobDetails: React.FC = () => {
 
     if (window.confirm('Are you sure you want to cancel this job?')) {
       try {
+        // If the on-chain escrow is already locked, refund it on-chain first.
+        const escrowTxSignature = (job as any)?.escrow?.txSignature as string | undefined
+        if (escrowTxSignature) {
+          toast.loading('Refunding locked payment on-chain...', { id: 'cancel-onchain' })
+          await cancelJobOnchain(jobId)
+          toast.success('On-chain refund completed', { id: 'cancel-onchain' })
+        }
+
         await cancelJobMutation.mutateAsync({ jobId, cleanupS3: false })
         toast.success('Job cancelled successfully')
         navigate('/client/dashboard')
       } catch (error) {
+        console.error('Cancel job error:', error)
         toast.error('Failed to cancel job')
       }
     }
@@ -445,7 +456,8 @@ const JobDetails: React.FC = () => {
     switch (status) {
       case 'completed': return 'bg-emerald-500'
       case 'processing': return 'bg-blue-500'
-      case 'pending': return 'bg-amber-500'
+      case 'pending':
+      case 'pending_payment': return 'bg-amber-500'
       case 'failed': return 'bg-red-500'
       case 'cancelled': return 'bg-gray-500'
       default: return 'bg-gray-500'
@@ -456,7 +468,8 @@ const JobDetails: React.FC = () => {
     switch (status) {
       case 'completed': return CheckCircle
       case 'processing': return RefreshCw
-      case 'pending': return Clock
+      case 'pending':
+      case 'pending_payment': return Clock
       case 'failed': return AlertCircle
       case 'cancelled': return X
       default: return Clock

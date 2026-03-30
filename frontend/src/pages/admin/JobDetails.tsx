@@ -175,7 +175,7 @@ const AdminJobDetails: React.FC = () => {
                                     Approve
                                 </Button>
                             )}
-                            {(job.status === 'pending' || job.status === 'processing') && (
+                            {(job.status === 'pending' || job.status === 'pending_payment' || job.status === 'processing') && !((job as any).escrow?.txSignature) && (
                                 <Button
                                     size="sm"
                                     variant="outline"
@@ -193,7 +193,7 @@ const AdminJobDetails: React.FC = () => {
 
             <div className="container mx-auto px-4 py-8">
                 {/* Progress Overview */}
-                {(job.status === 'processing' || job.status === 'pending') && (
+                {(job.status === 'processing' || job.status === 'pending' || job.status === 'pending_payment') && (
                     <Card className="bg-gray-900/50 border-white/10 mb-6">
                         <CardContent className="p-6">
                             <div className="flex items-center justify-between mb-3">

@@ -41,7 +41,7 @@ export interface Job {
   blendFileKey: string
   blendFileUrl: string
   type: 'image' | 'animation'
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+  status: 'pending' | 'pending_payment' | 'processing' | 'completed' | 'failed' | 'cancelled'
   progress: number
   settings: {
     engine: string
@@ -327,7 +327,7 @@ const jobStore = create<JobStore>((set, get) => ({
           blendFileKey: result.fileStructure?.blendFile || result.key,
           blendFileUrl: result.blendFileUrl,
           type: result.type || jobData.type,
-          status: 'pending',
+          status: 'pending_payment',
           progress: 0,
           settings: {
             engine: result.settings?.engine || jobData.settings.engine,

@@ -23,11 +23,15 @@ import {
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Progress } from '@/components/ui/Progress'
+import { cn } from '@/lib/utils'
 import { useNavigate } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import jobStore from '@/stores/jobStore'
 import { toast } from 'react-hot-toast'
 import { uploadService } from '@/services/uploadService'
+import { axiosInstance } from '@/lib/axios'
+import { useRenderNetwork } from '@/hooks/useRenderNetwork'
+import { useAuthStore } from '@/stores/authStore'
 // REMOVED: import { createJobFormData, validateJobFormData } from '@/utils/jobFormData'
 
 type Step = 'upload' | 'settings' | 'review' | 'processing'
@@ -92,11 +96,16 @@ const CreateJob: React.FC = () => {
     createJobMultipart,
     isUploading,
     uploadProgress,
-    uploadStage
+    uploadStage,
+    cancelJob
   } = jobStore()
+
+  const { creditedAmount, isRefreshing, fetchCreditBalance, lockPayment, cancelJobOnchain } = useRenderNetwork()
+  const { getProfile } = useAuthStore()
 
   const [currentStep, setCurrentStep] = useState<Step>('upload')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [isLocking, setIsLocking] = useState(false)
 
   // UPDATED: Initialize form data with settings object
   const [formData, setFormData] = useState<JobFormData>({
@@ -228,6 +237,14 @@ const CreateJob: React.FC = () => {
     console.log('⚙️ Form data:', formData)
 
     try {
+      // Pre-check on-chain credits BEFORE starting S3 upload/job creation.
+      // Otherwise we might create the job/upload files and only fail later on lock_payment.
+      const freshBalance = await fetchCreditBalance()
+      if (freshBalance < estimatedCost) {
+        toast.error(`Insufficient credits: ${freshBalance.toFixed(2)} available, ${estimatedCost} required.`)
+        return
+      }
+
       console.log('🔄 Calling createJobMultipart...')
 
       // Switch to processing view immediately so the user can see realtime upload progress
@@ -254,12 +271,52 @@ const CreateJob: React.FC = () => {
         const jobId = result.data?.jobId || result.data?.data?.jobId
 
         if (jobId) {
-          console.log('🎯 Navigating to job details:', jobId)
+          let didLockOnchain = false
+          try {
+            setIsLocking(true)
+            toast.loading('Confirming on-chain payment lock...', { id: 'payment-lock' })
+            
+            const { tx, escrowAddress, escrowJobId } = await lockPayment(jobId, estimatedCost)
+            didLockOnchain = true
+            toast.success('On-chain payment locked!', { id: 'payment-lock' })
 
-          // Show success message for 2 seconds then navigate
-          setTimeout(() => {
-            navigate(`/client/jobs/${jobId}`)
-          }, 2000)
+            // 3. Sync with backend
+            toast.loading('Finalizing job activation...', { id: 'backend-sync' })
+            await axiosInstance.post(`/jobs/${jobId}/lock-onchain`, {
+              txSignature: tx,
+              escrowAddress,
+              escrowJobId,
+              lockedAmount: estimatedCost
+            })
+
+            // Backend deducts DB tokenBalance when lock-onchain succeeds.
+            // Refresh the frontend store so the navbar shows the correct balance.
+            await getProfile()
+            toast.success('Job activated and enqueued!', { id: 'backend-sync' })
+
+            console.log('🎯 Navigating to job details:', jobId)
+            setTimeout(() => {
+              navigate(`/client/jobs/${jobId}`)
+            }, 1500)
+          } catch (error: any) {
+            console.error('Submission error:', error)
+            
+            if (didLockOnchain) {
+              // We locked onchain but backend failed. IMPORTANT: Don't just cancel.
+              toast.error('Payment locked but backend sync failed. Please check your Dashboard.', { duration: 5000 })
+            } else if (jobId) {
+              try {
+                await cancelJob(jobId, true)
+              } catch (e) {
+                console.error('Failed to cleanup job:', e)
+              }
+            }
+            
+            toast.error(error?.message || 'Failed to start job')
+            setCurrentStep('review')
+          } finally {
+            setIsLocking(false)
+          }
         } else {
           console.error('❌ No jobId found in response:', result)
           // Fallback: navigate to dashboard and show message
@@ -1207,10 +1264,31 @@ const CreateJob: React.FC = () => {
 
                     <div className="mt-8 p-4 rounded-2xl bg-blue-600/10 border border-blue-500/20 text-center">
                       <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Available Credits</p>
-                      <p className="text-xl font-bold text-white tabular-nums">1,250.00</p>
+                      <p className="text-xl font-bold text-white tabular-nums">
+                        {isRefreshing ? '...' : creditedAmount.toFixed(2)}
+                      </p>
                       <div className="mt-2 w-full bg-white/5 h-1 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${Math.max(10, 100 - (estimatedCost / 1250) * 100)}%` }} />
+                        <div 
+                          className={cn(
+                            "h-full transition-all duration-1000",
+                            creditedAmount >= estimatedCost ? "bg-blue-500" : "bg-red-500"
+                          )} 
+                          style={{ width: `${Math.min(100, (creditedAmount / estimatedCost) * 100)}%` }} 
+                        />
                       </div>
+                      {creditedAmount < estimatedCost && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-[10px] text-red-400 font-medium">Insufficient balance to start job</p>
+                          <Button 
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.dispatchEvent(new Event('open-deposit-modal'))}
+                            className="w-full border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 h-8 text-[10px] font-bold uppercase tracking-wider"
+                          >
+                            Deposit tokens
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1238,20 +1316,23 @@ const CreateJob: React.FC = () => {
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={isUploading}
-                className="relative overflow-hidden group bg-white text-black h-16 px-12 rounded-2xl font-black text-lg transition-all active:scale-95 disabled:opacity-50"
+                disabled={isUploading || isLocking || (creditedAmount < estimatedCost && !isRefreshing)}
+                className={cn(
+                  "relative overflow-hidden group h-16 px-12 rounded-2xl font-black text-lg transition-all active:scale-95 disabled:opacity-50",
+                  (creditedAmount < estimatedCost && !isRefreshing) ? "bg-gray-800 text-gray-500 cursor-not-allowed" : "bg-white text-black"
+                )}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-cyan-500 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
                 <span className="relative z-10 flex items-center gap-3 group-hover:text-white transition-colors">
-                  {isUploading ? (
+                  {isUploading || isLocking ? (
                     <>
                       <Loader2 className="w-6 h-6 animate-spin" />
-                      Transmitting Manifest...
+                      {isLocking ? 'Locking Payment...' : 'Transmitting Manifest...'}
                     </>
                   ) : (
                     <>
                       <Play className="w-6 h-6 fill-current" />
-                      Start Job
+                      {creditedAmount < estimatedCost ? 'Insufficient Credits' : 'Start Job'}
                     </>
                   )}
                 </span>

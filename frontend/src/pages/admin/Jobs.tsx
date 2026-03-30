@@ -82,7 +82,7 @@ const AdminJobs: React.FC = () => {
 
     const statusCounts = useMemo(() => ({
         all: jobs.length,
-        pending: jobs.filter(j => j.status === 'pending').length,
+        pending: jobs.filter(j => j.status === 'pending' || j.status === 'pending_payment').length,
         processing: jobs.filter(j => j.status === 'processing').length,
         completed: jobs.filter(j => j.status === 'completed').length,
         failed: jobs.filter(j => j.status === 'failed').length,
@@ -289,7 +289,7 @@ const AdminJobs: React.FC = () => {
                                                     </Button>
                                                 )}
 
-                                                {(job.status === 'pending' || job.status === 'processing') && (
+                                                {(job.status === 'pending' || job.status === 'pending_payment' || job.status === 'processing') && !((job as any).escrow?.txSignature) && (
                                                     <Button
                                                         size="sm"
                                                         variant="outline"

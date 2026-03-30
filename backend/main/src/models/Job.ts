@@ -191,7 +191,7 @@ const JobSchema = new Schema<IJob>({
 
   status: {
     type: String,
-    enum: ['pending', 'processing', 'completed', 'failed', 'cancelled', 'paused'],
+    enum: ['pending', 'pending_payment', 'processing', 'completed', 'failed', 'cancelled', 'paused'],
     default: 'pending',
     index: true
   },
@@ -209,6 +209,19 @@ const JobSchema = new Schema<IJob>({
 
   renderTime: Number,
   totalCreditsDistributed: Number,
+  // On-chain escrow details (populated after lock_payment succeeds)
+  escrow: {
+    txSignature: { type: String, default: '' },
+    escrowAddress: { type: String, default: '' },
+    escrowJobId: { type: String, default: '' },
+    lockedAmount: { type: Number, default: 0 },
+    status: {
+      type: String,
+      enum: ['none', 'locked', 'released', 'refunded'],
+      default: 'none'
+    },
+    lockedAt: { type: Date }
+  },
 
   // Metadata
   estimatedRenderTime: Number,
@@ -350,7 +363,7 @@ JobSchema.statics.getUserStats = async function (userId: string) {
         completedJobs: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
         activeJobs: {
           $sum: {
-            $cond: [{ $in: ['$status', ['pending', 'processing', 'paused']] }, 1, 0]
+            $cond: [{ $in: ['$status', ['pending', 'pending_payment', 'processing', 'paused']] }, 1, 0]
           }
         },
         totalSpent: { $sum: { $ifNull: ['$actualCost', 0] } },

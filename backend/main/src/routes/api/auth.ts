@@ -154,6 +154,7 @@ router.put('/profile', authenticate, AuthController.updateProfile);
 router.post('/apply-node-provider', authenticate, AuthController.applyAsNodeProvider);
 router.put('/primary-role', authenticate, AuthController.updatePrimaryRole);
 router.post('/sync-deposit', authenticate, AuthController.syncDeposit);
+router.post('/solana-seed', authenticate, AuthController.updateSolanaSeed);
 
 // Admin routes
 router.post('/add-credits', authenticate, authorize('admin'), AuthController.addCredits);

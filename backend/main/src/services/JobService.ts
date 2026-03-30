@@ -459,7 +459,15 @@ export class JobService {
 
             // Apply other filters
             if (projectId) query.projectId = projectId;
-            if (status) query.status = status;
+            if (status) {
+                // Treat pending_payment as "pending" in the same UI bucket
+                // so existing client filters (status=pending) still work.
+                if (status === 'pending') {
+                    query.status = { $in: ['pending', 'pending_payment'] };
+                } else {
+                    query.status = status;
+                }
+            }
             if (type) query.type = type;
             if (priority) query.priority = priority;
             if (approved !== undefined) query.approved = approved;
@@ -622,6 +630,11 @@ export class JobService {
 
         job.status = 'cancelled';
         job.cancelledAt = new Date();
+        if ((job as any).escrow?.txSignature) {
+            // We expect the client to call the contract's cancel_job first.
+            // Reflect refund state in the database for accurate UI.
+            (job as any).escrow.status = 'refunded';
+        }
         await job.save();
 
         // Remove queued (not yet active) frames from BullMQ immediately.
@@ -640,14 +653,27 @@ export class JobService {
             console.warn(`⚠️  Failed to remove BullMQ frames for cancelled job ${jobId}:`, queueErr);
         }
 
-        // Refund credits if job was in progress
-        if (wasProcessing) {
+        // Refund DB credits only for legacy credit-based jobs.
+        // Multipart/on-chain jobs lock payments via the contract, and DB credits are not deducted.
+        const usesOnchainEscrow = !!(job as any).escrow?.txSignature;
+
+        // Refund credits if job was in progress or was an on-chain escrow job.
+        // We now refund the DB balance even for on-chain jobs because we deduct it during "Lock"
+        // to maintain a synchronized UI experience.
+        if (wasProcessing || usesOnchainEscrow) {
             const user = await User.findById(userId);
             if (user && user.role !== 'admin') {
-                const spentCredits = job.totalCreditsDistributed || 0;
-                const refundAmount = Math.max(0, job.estimatedCost! - spentCredits);
+                // For on-chain jobs, the full estimatedCost was deducted from DB.
+                // For legacy jobs, we deduct the difference between estimate and spent.
+                const refundAmount = usesOnchainEscrow 
+                    ? (job as any).escrow?.lockedAmount || job.estimatedCost 
+                    : Math.max(0, job.estimatedCost! - (job.totalCreditsDistributed || 0));
+                
                 if (refundAmount > 0) {
-                    await user.addCredits(refundAmount);
+                    await User.findByIdAndUpdate(userId, {
+                        $inc: { tokenBalance: Number(refundAmount) }
+                    });
+                    console.log(`Refunded ${refundAmount} to User ${userId} DB balance for cancelled job ${jobId}`);
                 }
             }
         }
@@ -832,9 +858,13 @@ export class JobService {
         return {
             // Prioritize real-time database counts over cached User table stats
             totalJobs: totals.totalJobs, 
-            activeJobs: (statusCounts.pending || 0) + (statusCounts.processing || 0) + (statusCounts.paused || 0),
+            activeJobs:
+                (statusCounts.pending || 0) +
+                (statusCounts.pending_payment || 0) +
+                (statusCounts.processing || 0) +
+                (statusCounts.paused || 0),
             processingJobs: statusCounts.processing || 0,
-            pendingJobs: statusCounts.pending || 0,
+            pendingJobs: (statusCounts.pending || 0) + (statusCounts.pending_payment || 0),
             completedJobs: statusCounts.completed || 0,
             failedJobs: statusCounts.failed || 0,
             cancelledJobs: statusCounts.cancelled || 0,

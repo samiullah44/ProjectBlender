@@ -4,7 +4,6 @@ import { User } from '../models/User';
 import { S3Service } from './S3Service';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeBlenderVersion } from '../utils/blenderVersionMapper';
-import { enqueueJobFrames } from './FrameQueueService';
 import { wsService } from '../app';
 
 export class UploadService {
@@ -95,7 +94,8 @@ export class UploadService {
           pending: selectedFrames
         },
         assignedNodes: new Map(),
-        status: 'pending',
+        // User must lock on-chain payment (lock_payment) before nodes can start processing.
+        status: 'pending_payment',
         progress: 0,
         outputUrls: [],
         createdAt: new Date(),
@@ -109,14 +109,7 @@ export class UploadService {
         $inc: { 'stats.jobsCreated': 1 }
       });
 
-      // Enqueue frames to BullMQ for atomic distribution
-      try {
-        await enqueueJobFrames(jobId, selectedFrames, engine, device);
-      } catch (queueErr) {
-        console.error(`⚠️  Failed to enqueue multipart frames for job ${jobId} into BullMQ:`, queueErr);
-      }
-
-      // Proactively notify nodes
+      // Broadcast job creation (nodes won't start because BullMQ frames are enqueued only after lock_payment)
       if (wsService) {
         wsService.broadcastSystemUpdate({
           type: 'job_created',
@@ -124,10 +117,10 @@ export class UploadService {
             jobId: job.jobId,
             userId: job.userId,
             type: job.type,
-            totalFrames: job.frames.total
+            totalFrames: job.frames.total,
+            status: job.status
           }
         });
-        wsService.notifyNodesToCheckJobs();
       }
 
       console.log(`🎬 New ${type} job created via multipart upload: ${jobId}`);

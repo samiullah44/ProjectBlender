@@ -31,6 +31,7 @@ import { toast } from 'react-hot-toast'
 import { NotificationBell } from './NotificationBell'
 import { useOnClickOutside } from '@/hooks/useOnClickOutside'
 import { useRenderNetwork } from '@/hooks/useRenderNetwork'
+import { useWallet } from '@solana/wallet-adapter-react'
 
 // We no longer import WalletMultiButton as we are removing it from the header per user request
 // import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
@@ -65,7 +66,8 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
   const { user, isAuthenticated, logout, switchRole } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
-  const { creditedAmount, isRefreshing } = useRenderNetwork()
+  const { publicKey } = useWallet()
+  const { creditedAmount, isInitialized, isRefreshing, syncSolanaSeed } = useRenderNetwork()
 
   const activeRole = user?.primaryRole || user?.role;
   const isProvider = activeRole === 'node_provider';
@@ -482,7 +484,9 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                                 <div className="flex items-center gap-2 mt-1">
                                   <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
                                   <span className="text-xs font-semibold text-emerald-400">
-                                    {isRefreshing ? 'Syncing...' : `${(creditedAmount > 0 ? creditedAmount : (user?.tokenBalance || 0)).toFixed(2)} mRNDR`}
+                                    {isRefreshing ? 'Syncing...' : 
+                                      (creditedAmount === null ? 'Loading...' : `${creditedAmount.toFixed(2)} mRNDR`)
+                                    }
                                   </span>
                                 </div>
                               </div>
@@ -502,6 +506,26 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                               </div>
                               <span className="text-sm font-semibold text-emerald-400 shadow-sm">Deposit mRNDR Tokens</span>
                             </button>
+
+                            {/* Professional Sync Button - Only shown if mismatch detected */}
+                            {user?.solanaSeed && publicKey && publicKey.toBase58() !== user.solanaSeed && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  syncSolanaSeed();
+                                  setUserMenuOpen(false);
+                                }}
+                                className="flex items-center gap-3 w-full px-4 py-3 bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-left group border-b border-white/5 pb-4 mb-2"
+                              >
+                                <div className="p-1.5 bg-amber-500/20 rounded-md group-hover:scale-110 transition-transform">
+                                  <ArrowLeftRight className="w-4 h-4 text-amber-400" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-amber-400">Sync Identity</span>
+                                  <span className="text-[10px] text-amber-500/70">Connect this wallet to account</span>
+                                </div>
+                              </button>
+                            )}
 
                             {userMenuItems.map((item) => (
                               <Link
@@ -653,7 +677,9 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                                 "text-xs font-semibold",
                                 isProvider ? "text-purple-400" : "text-emerald-400"
                               )}>
-                                {isRefreshing ? 'Syncing...' : `${(creditedAmount > 0 ? creditedAmount : (user?.tokenBalance || 0)).toFixed(2)} mRNDR`}
+                                {isRefreshing
+                                  ? 'Syncing...'
+                                  : `${(creditedAmount ?? 0).toFixed(2)} mRNDR`}
                               </span>
                             </div>
                           </div>

@@ -75,6 +75,20 @@ export interface IUploadMetadata {
     checksum?: string;
 }
 
+export interface IJobEscrow {
+    /** Solana transaction signature of the lockPayment instruction */
+    txSignature: string;
+    /** On-chain Escrow PDA public key (base58) */
+    escrowAddress: string;
+    /** The u64 job_id used on-chain, stored as string to avoid precision loss */
+    escrowJobId: string;
+    /** Amount locked in tokens (human-readable, 6 decimals already applied) */
+    lockedAmount: number;
+    /** Current on-chain escrow lifecycle state */
+    status: 'none' | 'locked' | 'released' | 'refunded';
+    lockedAt: Date;
+}
+
 export interface IJob {
     _id?: Types.ObjectId;
     jobId: string;
@@ -94,8 +108,12 @@ export interface IJob {
     assignedNodes: Map<string, number[]> | Record<string, number[]>;
     frameAssignments: IFrameAssignment[];
 
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    /** 'pending_payment' = job created but on-chain escrow not yet locked */
+    status: 'pending_payment' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
     progress: number;
+
+    /** On-chain escrow state — populated after lockPayment succeeds */
+    escrow?: IJobEscrow;
 
     uploadMetadata?: IUploadMetadata;
     outputUrls: IJobOutput[];

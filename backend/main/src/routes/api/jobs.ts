@@ -83,6 +83,13 @@ router.get('/:jobId',
     jobController.getJob.bind(jobController)
 );
 
+// USER: After on-chain lock_payment succeeds, mark job ready and start rendering (enqueue frames)
+router.post('/:jobId/lock-onchain',
+    authenticate,
+    injectServices,
+    jobController.lockOnchainPayment.bind(jobController)
+);
+
 router.get('/:jobId/frames/zip',
     authenticate,
     jobController.downloadJobFramesZip.bind(jobController)

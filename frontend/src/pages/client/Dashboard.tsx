@@ -724,7 +724,7 @@ const ClientDashboard: React.FC = () => {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
     const completedJobs = jobs.filter(j => j.status === 'completed')
-    const activeJobs = jobs.filter(j => j.status === 'processing' || j.status === 'pending')
+    const activeJobs = jobs.filter(j => j.status === 'processing' || j.status === 'pending' || j.status === 'pending_payment')
     const failedJobs = jobs.filter(j => j.status === 'failed')
 
     // Local fallback for today's stats (still useful for immediate feedback)
@@ -740,7 +740,10 @@ const ClientDashboard: React.FC = () => {
       totalJobs: realTimeStats?.totalJobs || systemStats?.totalJobs || pagination.total || jobs.length,
       activeJobs: realTimeStats?.activeJobs || systemStats?.activeJobs || activeJobs.length,
       processingJobs: realTimeStats?.processingJobs || systemStats?.processingJobs || jobs.filter(j => j.status === 'processing').length,
-      pendingJobs: realTimeStats?.pendingJobs || systemStats?.pendingJobs || jobs.filter(j => j.status === 'pending').length,
+      pendingJobs:
+        realTimeStats?.pendingJobs ||
+        systemStats?.pendingJobs ||
+        jobs.filter(j => j.status === 'pending' || j.status === 'pending_payment').length,
       completedJobs: realTimeStats?.completedJobs || systemStats?.completedJobs || completedJobs.length,
       failedJobs: realTimeStats?.failedJobs || systemStats?.failedJobs || failedJobs.length,
       completedToday: realTimeStats?.completedToday || systemStats?.completedToday || completedJobs.filter(j => {
@@ -756,7 +759,7 @@ const ClientDashboard: React.FC = () => {
 
   const subscribeToActiveJobs = useCallback(() => {
     const activeJobIds = jobs
-      .filter(job => job.status === 'processing' || job.status === 'pending')
+      .filter(job => job.status === 'processing' || job.status === 'pending' || job.status === 'pending_payment')
       .map(job => job.jobId)
 
     const jobsToSubscribe = activeJobIds.filter(jobId => !jobSubscriptions.has(jobId))
@@ -775,7 +778,7 @@ const ClientDashboard: React.FC = () => {
   const cleanupJobSubscriptions = useCallback(() => {
     const activeJobIds = new Set(
       jobs
-        .filter(job => job.status === 'processing' || job.status === 'pending')
+        .filter(job => job.status === 'processing' || job.status === 'pending' || job.status === 'pending_payment')
         .map(job => job.jobId)
     )
 
@@ -861,7 +864,7 @@ const ClientDashboard: React.FC = () => {
 
   const activeJobs = useMemo(() => {
     return jobs
-      .filter(j => j.status === 'processing' || j.status === 'pending')
+      .filter(j => j.status === 'processing' || j.status === 'pending' || j.status === 'pending_payment')
       .map(job => ({
         ...job,
         progress: getJobProgress(job),
@@ -877,7 +880,7 @@ const ClientDashboard: React.FC = () => {
         id: job.jobId,
         type: job.status === 'completed' ? 'success' as const :
           job.status === 'processing' ? 'processing' as const :
-            job.status === 'pending' ? 'upload' as const : 'failed' as const,
+            job.status === 'pending' || job.status === 'pending_payment' ? 'upload' as const : 'failed' as const,
         title: `${job.blendFileName}`,
         time: new Date(job.createdAt).toLocaleString(),
         status: job.status,

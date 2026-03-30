@@ -80,7 +80,7 @@ const AdminDashboard: React.FC = () => {
 
     // Computed stats
     const stats = useMemo(() => {
-        const pending = jobs.filter(j => j.status === 'pending')
+        const pending = jobs.filter(j => j.status === 'pending' || j.status === 'pending_payment')
         const processing = jobs.filter(j => j.status === 'processing')
         const completed = jobs.filter(j => j.status === 'completed')
         const failed = jobs.filter(j => j.status === 'failed')

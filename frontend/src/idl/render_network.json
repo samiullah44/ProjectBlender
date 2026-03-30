@@ -801,8 +801,8 @@
                 ]
               },
               {
-                "kind": "account",
-                "path": "user"
+                "kind": "arg",
+                "path": "user_id"
               }
             ]
           }

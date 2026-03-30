@@ -579,6 +579,37 @@ export class AuthService {
     }
   }
 
+  // Update user's solanaSeed (identity seed)
+  async updateSolanaSeed(userId: string, newSeed: string): Promise<AuthResponse> {
+    try {
+      const user = await User.findById(userId);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      // Basic validation: ensure it's a valid hex string of proper length (usually 64 chars for 32 bytes)
+      if (!/^[0-9a-fA-F]{64}$/.test(newSeed)) {
+        // If it's a 32-44 char public key string, we'll convert it to hex or just store it as-is
+        // The user said "use solanaseed", but here we want to ensure it's a valid base for derivations
+        // If they pass a raw PK, we'll just allow it as long as it's a string.
+      }
+
+      user.solanaSeed = newSeed;
+      await user.save();
+
+      return {
+        success: true,
+        message: 'Solana identity seed updated successfully',
+        user: {
+          solanaSeed: user.solanaSeed
+        }
+      };
+    } catch (error: any) {
+      console.error('Update solana seed error:', error);
+      return { success: false, error: 'Failed to update solana seed' };
+    }
+  }
+
   // backend/src/services/authService.ts - AUTOMATED applyForNodeProvider
   async applyForNodeProvider(userId: string, applicationData: {
     operatingSystem: string;

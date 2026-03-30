@@ -596,7 +596,7 @@ export class WebSocketService {
       if (!job) return null;
 
       // Real-time Sync: If job is stuck in processing but all frames are done, update it
-      if (['pending', 'processing'].includes(job.status)) {
+      if (['pending', 'pending_payment', 'processing'].includes(job.status)) {
         const selectedOrAll = job.frames.selected && job.frames.selected.length > 0
           ? job.frames.selected
           : Array.from({ length: job.frames.total }, (_, i) => job.frames.start + i);
