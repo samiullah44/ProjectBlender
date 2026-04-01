@@ -5,6 +5,9 @@ import { S3Service } from './S3Service';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeBlenderVersion } from '../utils/blenderVersionMapper';
 import { wsService } from '../app';
+import { solanaService } from './SolanaService';
+import { AppError } from '../middleware/error';
+import { enqueueJobFrames } from './FrameQueueService';
 
 export class UploadService {
   private s3Service: S3Service;
@@ -61,6 +64,38 @@ export class UploadService {
         totalFrames = 1;
         selectedFrames = [selectedFrame];
       }
+      
+      // --- SOLANA ZERO-PROMPT LOCKING ---
+      const user = await User.findById(userId);
+      if (!user) throw new AppError('User not found', 404);
+
+      // Simple frame-based estimate for the lock (Matching JobService)
+      const creditsPerFrame = jobSettings?.creditsPerFrame || 1;
+      const complexityFactor = (jobSettings?.samples || 128) / 128;
+      const resolutionFactor = ((jobSettings?.resolutionX || 1920) * (jobSettings?.resolutionY || 1080)) / (1920 * 1080);
+      let estimatedCredits = totalFrames * creditsPerFrame * complexityFactor * resolutionFactor;
+      if (jobSettings?.engine === 'CYCLES') estimatedCredits *= 1.2;
+      if (jobSettings?.device === 'GPU') estimatedCredits *= 0.8;
+      const roundedCredits = Math.ceil(estimatedCredits);
+
+      let lockTxSignature = '';
+      const onchainJobId = Date.now();
+
+      if (user.role !== 'admin' && user.solanaSeed) {
+        try {
+          console.log(`[UploadService] Initiating on-chain lock for user ${userId}, amount: ${roundedCredits}`);
+          lockTxSignature = await solanaService.lockPayment(
+            user.solanaSeed,
+            onchainJobId,
+            roundedCredits
+          );
+          console.log(`[UploadService] ✅ Solana Lock Successful: ${lockTxSignature}`);
+        } catch (solanaErr: any) {
+          console.error('[UploadService] ❌ Solana Lock Failed:', solanaErr);
+          throw new AppError(`On-chain payment reservation failed: ${solanaErr.message}`, 402);
+        }
+      }
+      // ----------------------------------
 
       const jobId = `job-${Date.now()}-${uuidv4().substr(0, 8)}`;
 
@@ -94,15 +129,29 @@ export class UploadService {
           pending: selectedFrames
         },
         assignedNodes: new Map(),
-        // User must lock on-chain payment (lock_payment) before nodes can start processing.
-        status: 'pending_payment',
+        status: 'pending', // Now that payment is locked, it's ready.
         progress: 0,
         outputUrls: [],
+        estimatedCost: roundedCredits,
+        escrow: {
+          onchainJobId,
+          txSignature: lockTxSignature,
+          status: lockTxSignature ? 'locked' : 'none',
+          lockedAmount: roundedCredits,
+          lockedAt: lockTxSignature ? new Date() : undefined
+        },
         createdAt: new Date(),
         updatedAt: new Date()
       });
 
       await job.save();
+
+      // Enqueue frames for nodes (Matching JobService)
+      try {
+        await enqueueJobFrames(jobId, selectedFrames, job.settings.engine, job.settings.device);
+      } catch (queueErr) {
+        console.error(`⚠️  Failed to enqueue frames for job ${jobId} into BullMQ:`, queueErr);
+      }
 
       // Update user stats
       await User.findByIdAndUpdate(userId, {

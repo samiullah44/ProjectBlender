@@ -8,9 +8,178 @@
   },
   "instructions": [
     {
+      "name": "admin_cancel_payment",
+      "discriminator": [
+        88,
+        193,
+        55,
+        179,
+        8,
+        121,
+        175,
+        136
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  95,
+                  118,
+                  51
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.user_id",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "job_id",
+          "type": "u64"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "admin_lock_payment",
+      "discriminator": [
+        182,
+        136,
+        112,
+        139,
+        175,
+        234,
+        96,
+        129
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103,
+                  95,
+                  118,
+                  51
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.user_id",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "job_id",
+          "type": "u64"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "batch_release",
       "discriminator": [
         181,
+        182,
         251,
         122,
         96,
@@ -35,7 +204,7 @@
                   103,
                   95,
                   118,
-                  50
+                  51
                 ]
               }
             ]
@@ -47,7 +216,218 @@
           "signer": true
         },
         {
+          "name": "user_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_account.user_id",
+                "account": "UserAccount"
+              }
+            ]
+          }
+        },
+        {
           "name": "mint"
+        },
+        {
+          "name": "user_deposit_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user_account"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "fee_collector_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "config.fee_collector",
+                "account": "GlobalConfig"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "token_program"
@@ -65,441 +445,6 @@
           }
         }
       ]
-    },
-    {
-      "name": "cancel_job",
-      "discriminator": [
-        126,
-        241,
-        155,
-        241,
-        50,
-        236,
-        83,
-        118
-      ],
-      "accounts": [
-        {
-          "name": "escrow",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              },
-              {
-                "kind": "account",
-                "path": "escrow.job_id",
-                "account": "Escrow"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "escrow"
-          ]
-        },
-        {
-          "name": "user_deposit_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  117,
-                  115,
-                  101,
-                  114,
-                  95,
-                  97,
-                  99,
-                  99,
-                  111,
-                  117,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint",
-          "relations": [
-            "escrow"
-          ]
-        },
-        {
-          "name": "user_deposit_token_account",
-          "docs": [
-            "Refund destination: User's Credit PDA ATA"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "user_deposit_account"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "escrow_token_account",
-          "docs": [
-            "Escrow's token ATA (to be closed)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "escrow"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "token_program"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "close_escrow",
-      "discriminator": [
-        139,
-        171,
-        94,
-        146,
-        191,
-        91,
-        144,
-        50
-      ],
-      "accounts": [
-        {
-          "name": "escrow",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              },
-              {
-                "kind": "account",
-                "path": "escrow.job_id",
-                "account": "Escrow"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "escrow"
-          ]
-        },
-        {
-          "name": "mint",
-          "relations": [
-            "escrow"
-          ]
-        },
-        {
-          "name": "escrow_token_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "escrow"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "token_program"
-        }
-      ],
-      "args": []
     },
     {
       "name": "deposit_to_account",
@@ -531,14 +476,14 @@
                   99,
                   99,
                   111,
-                  117,
                   110,
+                  102,
                   116
                 ]
               },
               {
-                "kind": "account",
-                "path": "user"
+                "kind": "arg",
+                "path": "user_id"
               }
             ]
           }
@@ -553,16 +498,10 @@
         },
         {
           "name": "user_token_account",
-          "docs": [
-            "User's own wallet token account (source of funds)"
-          ],
           "writable": true
         },
         {
           "name": "user_deposit_token_account",
-          "docs": [
-            "Credit PDA's token account (destination). Initialized if needed."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -675,16 +614,16 @@
       ]
     },
     {
-      "name": "initialize_config",
+      "name": "initialize_global_config",
       "discriminator": [
-        208,
-        127,
-        21,
-        1,
-        194,
-        190,
-        196,
-        70
+        113,
+        216,
+        122,
+        131,
+        225,
+        209,
+        22,
+        55
       ],
       "accounts": [
         {
@@ -703,7 +642,7 @@
                   103,
                   95,
                   118,
-                  50
+                  51
                 ]
               }
             ]
@@ -713,6 +652,9 @@
           "name": "admin",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "fee_collector"
         },
         {
           "name": "system_program",
@@ -721,390 +663,22 @@
       ],
       "args": [
         {
-          "name": "admin",
-          "type": "pubkey"
-        },
-        {
-          "name": "release_delay",
-          "type": "i64"
-        }
-      ]
-    },
-    {
-      "name": "lock_payment",
-      "discriminator": [
-        170,
-        21,
-        188,
-        226,
-        187,
-        242,
-        186,
-        104
-      ],
-      "accounts": [
-        {
-          "name": "escrow",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              },
-              {
-                "kind": "arg",
-                "path": "job_id"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "user_deposit_account",
-          "docs": [
-            "The user's Credit Account (source of funds)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  117,
-                  115,
-                  101,
-                  114,
-                  95,
-                  97,
-                  99,
-                  99,
-                  111,
-                  117,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "user_id"
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint"
-        },
-        {
-          "name": "user_deposit_token_account",
-          "docs": [
-            "Credit PDA's token ATA (source of tokens)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "user_deposit_account"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "escrow_token_account",
-          "docs": [
-            "Escrow PDA's token ATA (destination). Created here."
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "escrow"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "token_program"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "user_id",
-          "type": "pubkey"
-        },
-        {
-          "name": "job_id",
-          "type": "u64"
-        },
-        {
-          "name": "amount",
+          "name": "platform_fee_bps",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "mark_job_completed",
+      "name": "update_global_config",
       "discriminator": [
-        48,
-        143,
-        151,
-        51,
-        175,
-        82,
-        105,
-        6
-      ],
-      "accounts": [
-        {
-          "name": "config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103,
-                  95,
-                  118,
-                  50
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "escrow",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "escrow.user",
-                "account": "Escrow"
-              },
-              {
-                "kind": "account",
-                "path": "escrow.job_id",
-                "account": "Escrow"
-              }
-            ]
-          }
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "update_config",
-      "discriminator": [
-        29,
-        158,
-        252,
-        191,
-        10,
-        83,
-        219,
-        99
+        164,
+        84,
+        130,
+        189,
+        111,
+        58,
+        250,
+        200
       ],
       "accounts": [
         {
@@ -1123,7 +697,7 @@
                   103,
                   95,
                   118,
-                  50
+                  51
                 ]
               }
             ]
@@ -1147,28 +721,21 @@
           }
         },
         {
-          "name": "new_delay",
+          "name": "new_fee_collector",
           "type": {
-            "option": "i64"
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "new_platform_fee_bps",
+          "type": {
+            "option": "u64"
           }
         }
       ]
     }
   ],
   "accounts": [
-    {
-      "name": "Escrow",
-      "discriminator": [
-        31,
-        213,
-        123,
-        187,
-        186,
-        22,
-        218,
-        155
-      ]
-    },
     {
       "name": "GlobalConfig",
       "discriminator": [
@@ -1198,29 +765,42 @@
   ],
   "events": [
     {
-      "name": "JobCancelled",
+      "name": "BatchPaid",
       "discriminator": [
-        203,
-        84,
-        143,
-        130,
-        48,
-        134,
-        74,
-        191
+        254,
+        26,
+        12,
+        175,
+        204,
+        61,
+        242,
+        70
       ]
     },
     {
-      "name": "PaymentLocked",
+      "name": "JobLocked",
       "discriminator": [
-        48,
-        187,
-        212,
-        67,
-        11,
-        105,
-        89,
-        191
+        152,
+        195,
+        1,
+        14,
+        160,
+        137,
+        251,
+        39
+      ]
+    },
+    {
+      "name": "JobUnlocked",
+      "discriminator": [
+        87,
+        166,
+        190,
+        86,
+        131,
+        166,
+        180,
+        236
       ]
     },
     {
@@ -1260,8 +840,8 @@
     },
     {
       "code": 6004,
-      "name": "InsufficientEscrowBalance",
-      "msg": "Insufficient balance in escrow"
+      "name": "InsufficientFunds",
+      "msg": "Insufficient balance in user account"
     },
     {
       "code": 6005,
@@ -1285,13 +865,8 @@
     },
     {
       "code": 6009,
-      "name": "JobNotFinished",
-      "msg": "Job not yet finished or refunded"
-    },
-    {
-      "code": 6010,
-      "name": "ReleaseDelayNotMet",
-      "msg": "Release delay period has not yet passed"
+      "name": "ReplayProtection",
+      "msg": "Replay protection: Job ID must be monotonically increasing"
     }
   ],
   "types": [
@@ -1318,10 +893,7 @@
       }
     },
     {
-      "name": "Escrow",
-      "docs": [
-        "Escrow account storing state of a locked payment for a specific job"
-      ],
+      "name": "BatchPaid",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1330,40 +902,20 @@
             "type": "u64"
           },
           {
-            "name": "user_id",
-            "type": "pubkey"
-          },
-          {
             "name": "user",
             "type": "pubkey"
           },
           {
-            "name": "mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "amount",
+            "name": "total_payout",
             "type": "u64"
           },
           {
-            "name": "remaining_amount",
+            "name": "fee_collected",
             "type": "u64"
           },
           {
-            "name": "released_amount",
-            "type": "u64"
-          },
-          {
-            "name": "completed_at",
+            "name": "timestamp",
             "type": "i64"
-          },
-          {
-            "name": "status",
-            "type": "u8"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
           }
         ]
       }
@@ -1381,18 +933,22 @@
             "type": "pubkey"
           },
           {
-            "name": "release_delay",
-            "type": "i64"
+            "name": "fee_collector",
+            "type": "pubkey"
           },
           {
-            "name": "bump",
+            "name": "platform_fee_bps",
+            "type": "u64"
+          },
+          {
+            "name": "version",
             "type": "u8"
           }
         ]
       }
     },
     {
-      "name": "JobCancelled",
+      "name": "JobLocked",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1405,14 +961,14 @@
             "type": "pubkey"
           },
           {
-            "name": "refund_amount",
+            "name": "amount",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "PaymentLocked",
+      "name": "JobUnlocked",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1422,10 +978,6 @@
           },
           {
             "name": "user",
-            "type": "pubkey"
-          },
-          {
-            "name": "mint",
             "type": "pubkey"
           },
           {
@@ -1497,7 +1049,19 @@
             "type": "u64"
           },
           {
+            "name": "locked_amount",
+            "type": "u64"
+          },
+          {
+            "name": "last_job_nonce",
+            "type": "u64"
+          },
+          {
             "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "version",
             "type": "u8"
           }
         ]

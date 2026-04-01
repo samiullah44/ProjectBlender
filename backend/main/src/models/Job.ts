@@ -214,6 +214,7 @@ const JobSchema = new Schema<IJob>({
     txSignature: { type: String, default: '' },
     escrowAddress: { type: String, default: '' },
     escrowJobId: { type: String, default: '' },
+    onchainJobId: { type: Number, index: true }, // NEW: Numeric ID for Solana Program
     lockedAmount: { type: Number, default: 0 },
     status: {
       type: String,

@@ -327,7 +327,7 @@ const jobStore = create<JobStore>((set, get) => ({
           blendFileKey: result.fileStructure?.blendFile || result.key,
           blendFileUrl: result.blendFileUrl,
           type: result.type || jobData.type,
-          status: 'pending_payment',
+          status: result.status || 'pending',
           progress: 0,
           settings: {
             engine: result.settings?.engine || jobData.settings.engine,

@@ -45,6 +45,7 @@ import { authService } from '@/services/authService'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
 import { type Job } from '@/stores/jobStore'
+import { useRenderNetwork } from '@/hooks/useRenderNetwork'
 
 interface SystemStats {
   totalJobs: number
@@ -711,6 +712,8 @@ const ClientDashboard: React.FC = () => {
     pagination,
     webSocketConnected
   } = jobStore()
+
+  const { lockedAmount } = useRenderNetwork()
 
   const [refreshing, setRefreshing] = useState(false)
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)

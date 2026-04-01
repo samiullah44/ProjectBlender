@@ -67,7 +67,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
   const location = useLocation()
   const navigate = useNavigate()
   const { publicKey } = useWallet()
-  const { creditedAmount, isInitialized, isRefreshing, syncSolanaSeed } = useRenderNetwork()
+  const { creditedAmount, lockedAmount, isInitialized, isRefreshing, syncSolanaSeed } = useRenderNetwork()
 
   const activeRole = user?.primaryRole || user?.role;
   const isProvider = activeRole === 'node_provider';
@@ -488,6 +488,11 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                                       (creditedAmount === null ? 'Loading...' : `${creditedAmount.toFixed(2)} mRNDR`)
                                     }
                                   </span>
+                                  {lockedAmount > 0 && (
+                                    <span className="text-[10px] text-amber-500/80 font-medium ml-1">
+                                      ({lockedAmount.toFixed(2)} Locked)
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -681,6 +686,11 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                                   ? 'Syncing...'
                                   : `${(creditedAmount ?? 0).toFixed(2)} mRNDR`}
                               </span>
+                              {lockedAmount > 0 && (
+                                <span className="text-[10px] text-amber-500/80 font-medium ml-1">
+                                  ({lockedAmount.toFixed(2)} Locked)
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>

@@ -20,6 +20,7 @@ import {
 import { AppError } from '../middleware/error';
 import { normalizeBlenderVersion } from '../utils/blenderVersionMapper';
 import { enqueueJobFrames, removeJobFrames } from './FrameQueueService';
+import { solanaService } from './SolanaService';
 
 export class JobService {
     private s3Service: S3Service;
@@ -60,12 +61,34 @@ export class JobService {
             }
 
             // Check user credits if not admin
+            let estimatedCredits = this.calculateEstimatedCredits(type, settings, startFrame, endFrame);
             if (user.role !== 'admin') {
-                const estimatedCredits = this.calculateEstimatedCredits(type, settings, startFrame, endFrame);
                 if (user.credits < estimatedCredits) {
                     throw new AppError('Insufficient credits', 400);
                 }
             }
+
+            // --- SOLANA ZERO-PROMPT LOCKING ---
+            let lockTxSignature = '';
+            const onchainJobId = Date.now();
+            
+            if (user.role !== 'admin' && user.solanaSeed) {
+                try {
+                    console.log(`[JobService] Initiating on-chain lock for user ${userId}, amount: ${estimatedCredits}`);
+                    // Lock payment on-chain using backend admin signature
+                    lockTxSignature = await solanaService.lockPayment(
+                        user.solanaSeed, 
+                        onchainJobId, 
+                        estimatedCredits
+                    );
+                    console.log(`[JobService] ✅ Solana Lock Successful: ${lockTxSignature}`);
+                } catch (solanaErr: any) {
+                    console.error('[JobService] ❌ Solana Lock Failed:', solanaErr);
+                    // Block job creation if payment reservation fails
+                    throw new AppError(`On-chain payment reservation failed: ${solanaErr.message}`, 402);
+                }
+            }
+            // ----------------------------------
 
             // Generate job ID
             const jobId = `job-${Date.now()}-${uuidv4().slice(0, 8)}`;
@@ -77,8 +100,9 @@ export class JobService {
             const blendFileKey = await this.s3Service.uploadBlendFile(blendFile, jobId);
             const blendFileUrl = await this.s3Service.generateBlendFileDownloadUrl(blendFileKey);
 
-            // Calculate estimated cost and time
-            const estimatedCost = this.calculateEstimatedCost(totalFrames, settings);
+            // Calculate estimated cost and credits
+            const jobCredits = this.calculateEstimatedCredits(type, settings, startFrame, endFrame);
+            const estimatedCost = this.calculateEstimatedCost(type, settings, startFrame, endFrame);
             const estimatedTime = this.calculateEstimatedRenderTime(totalFrames, settings);
 
             // Create job document
@@ -121,11 +145,18 @@ export class JobService {
                 approved: !requireApproval,
                 estimatedCost,
                 estimatedRenderTime: estimatedTime,
-                status: requireApproval ? 'pending' : 'pending',
+                status: 'pending',
                 progress: 0,
                 frameAssignments: [],
                 assignedNodes: new Map(),
-                outputUrls: []
+                outputUrls: [],
+                escrow: {
+                    onchainJobId,
+                    txSignature: lockTxSignature,
+                    status: lockTxSignature ? 'locked' : 'none',
+                    lockedAmount: jobCredits,
+                    lockedAt: lockTxSignature ? new Date() : undefined
+                }
             });
 
             await job.save();
@@ -290,7 +321,7 @@ export class JobService {
         // If rendering is done (all frames reached rendered or failed state, and none are in progress)
         if ((renderedFrames + stillFailed >= totalFramesToRender) && stillInFlight === 0) {
             const oldStatus = job.status;
-            
+
             if (renderedFrames > 0) {
                 job.status = 'completed';
             } else if (stillFailed > 0) {
@@ -299,16 +330,16 @@ export class JobService {
 
             if (job.status !== oldStatus) {
                 job.completedAt = new Date();
-                
+
                 // REFINE: Use session-based wall-clock accumulation
                 const sessionStart = job.startedAt || job.createdAt;
                 const sessionDurationMs = Math.max(0, job.completedAt.getTime() - sessionStart.getTime());
-                
+
                 // Add current session to accumulated time
                 job.renderTime = (job.renderTime || 0) + sessionDurationMs;
-                
+
                 await job.save();
-                console.log(`🔄 Sync: Job ${jobId} status updated to ${job.status}. Added ${Math.round(sessionDurationMs/1000)}s to renderTime (Total: ${Math.round((job.renderTime || 0)/1000)}s)`);
+                console.log(`🔄 Sync: Job ${jobId} status updated to ${job.status}. Added ${Math.round(sessionDurationMs / 1000)}s to renderTime (Total: ${Math.round((job.renderTime || 0) / 1000)}s)`);
             }
         }
 
@@ -372,7 +403,7 @@ export class JobService {
         jobDoc.renderTime = jobDoc.renderTime || 0; // Ensure it's initialized
         jobDoc.userRerenderCount = nextCount;
         jobDoc.userRerenderMax = maxCount;
-        
+
         // Track historically re-rendered frames
         const existingHistory = jobDoc.rerenderedHistory || [];
         jobDoc.rerenderedHistory = Array.from(new Set([...existingHistory, ...uniqueFrames]));
@@ -630,10 +661,25 @@ export class JobService {
 
         job.status = 'cancelled';
         job.cancelledAt = new Date();
-        if ((job as any).escrow?.txSignature) {
-            // We expect the client to call the contract's cancel_job first.
-            // Reflect refund state in the database for accurate UI.
-            (job as any).escrow.status = 'refunded';
+        if ((job as any).escrow?.txSignature && (job as any).escrow.status === 'locked') {
+            try {
+                const user = await User.findById(job.userId);
+                if (user && user.solanaSeed) {
+                    console.log(`[JobService] Attempting on-chain unlock for job ${jobId}`);
+                    const unlockTx = await solanaService.cancelPayment(
+                        user.solanaSeed,
+                        (job as any).escrow.onchainJobId,
+                        (job as any).escrow.lockedAmount || job.estimatedCost
+                    );
+                    console.log(`[JobService] ✅ On-chain Unlock Successful: ${unlockTx}`);
+                    (job as any).escrow.status = 'refunded';
+                    (job as any).escrow.unlockTxSignature = unlockTx;
+                }
+            } catch (err) {
+                console.error('[JobService] ❌ On-chain Unlock Failed (Non-fatal for DB):', err);
+                // We continue with DB cancellation even if chain unlock fails, 
+                // but the locked_amount stays high on-chain until manual intervention.
+            }
         }
         await job.save();
 
@@ -665,10 +711,10 @@ export class JobService {
             if (user && user.role !== 'admin') {
                 // For on-chain jobs, the full estimatedCost was deducted from DB.
                 // For legacy jobs, we deduct the difference between estimate and spent.
-                const refundAmount = usesOnchainEscrow 
-                    ? (job as any).escrow?.lockedAmount || job.estimatedCost 
+                const refundAmount = usesOnchainEscrow
+                    ? (job as any).escrow?.lockedAmount || job.estimatedCost
                     : Math.max(0, job.estimatedCost! - (job.totalCreditsDistributed || 0));
-                
+
                 if (refundAmount > 0) {
                     await User.findByIdAndUpdate(userId, {
                         $inc: { tokenBalance: Number(refundAmount) }
@@ -736,7 +782,7 @@ export class JobService {
 
             job.approved = true;
             // job.status remains 'completed'
-            
+
             await job.save();
             this.wsService?.broadcastJobUpdate(jobId);
             return true;
@@ -857,7 +903,7 @@ export class JobService {
 
         return {
             // Prioritize real-time database counts over cached User table stats
-            totalJobs: totals.totalJobs, 
+            totalJobs: totals.totalJobs,
             activeJobs:
                 (statusCounts.pending || 0) +
                 (statusCounts.pending_payment || 0) +
@@ -944,19 +990,24 @@ export class JobService {
         const frames = type === 'image' ? 1 : endFrame - startFrame + 1;
         const creditsPerFrame = settings.creditsPerFrame || 1;
 
-        // Adjust based on settings complexity
-        let complexityMultiplier = 1;
-        if (settings.samples && settings.samples > 256) complexityMultiplier *= 1.5;
-        if (settings.resolutionX * settings.resolutionY > 1920 * 1080) complexityMultiplier *= 2;
-        if (settings.denoiser && settings.denoiser !== 'NONE') complexityMultiplier *= 1.2;
+        // Granular Factors (Matching Frontend CreateJob.tsx)
+        const complexityFactor = (settings.samples || 128) / 128;
+        const resolutionFactor = ((settings.resolutionX || 1920) * (settings.resolutionY || 1080)) / (1920 * 1080);
+        
+        let baseCost = frames * creditsPerFrame;
+        baseCost *= complexityFactor;
+        baseCost *= resolutionFactor;
 
-        return Math.ceil(frames * creditsPerFrame * complexityMultiplier);
+        // Engine & Device Factors
+        if (settings.engine === 'CYCLES') baseCost *= 1.2;
+        if (settings.device === 'GPU') baseCost *= 0.8;
+
+        return Math.ceil(baseCost);
     }
 
-    private calculateEstimatedCost(frames: number, settings: any): number {
-        const baseCostPerFrame = 0.1; // $0.10 per frame
-        const creditsPerFrame = settings.creditsPerFrame || 1;
-        return frames * creditsPerFrame * baseCostPerFrame;
+    private calculateEstimatedCost(type: 'image' | 'animation', settings: any, startFrame: number, endFrame: number): number {
+        // Unify with Credits (since we are a token-based system)
+        return this.calculateEstimatedCredits(type, settings, startFrame, endFrame);
     }
 
     private calculateEstimatedRenderTime(frames: number, settings: any): number {

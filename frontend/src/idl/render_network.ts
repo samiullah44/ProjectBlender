@@ -9,4 +9,4 @@ import idlJson from './render_network.json';
 export const idl = idlJson;
 
 // We can define the PDA Seed derivations here for easy importing
-export const SEED_USER_ACCOUNT = "user_account";
+export const SEED_USER_ACCOUNT = "user_account_v2";
