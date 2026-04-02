@@ -82,11 +82,27 @@ export interface IJobEscrow {
     escrowAddress: string;
     /** The u64 job_id used on-chain, stored as string to avoid precision loss */
     escrowJobId: string;
+    /** Numeric on-chain job ID for Solana program */
+    onchainJobId?: number;
     /** Amount locked in tokens (human-readable, 6 decimals already applied) */
     lockedAmount: number;
     /** Current on-chain escrow lifecycle state */
     status: 'none' | 'locked' | 'released' | 'refunded';
     lockedAt: Date;
+
+    // ── Settlement tracking (Phase 4) ──────────────────────────────
+    /** Payment settlement state machine */
+    paymentStatus?: 'unsettled' | 'settling' | 'partial' | 'settled' | 'failed';
+    /** Tokens already released on-chain to providers */
+    releasedAmount?: number;
+    /** Timestamp of last successful settlement */
+    settledAt?: Date;
+    /** TX signatures from batch_release calls (one job may span multiple TXs) */
+    settlementTxSignatures?: string[];
+    /** Reason for settlement failure */
+    failureReason?: string;
+    /** Number of settlement retry attempts */
+    retryCount?: number;
 }
 
 export interface IJob {

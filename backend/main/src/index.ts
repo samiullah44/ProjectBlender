@@ -136,6 +136,7 @@
 import { server } from './app';
 import { connectDatabase } from './config/database';
 import { closeQueue } from './services/FrameQueueService';
+import { settlementScheduler } from './services/SettlementScheduler';
 import Redis from 'ioredis';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -186,6 +187,9 @@ async function checkRedisConnection() {
       console.log(`🔌 WebSocket: ws://${HOST}:${PORT}/ws`);
       console.log(`🗄️  Redis: ${redisConnected ? 'Connected (Queue System Live)' : 'Disconnected (Queues Offline)'}`);
       console.log('='.repeat(50));
+
+      // Start Settlement Scheduler
+      settlementScheduler.start();
     });
   } catch (error) {
     console.error('❌ Server startup failed:', error);
@@ -205,6 +209,7 @@ process.on('unhandledRejection', (reason, promise) => {
 // Graceful shutdown
 const gracefulShutdown = async () => {
   console.log('\n🔄 Received shutdown signal, closing queues...');
+  settlementScheduler.stop();
   await closeQueue();
   process.exit(0);
 };

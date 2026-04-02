@@ -377,6 +377,24 @@ const AllJobsTab: React.FC<{
                               <span>{progress}%</span>
                             </>
                           )}
+                          {job.escrow && (
+                            <>
+                              <span>•</span>
+                              <span className="flex items-center gap-1 text-amber-400/90">
+                                <Shield className="w-3 h-3" />
+                                {job.escrow.lockedAmount || 0} Locked
+                              </span>
+                              {job.escrow.paymentStatus === 'settled' && (
+                                <>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1 text-emerald-400">
+                                    <CheckCircle className="w-3 h-3" />
+                                    {job.escrow.releasedAmount || 0} Released
+                                  </span>
+                                </>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="text-xs text-gray-400">

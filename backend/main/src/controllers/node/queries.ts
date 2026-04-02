@@ -226,17 +226,45 @@ export const getNodeStatistics = async (req: Request, res: Response): Promise<vo
     const nodes = await Node.find(query);
     const now = new Date();
 
-    // Calculate performance statistics
+    // 1. Calculate Earnings (Released vs Pending)
+    const allUserJobs = await Job.find({ "frameAssignments.nodeId": { $in: nodes.map(n => n.nodeId) } }).lean();
+    
+    let pendingEarnings = 0;
+    let totalEarnedTokens = 0;
+
+    for (const job of allUserJobs) {
+      const isSettled = job.escrow?.paymentStatus === 'settled';
+      
+      for (const frame of job.frameAssignments || []) {
+        const isThisUserNode = nodes.some(n => n.nodeId === frame.nodeId);
+        if (isThisUserNode && frame.status === 'rendered' && frame.creditsEarned) {
+          totalEarnedTokens += frame.creditsEarned;
+          if (!isSettled) {
+            pendingEarnings += frame.creditsEarned;
+          }
+        }
+      }
+    }
+
+    const user = await User.findById(userId);
+    const releasedEarnings = user?.nodeProvider?.earnings || 0;
+
+    // 2. Calculate performance statistics
     const perfNodes = nodes.filter(n => n.performance && n.performance.framesRendered > 0);
-    const avgFrameTime = perfNodes.length > 0
+    const avgFrameTimeValue = perfNodes.length > 0
       ? perfNodes.reduce((sum, n) => sum + (n.performance?.avgFrameTime || 0), 0) / perfNodes.length
       : 0;
 
-    // Get job statistics for node contributions (if method exists)
+    // Get job statistics for node contributions
     const jobStats = (Job as any).getNodeContributions ? await (Job as any).getNodeContributions() : {};
 
     const statistics = {
       total: nodes.length,
+      earnings: {
+        total: totalEarnedTokens,
+        released: releasedEarnings,
+        pending: pendingEarnings
+      },
       byStatus: {
         online: nodes.filter(n => n.status === 'online').length,
         offline: nodes.filter(n => n.status === 'offline').length,
@@ -255,7 +283,7 @@ export const getNodeStatistics = async (req: Request, res: Response): Promise<vo
           Math.round(nodes.reduce((sum, n) => sum + (n.jobsCompleted || 0), 0) / nodes.length) : 0,
         totalConnections: nodes.reduce((sum, n) => sum + (n.connectionCount || 0), 0),
         nodesWithPerformanceData: perfNodes.length,
-        avgFrameTime: avgFrameTime.toFixed(2),
+        avgFrameTime: avgFrameTimeValue.toFixed(2),
         fastestNode: perfNodes.length > 0
           ? perfNodes.sort((a, b) => (a.performance!.avgFrameTime - b.performance!.avgFrameTime))[0]?.nodeId
           : 'N/A',

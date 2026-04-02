@@ -17,6 +17,7 @@ export interface IUser extends Document {
   depositTokenAddress?: string;
   tokenBalance: number;
   solanaSeed?: string;
+  payoutWallet?: string; // NEW: Specific wallet for receiving render earnings
 
   // OAuth fields
   provider?: 'google' | 'github' | 'local';
@@ -138,6 +139,11 @@ const userSchema = new Schema<IUser>(
       min: 0
     },
     solanaSeed: {
+      type: String,
+      sparse: true,
+      index: true
+    },
+    payoutWallet: {
       type: String,
       sparse: true,
       index: true

@@ -214,14 +214,25 @@ const JobSchema = new Schema<IJob>({
     txSignature: { type: String, default: '' },
     escrowAddress: { type: String, default: '' },
     escrowJobId: { type: String, default: '' },
-    onchainJobId: { type: Number, index: true }, // NEW: Numeric ID for Solana Program
+    onchainJobId: { type: Number, index: true }, // Numeric ID for Solana Program
     lockedAmount: { type: Number, default: 0 },
     status: {
       type: String,
       enum: ['none', 'locked', 'released', 'refunded'],
       default: 'none'
     },
-    lockedAt: { type: Date }
+    lockedAt: { type: Date },
+    // ── Settlement tracking (Phase 4) ──────────────────────────────
+    paymentStatus: {
+      type: String,
+      enum: ['unsettled', 'settling', 'partial', 'settled', 'failed'],
+      default: 'unsettled'
+    },
+    releasedAmount: { type: Number, default: 0 },
+    settledAt: { type: Date },
+    settlementTxSignatures: { type: [String], default: [] },
+    failureReason: { type: String },
+    retryCount: { type: Number, default: 0 }
   },
 
   // Metadata

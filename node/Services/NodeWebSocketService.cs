@@ -76,7 +76,7 @@ namespace BlendFarm.Node.Services
             _nodeId = nodeId;
 
             var backendUrl = (configuration["Backend:Url"]
-                              ?? "http://192.168.1.32:3000")
+                              ?? "http://192.168.1.54:3000")
                              .TrimEnd('/');
 
             // Convert http(s) → ws(s)

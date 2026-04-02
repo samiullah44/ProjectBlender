@@ -204,6 +204,7 @@ export class AuthController {
           tokenBalance: user.tokenBalance,
           depositTokenAddress: user.depositTokenAddress,
           solanaSeed: user.solanaSeed,
+          payoutWallet: user.payoutWallet,
           isVerified: user.isVerified,
           provider: user.provider,
           stats: user.stats,
@@ -565,6 +566,68 @@ export class AuthController {
         success: false,
         error: 'Failed to get applications'
       });
+    }
+  }
+
+  // ── Payout Wallet (Provider Earnings Destination) ──────────────────────
+  static async getPayoutWallet(req: AuthRequest, res: Response) {
+    try {
+      const { User } = await import('../models/User');
+      const user = await User.findById(req.user.userId);
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+      res.json({ success: true, payoutWallet: user.payoutWallet || null });
+    } catch (error: any) {
+      console.error('Get payout wallet error:', error);
+      res.status(500).json({ success: false, error: 'Failed to get payout wallet' });
+    }
+  }
+
+  static async updatePayoutWallet(req: AuthRequest, res: Response) {
+    try {
+      const { wallet } = req.body;
+      if (!wallet || typeof wallet !== 'string') {
+        return res.status(400).json({ success: false, error: 'Wallet address is required' });
+      }
+
+      // Validate Solana public key format
+      try {
+        const { PublicKey } = await import('@solana/web3.js');
+        new PublicKey(wallet); // throws if invalid base58 / wrong length
+      } catch {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid Solana wallet address. Must be a valid base58 public key.'
+        });
+      }
+
+      const { User } = await import('../models/User');
+      const user = await User.findById(req.user.userId);
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      if (!user.roles?.includes('node_provider')) {
+        return res.status(403).json({
+          success: false,
+          error: 'Only node providers can set a payout wallet'
+        });
+      }
+
+      user.payoutWallet = wallet;
+      await user.save();
+
+      console.log(`💰 Payout wallet updated for user ${req.user.userId}: ${wallet.substring(0, 8)}...`);
+
+      res.json({
+        success: true,
+        message: 'Payout wallet updated successfully',
+        payoutWallet: wallet
+      });
+    } catch (error: any) {
+      console.error('Update payout wallet error:', error);
+      res.status(500).json({ success: false, error: 'Failed to update payout wallet' });
     }
   }
 }
