@@ -4,6 +4,10 @@ using System.Text.Json.Serialization;
 namespace BlendFarm.Node.Models
 {
     [JsonSerializable(typeof(NodeConfiguration))]
+    [JsonSerializable(typeof(int))]
+    [JsonSerializable(typeof(long))]
+    [JsonSerializable(typeof(double))]
+    [JsonSerializable(typeof(bool))]
     [JsonSourceGenerationOptions(WriteIndented = true)]
     public partial class NodeConfigurationContext : JsonSerializerContext
     {

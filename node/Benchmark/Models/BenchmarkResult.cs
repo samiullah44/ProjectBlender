@@ -6,6 +6,10 @@ using BlendFarm.Node.Models;
 namespace BlendFarm.Node.Benchmark.Models
 {
     [JsonSerializable(typeof(BenchmarkResult))]
+    [JsonSerializable(typeof(int))]
+    [JsonSerializable(typeof(long))]
+    [JsonSerializable(typeof(double))]
+    [JsonSerializable(typeof(bool))]
     public partial class BenchmarkSerializerContext : JsonSerializerContext
     {
     }
