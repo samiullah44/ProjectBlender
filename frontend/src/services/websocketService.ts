@@ -104,6 +104,10 @@ class WebSocketService {
         // Send auth message if user is logged in
         this.authenticateIfPossible()
         break
+      case 'credit_balance_updated':
+        console.log('💳 Credit balance update received, refreshing...')
+        window.dispatchEvent(new Event('refresh_credit_balance'))
+        break
       case 'pong':
         // Heartbeat response
         break

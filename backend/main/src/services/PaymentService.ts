@@ -223,25 +223,9 @@ export class PaymentService {
       scalingFactor = 0;
       console.warn(`[PaymentService] Job ${job.jobId} has ZERO lockedAmount — forcing scalingFactor to 0.`);
     } else {
-      // ── FEE ACCOUNTING: The on-chain program adds a platform fee ──
-      // Default to 2% (200 bps) if we can't fetch it, but try to be precise.
-      let platformFeeRate = 0.02; 
-      try {
-        const config = await (solanaService as any).program.account.globalConfig.all();
-        if (config && config.length > 0) {
-           const bps = config[0].account.platformFeeBps.toNumber();
-           platformFeeRate = bps / 10000;
-        }
-      } catch (e) {
-        console.warn(`[PaymentService] Could not fetch platform fee BPS, defaulting to 2%.`);
-      }
-
-      // Max allowable payout = lockedAmount / (1 + feeRate)
-      const maxAllowablePayout = lockedAmount / (1 + platformFeeRate);
-      
-      if (totalCalculatedCredits > maxAllowablePayout) {
-        scalingFactor = maxAllowablePayout / totalCalculatedCredits;
-        console.warn(`[PaymentService] Job ${job.jobId} needs fee-aware scaling (${totalCalculatedCredits} > ${maxAllowablePayout.toFixed(4)}). Factor: ${scalingFactor.toFixed(6)}`);
+      if (totalCalculatedCredits > lockedAmount) {
+        scalingFactor = lockedAmount / totalCalculatedCredits;
+        console.warn(`[PaymentService] Job ${job.jobId} needs safety scaling (${totalCalculatedCredits} > ${lockedAmount}). Factor: ${scalingFactor.toFixed(6)}`);
       }
     }
 
@@ -402,6 +386,7 @@ export class PaymentService {
 
     await Job.findByIdAndUpdate(job._id, {
       $set: {
+        "escrow.status": "released",
         "escrow.paymentStatus": item.skippedProviders.length > 0 ? "partial" : "settled",
         "escrow.releasedAmount": releasedAmount,
         "escrow.settledAt": new Date(),
@@ -417,6 +402,20 @@ export class PaymentService {
       await User.findByIdAndUpdate(payout.userId, {
         $inc: { "nodeProvider.earnings": payout.amount / 1_000_000 }
       });
+    }
+
+    // Notify frontend to refresh its state via WebSocket
+    try {
+      const { wsService } = await import("../app");
+      if (wsService) {
+        // Send a job update so that UI knows the job is now finalized
+        wsService.broadcastJobUpdate(job.jobId).catch((err: any) => console.error("Error broadcasting job update:", err));
+        
+        // Also tell the specific user to reload their wallet balance
+        wsService.emitToUser(job.userId.toString(), "credit_balance_updated", {});
+      }
+    } catch (wsErr) {
+      console.error("WS Emit failed:", wsErr);
     }
   }
 
