@@ -12,7 +12,7 @@ import { paymentService, SettlementResult } from "./PaymentService";
 // ── Config ───────────────────────────────────────────────────────────────────
 // Change these two lines:
 const CHECK_INTERVAL_MS = 10 * 1000;  // 10 seconds for testing
-const JOB_THRESHOLD = 1;              // Trigger on every new job for testing
+const JOB_THRESHOLD = 3;              // Trigger on every new job for testing
 const TIME_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 1 day
 
 export class SettlementScheduler {

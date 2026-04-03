@@ -218,9 +218,31 @@ export class PaymentService {
     // ── SAFETY CAP: Never payout more than what was locked ──
     const lockedAmount = job.escrow?.lockedAmount || 0;
     let scalingFactor = 1.0;
-    if (totalCalculatedCredits > lockedAmount && lockedAmount > 0) {
-      scalingFactor = lockedAmount / totalCalculatedCredits;
-      console.warn(`[PaymentService] Job ${job.jobId} over-earned (${totalCalculatedCredits} > ${lockedAmount}). Scaling payouts by ${scalingFactor.toFixed(4)}`);
+    
+    if (lockedAmount <= 0) {
+      scalingFactor = 0;
+      console.warn(`[PaymentService] Job ${job.jobId} has ZERO lockedAmount — forcing scalingFactor to 0.`);
+    } else {
+      // ── FEE ACCOUNTING: The on-chain program adds a platform fee ──
+      // Default to 2% (200 bps) if we can't fetch it, but try to be precise.
+      let platformFeeRate = 0.02; 
+      try {
+        const config = await (solanaService as any).program.account.globalConfig.all();
+        if (config && config.length > 0) {
+           const bps = config[0].account.platformFeeBps.toNumber();
+           platformFeeRate = bps / 10000;
+        }
+      } catch (e) {
+        console.warn(`[PaymentService] Could not fetch platform fee BPS, defaulting to 2%.`);
+      }
+
+      // Max allowable payout = lockedAmount / (1 + feeRate)
+      const maxAllowablePayout = lockedAmount / (1 + platformFeeRate);
+      
+      if (totalCalculatedCredits > maxAllowablePayout) {
+        scalingFactor = maxAllowablePayout / totalCalculatedCredits;
+        console.warn(`[PaymentService] Job ${job.jobId} needs fee-aware scaling (${totalCalculatedCredits} > ${maxAllowablePayout.toFixed(4)}). Factor: ${scalingFactor.toFixed(6)}`);
+      }
     }
 
     // Resolve nodeId → User.payoutWallet
