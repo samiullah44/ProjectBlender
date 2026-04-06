@@ -1,6 +1,7 @@
 import * as mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import bs58 from 'bs58';
 import { User, IUser } from '../models/User';
 
 import { Application } from '../models/Application';
@@ -73,7 +74,7 @@ export class AuthService {
           totalSpent: 0,
           totalEarned: 0
         },
-        solanaSeed: crypto.randomBytes(32).toString('hex')
+        solanaSeed: bs58.encode(crypto.randomBytes(32))
       });
 
 
@@ -435,7 +436,7 @@ export class AuthService {
 
     // Auto-generate solanaSeed for existing users if missing
     if (!user.solanaSeed) {
-      user.solanaSeed = crypto.randomBytes(32).toString('hex');
+      user.solanaSeed = bs58.encode(crypto.randomBytes(32));
       await user.save();
       console.log(`✅ Generated Solana Identity Seed for existing user: ${user.email}`);
     }
@@ -587,13 +588,8 @@ export class AuthService {
         return { success: false, error: 'User not found' };
       }
 
-      // Basic validation: ensure it's a valid hex string of proper length (usually 64 chars for 32 bytes)
-      if (!/^[0-9a-fA-F]{64}$/.test(newSeed)) {
-        // If it's a 32-44 char public key string, we'll convert it to hex or just store it as-is
-        // The user said "use solanaseed", but here we want to ensure it's a valid base for derivations
-        // If they pass a raw PK, we'll just allow it as long as it's a string.
-      }
-
+      // Custom identity seeds are allowed as long as they are valid strings
+      // parseUserSeed in SolanaService handles both hex and base58.
       user.solanaSeed = newSeed;
       await user.save();
 

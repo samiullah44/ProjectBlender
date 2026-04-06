@@ -124,7 +124,7 @@ export class JobService {
                     tileSize: settings.tileSize || 256,
                     outputFormat: settings.outputFormat || 'PNG',
                     compression: settings.compression ?? 90,
-                    creditsPerFrame: settings.creditsPerFrame || 1,
+                    creditsPerFrame: (jobCredits / totalFrames) || 1, // DERIVED: Ensure node payout matches escrow
                     blenderVersion: normalizeBlenderVersion(settings.blenderVersion || '4.5.0'),
                     selectedFrame: settings.selectedFrame || selectedFrame
                 },

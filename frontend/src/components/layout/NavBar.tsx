@@ -57,11 +57,13 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [balanceMenuOpen, setBalanceMenuOpen] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const [isSubscribed, setIsSubscribed] = useState(false)
 
   const userMenuRef = useRef<HTMLDivElement>(null)
+  const balanceMenuRef = useRef<HTMLDivElement>(null)
 
   const { user, isAuthenticated, logout, switchRole } = useAuthStore()
   const location = useLocation()
@@ -74,6 +76,10 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
 
   useOnClickOutside(userMenuRef, () => {
     if (userMenuOpen) setUserMenuOpen(false)
+  })
+
+  useOnClickOutside(balanceMenuRef, () => {
+    if (balanceMenuOpen) setBalanceMenuOpen(false)
   })
 
   useEffect(() => {
@@ -430,130 +436,197 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                     </div>
                   )}
 
-                  {/* User Profile */}
-                  <div className="relative" ref={userMenuRef}>
-                    <button
-                      onClick={() => setUserMenuOpen(!userMenuOpen)}
-                      className="flex items-center gap-3 p-1 rounded-lg hover:bg-white/5 transition-colors"
-                    >
-                      <div className="text-right hidden sm:block">
-                        <div className="text-sm font-medium text-white">
-                          {user.name}
-                        </div>
-                        <div className="text-xs text-gray-400 capitalize">
-                          {user.role?.replace('_', ' ') || user.role}
-                        </div>
-                      </div>
-                      <div className={cn(
-                        "w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold transition-all duration-500",
-                        isProvider
-                          ? "bg-gradient-to-br from-purple-600 to-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
-                          : "bg-gradient-to-br from-emerald-500 to-cyan-500"
-                      )}>
-                        {user.name.charAt(0).toUpperCase()}
-                      </div>
-                      <ChevronDown className={cn(
-                        "w-4 h-4 text-gray-400 transition-transform duration-200",
-                        userMenuOpen && "rotate-180"
-                      )} />
-                    </button>
+                  {/* Combined Balance & User Profile Widget */}
+                  <div className={cn(
+                    "flex items-center rounded-full transition-all relative backdrop-blur-sm",
+                    isProvider 
+                      ? "bg-purple-500/10 hover:bg-purple-500/15 border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
+                      : "bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                  )}>
+                    
+                    {/* Balance Menu */}
+                    <div className="relative" ref={balanceMenuRef}>
+                      <button
+                        onClick={() => {
+                          setBalanceMenuOpen(!balanceMenuOpen);
+                          setUserMenuOpen(false);
+                        }}
+                        className="flex items-center gap-2 pl-4 pr-3 py-1.5 transition-colors group"
+                      >
+                        <span className={cn(
+                          "text-sm font-bold tracking-wide transition-colors",
+                          isProvider 
+                            ? "text-purple-400 group-hover:text-purple-300" 
+                            : "text-emerald-400 group-hover:text-emerald-300"
+                        )}>
+                          RNDR {isRefreshing ? '...' : (creditedAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+                        </span>
+                      </button>
 
-                    {/* User Dropdown */}
-                    <AnimatePresence>
-                      {userMenuOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="absolute right-0 mt-2 w-64 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden"
-                          onClick={() => setUserMenuOpen(false)}
-                        >
-                          <div className="p-4 border-b border-white/10">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold text-lg">
-                                {user.name.charAt(0).toUpperCase()}
-                              </div>
-                              <div>
-                                <div className="font-medium text-white">
-                                  {user.name}
+                      {/* Balance Dropdown */}
+                      <AnimatePresence>
+                        {balanceMenuOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute right-0 mt-3 w-56 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden z-50"
+                          >
+                            <div className="p-3 border-b border-white/10 bg-gray-800/50">
+                              <div className="text-xs text-gray-400 font-semibold mb-1 uppercase tracking-wider">Available Balance</div>
+                              <div className="text-lg font-bold text-white tracking-tight">{(creditedAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} <span className="text-sm text-amber-500 font-semibold">mRNDR</span></div>
+                              {lockedAmount > 0 && (
+                                <div className="text-xs text-amber-500/80 font-medium mt-1">
+                                  {lockedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} Locked
                                 </div>
-                                <div className="text-sm text-gray-400">
-                                  {user.email}
+                              )}
+                            </div>
+                            <div className="p-2 space-y-1">
+                                <button
+                                  onClick={() => {
+                                    window.dispatchEvent(new Event('open-deposit-modal'));
+                                    setBalanceMenuOpen(false);
+                                  }}
+                                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-emerald-500/10 text-emerald-400 font-semibold text-sm transition-colors group"
+                                >
+                                  <div className="p-1.5 bg-emerald-500/20 rounded-md group-hover:scale-110 transition-transform">
+                                    <CreditCard className="w-3.5 h-3.5" />
+                                  </div>
+                                  Deposit
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    window.dispatchEvent(new Event('open-withdraw-modal'));
+                                    setBalanceMenuOpen(false);
+                                  }}
+                                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-red-500/10 text-red-400 font-semibold text-sm transition-colors group"
+                                >
+                                  <div className="p-1.5 bg-red-500/20 rounded-md group-hover:scale-110 transition-transform">
+                                    <CreditCard className="w-3.5 h-3.5" />
+                                  </div>
+                                  Withdraw
+                                </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Divider */}
+                    <div className={cn(
+                      "w-[1px] h-5",
+                      isProvider ? "bg-purple-500/30" : "bg-emerald-500/30"
+                    )}></div>
+
+                    {/* User Profile Menu */}
+                    <div className="relative" ref={userMenuRef}>
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(!userMenuOpen);
+                          setBalanceMenuOpen(false);
+                        }}
+                        className="flex items-center justify-center p-1 mr-1"
+                      >
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs uppercase shadow-lg transform transition-transform hover:scale-105",
+                          isProvider
+                            ? "bg-gradient-to-br from-purple-600 to-purple-500 shadow-purple-600/30"
+                            : "bg-gradient-to-br from-emerald-500 to-cyan-500 shadow-emerald-500/30"
+                        )}>
+                          {user.name.substring(0, 2)}
+                        </div>
+                      </button>
+
+                      {/* User Dropdown */}
+                      <AnimatePresence>
+                        {userMenuOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute right-0 mt-3 w-64 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden z-50"
+                          >
+                            <div className="p-4 border-b border-white/10 bg-gray-800/30">
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  "w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg uppercase",
+                                  isProvider
+                                    ? "bg-gradient-to-br from-purple-600 to-purple-500"
+                                    : "bg-gradient-to-br from-emerald-500 to-cyan-500"
+                                )}>
+                                  {user.name.substring(0, 2)}
                                 </div>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
-                                  <span className="text-xs font-semibold text-emerald-400">
-                                    {isRefreshing ? 'Syncing...' : 
-                                      (creditedAmount === null ? 'Loading...' : `${creditedAmount.toFixed(2)} mRNDR`)
-                                    }
-                                  </span>
-                                  {lockedAmount > 0 && (
-                                    <span className="text-[10px] text-amber-500/80 font-medium ml-1">
-                                      ({lockedAmount.toFixed(2)} Locked)
-                                    </span>
-                                  )}
+                                <div>
+                                  <div className="font-medium text-white">
+                                    {user.name}
+                                  </div>
+                                  <div className="text-sm text-gray-400">
+                                    {user.email}
+                                  </div>
+                                  <div className={cn(
+                                    "text-xs font-semibold mt-1 capitalize",
+                                    isProvider ? "text-purple-400" : "text-emerald-400"
+                                  )}>
+                                    {activeRole?.replace('_', ' ') || activeRole}
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
+                            <div className="py-2">
+                              {userMenuItems.map((item) => (
+                                <Link
+                                  key={item.label}
+                                  to={item.href}
+                                  onClick={() => setUserMenuOpen(false)}
+                                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors group"
+                                >
+                                  <div className="text-gray-400 group-hover:text-white transition-colors">
+                                    {item.icon}
+                                  </div>
+                                  <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">{item.label}</span>
+                                </Link>
+                              ))}
 
-                          <div className="py-2">
-                            <button
-                              onClick={() => {
-                                window.dispatchEvent(new Event('open-deposit-modal'));
-                                setUserMenuOpen(false);
-                              }}
-                              className="flex items-center gap-3 w-full px-4 py-3 hover:bg-emerald-500/10 transition-colors text-left group border-b border-white/5 pb-4 mb-2"
-                            >
-                              <div className="p-1.5 bg-emerald-500/20 rounded-md group-hover:scale-110 transition-transform">
-                                <CreditCard className="w-4 h-4 text-emerald-400" />
-                              </div>
-                              <span className="text-sm font-semibold text-emerald-400 shadow-sm">Deposit mRNDR Tokens</span>
-                            </button>
+                              <div className="h-[1px] w-full bg-white/10 my-2"></div>
 
-                            {/* Professional Sync Button - Only shown if mismatch detected */}
-                            {user?.solanaSeed && publicKey && publicKey.toBase58() !== user.solanaSeed && (
+                              {user?.solanaSeed && publicKey && publicKey.toBase58() !== user.solanaSeed && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    syncSolanaSeed();
+                                    setUserMenuOpen(false);
+                                  }}
+                                  className="flex items-center gap-3 w-full px-4 py-3 bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-left group border-b border-white/5 mb-2"
+                                >
+                                  <div className="p-1.5 bg-amber-500/20 rounded-md group-hover:scale-110 transition-transform">
+                                    <ArrowLeftRight className="w-4 h-4 text-amber-400" />
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-amber-400">Sync Identity</span>
+                                    <span className="text-[10px] text-amber-500/70">Connect this wallet to account</span>
+                                  </div>
+                                </button>
+                              )}
+
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  syncSolanaSeed();
-                                  setUserMenuOpen(false);
+                                onClick={() => {
+                                  handleLogout()
+                                  setUserMenuOpen(false)
                                 }}
-                                className="flex items-center gap-3 w-full px-4 py-3 bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-left group border-b border-white/5 pb-4 mb-2"
+                                className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-red-500/10 group transition-colors"
                               >
-                                <div className="p-1.5 bg-amber-500/20 rounded-md group-hover:scale-110 transition-transform">
-                                  <ArrowLeftRight className="w-4 h-4 text-amber-400" />
+                                <div className="text-red-400 transition-colors">
+                                  <LogOut className="w-4 h-4" />
                                 </div>
-                                <div className="flex flex-col">
-                                  <span className="text-xs font-bold text-amber-400">Sync Identity</span>
-                                  <span className="text-[10px] text-amber-500/70">Connect this wallet to account</span>
-                                </div>
+                                <span className="text-sm font-medium text-red-400">Logout</span>
                               </button>
-                            )}
-
-                            {userMenuItems.map((item) => (
-                              <Link
-                                key={item.label}
-                                to={item.href}
-                                className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
-                              >
-                                {item.icon}
-                                <span className="text-sm text-gray-300">{item.label}</span>
-                              </Link>
-                            ))}
-
-                            <button
-                              onClick={handleLogout}
-                              className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-500/10 text-red-400 transition-colors"
-                            >
-                              <LogOut className="w-4 h-4" />
-                              <span className="text-sm">Logout</span>
-                            </button>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -671,7 +744,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                               {user.name}
                             </div>
                             <div className="text-sm text-gray-400 capitalize">
-                              {user.role?.replace('_', ' ') || user.role}
+                              {activeRole?.replace('_', ' ') || activeRole}
                             </div>
                             <div className="flex items-center gap-2 mt-1">
                               <CreditCard className={cn(
@@ -684,11 +757,11 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                               )}>
                                 {isRefreshing
                                   ? 'Syncing...'
-                                  : `${(creditedAmount ?? 0).toFixed(2)} mRNDR`}
+                                  : `${(creditedAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} mRNDR`}
                               </span>
                               {lockedAmount > 0 && (
                                 <span className="text-[10px] text-amber-500/80 font-medium ml-1">
-                                  ({lockedAmount.toFixed(2)} Locked)
+                                  ({lockedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} Locked)
                                 </span>
                               )}
                             </div>
@@ -725,6 +798,17 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                           >
                             <CreditCard className="w-4 h-4 text-emerald-400" />
                             <span className="text-emerald-400 font-medium text-sm font-semibold">Deposit mRNDR Tokens</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              window.dispatchEvent(new Event('open-withdraw-modal'));
+                              setIsOpen(false);
+                            }}
+                            className="flex items-center gap-3 w-full px-4 py-3 rounded-lg hover:bg-red-500/10 bg-red-500/5 transition-colors text-left mb-2 border border-red-500/20"
+                          >
+                            <CreditCard className="w-4 h-4 text-red-400" />
+                            <span className="text-red-400 font-medium text-sm font-semibold">Withdraw mRNDR Tokens</span>
                           </button>
 
                           {userMenuItems.map((item) => (

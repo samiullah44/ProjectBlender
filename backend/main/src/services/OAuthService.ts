@@ -1,6 +1,7 @@
 // backend/src/services/OAuthService.ts
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import bs58 from 'bs58';
 import { User } from '../models/User';
 
 import { env } from '../config/env';
@@ -37,7 +38,7 @@ export class OAuthService {
                         totalSpent: 0,
                         totalEarned: 0
                     },
-                    solanaSeed: crypto.randomBytes(32).toString('hex')
+                    solanaSeed: bs58.encode(crypto.randomBytes(32))
                 });
 
 
@@ -48,7 +49,7 @@ export class OAuthService {
 
             // Auto-generate solanaSeed for existing users if missing
             if (!user.solanaSeed) {
-                user.solanaSeed = crypto.randomBytes(32).toString('hex');
+                user.solanaSeed = bs58.encode(crypto.randomBytes(32));
                 await user.save();
                 console.log(`✅ Generated Solana Identity Seed for existing OAuth user: ${user.email}`);
             }

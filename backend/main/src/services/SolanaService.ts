@@ -180,14 +180,32 @@ export class SolanaService {
   }
 
   /**
+   * Helper to safely parse a seed string (hex or base58) into a PublicKey.
+   * This handles backward compatibility for hex-encoded solanaSeeds.
+   */
+  private parseUserSeed(seed: string): PublicKey {
+    try {
+      // 1. Check if it's a 64-char hex string (32 bytes)
+      if (seed.length === 64 && /^[0-9a-fA-F]+$/.test(seed)) {
+        return new PublicKey(Buffer.from(seed, 'hex'));
+      }
+      // 2. Otherwise assume Base58 (default for PublicKey)
+      return new PublicKey(seed);
+    } catch (e) {
+      console.error(`[SolanaService] Failed to parse user seed: ${seed}`, e);
+      throw e;
+    }
+  }
+
+  /**
    * Logical Lock: Reserves funds in the user's account PDA without tokens moving.
    * This is what enables the Zero-Prompt UX.
    */
   public async lockPayment(userId: string, jobId: number, amount: number): Promise<string> {
     try {
       // 1. Derive User Account PDA (using the website identity seed)
-      // Note: userId here should be the public key used as the seed on-chain
-      const userSeed = new PublicKey(userId);
+      // Note: userId here is the solanaSeed string (hex or base58)
+      const userSeed = this.parseUserSeed(userId);
       const [userAccountPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_account_v2"), userSeed.toBuffer()],
         this.program.programId
@@ -220,7 +238,7 @@ export class SolanaService {
 
   public async cancelPayment(userId: string, jobId: number, amount: number): Promise<string> {
     try {
-      const userSeed = new PublicKey(userId);
+      const userSeed = this.parseUserSeed(userId);
       const [userAccountPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_account_v2"), userSeed.toBuffer()],
         this.program.programId
@@ -259,11 +277,11 @@ export class SolanaService {
    */
   public async batchRelease(
     userSolanaSeed: string,
-    batchItems: BatchItem[],
+    batchItems: any[],
     providerTokenAccounts: PublicKey[]
   ): Promise<string> {
     try {
-      const userSeed = new PublicKey(userSolanaSeed);
+      const userSeed = this.parseUserSeed(userSolanaSeed);
 
       // Derive PDAs
       const [userAccountPda] = PublicKey.findProgramAddressSync(
@@ -332,7 +350,7 @@ export class SolanaService {
    */
   public async getUserAccountState(userSolanaSeed: string): Promise<{ creditedAmount: number; lockedAmount: number }> {
     try {
-      const userSeed = new PublicKey(userSolanaSeed);
+      const userSeed = this.parseUserSeed(userSolanaSeed);
       const [userAccountPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_account_v2"), userSeed.toBuffer()],
         this.program.programId
@@ -344,6 +362,55 @@ export class SolanaService {
       };
     } catch (error: any) {
       console.error("[SolanaService] getUserAccountState Failed:", error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Fetch current platform fee statistics from on-chain.
+   */
+  public async getPlatformFeeStats(): Promise<{ 
+    collectorWallet: string; 
+    feeTokenAccount: string; 
+    balance: number;
+    platformFeeBps: number;
+  }> {
+    try {
+      const [configPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("config_v3")],
+        this.program.programId
+      );
+
+      // 1. Fetch GlobalConfig
+      const configAccount = await (this.program.account as any).globalConfig.fetch(configPda);
+      const feeCollector = configAccount.feeCollector as PublicKey;
+      const platformFeeBps = (configAccount.platformFeeBps as anchor.BN).toNumber();
+
+      // 2. Derive ATA for fee collector
+      const feeTokenAccount = await getAssociatedTokenAddress(
+        MINT_ADDRESS,
+        feeCollector,
+        false // Owner is a wallet (User), not a PDA
+      );
+
+      // 3. Fetch current balance
+      let balance = 0;
+      try {
+        const balanceResponse = await this.connection.getTokenAccountBalance(feeTokenAccount);
+        balance = balanceResponse.value.uiAmount || 0;
+      } catch (err) {
+        // If account doesn't exist yet, balance is 0
+        console.warn(`[SolanaService] Fee token account ${feeTokenAccount.toBase58()} not initialized yet or empty.`);
+      }
+
+      return {
+        collectorWallet: feeCollector.toBase58(),
+        feeTokenAccount: feeTokenAccount.toBase58(),
+        balance,
+        platformFeeBps
+      };
+    } catch (error: any) {
+      console.error("[SolanaService] getPlatformFeeStats Failed:", error);
       throw error;
     }
   }

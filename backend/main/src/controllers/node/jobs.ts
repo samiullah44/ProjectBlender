@@ -187,24 +187,11 @@ export const assignJob = async (req: Request, res: Response): Promise<void> => {
     const dequeuedAll = await dequeueFramesForNode(nodeId, queueNames, maxFramesToRequest);
 
     if (dequeuedAll.length === 0) {
-      // 📝 ON-DEMAND SWEEP: If node is free but found nothing, check if frames are "stuck"
-      // as active in the specific queues it just checked.
-      const recoveredCount = await forceRequeueActiveJobs(queueNames);
-      if (recoveredCount > 0) {
-        // Try dequeuing again after recovery sweep
-        const retryDequeued = await dequeueFramesForNode(nodeId, queueNames, maxFramesToRequest);
-        if (retryDequeued.length > 0) {
-          console.log(`🛡️  Poll Recovery: Successfully assigned ${retryDequeued.length} recovered frames to node ${nodeId}`);
-          // Update the original array so the rest of the function proceeds
-          dequeuedAll.push(...retryDequeued);
-        } else {
-          res.json({ jobId: null });
-          return;
-        }
-      } else {
-        res.json({ jobId: null });
-        return;
-      }
+      // NOTE: We removed the aggressive forceRequeueActiveJobs sweep here.
+      // Recovery is now handled by the background SettlementScheduler to prevent
+      // race conditions where multiple nodes fight for the same "stuck" frame.
+      res.json({ jobId: null });
+      return;
     }
 
     console.log(`📥 Dequeued ${dequeuedAll.length} frame(s) from BullMQ for node ${nodeId}: [${dequeuedAll.map(f => `${f.jobId}:${f.frame}`).join(', ')}]`);
@@ -661,6 +648,9 @@ export const frameCompleted = async (req: Request, res: Response): Promise<void>
       }
       
       job.completedAt = now;
+
+      // Aggressively purge any remaining frames from BullMQ (e.g. if stillFailed > 0 or ghost frames exist)
+      purgeJobFromAllQueues(jobId).catch(err => console.error(`❌ Global Purge Error for job ${jobId}:`, err));
 
       // Accumulate total render time based on wall-clock duration of the job.
       // We only accumulate if this is the first time the job reaches a final state in this session.

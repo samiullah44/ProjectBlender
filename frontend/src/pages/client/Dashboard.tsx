@@ -382,14 +382,14 @@ const AllJobsTab: React.FC<{
                               <span>•</span>
                               <span className="flex items-center gap-1 text-amber-400/90">
                                 <Shield className="w-3 h-3" />
-                                {job.escrow.lockedAmount || 0} Locked
+                                {job.escrow.lockedAmount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) || '0.00'} Locked
                               </span>
                               {job.escrow.paymentStatus === 'settled' && (
                                 <>
                                   <span>•</span>
                                   <span className="flex items-center gap-1 text-emerald-400">
                                     <CheckCircle className="w-3 h-3" />
-                                    {job.escrow.releasedAmount || 0} Released
+                                    {job.escrow.releasedAmount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) || '0.00'} Released
                                   </span>
                                 </>
                               )}
@@ -1204,7 +1204,7 @@ const ClientDashboard: React.FC = () => {
                         <div className="pt-4 border-t border-white/10">
                           <div className="text-sm text-gray-400 mb-2 flex items-center justify-between">
                             <span>Credits Usage</span>
-                            <span className="font-medium">{dashboardStats.creditsUsed.toFixed(1)} used</span>
+                            <span className="font-medium">{dashboardStats.creditsUsed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} used</span>
                           </div>
                           <Progress
                             value={Math.min((dashboardStats.creditsUsed / 1000) * 100, 100)}

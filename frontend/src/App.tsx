@@ -15,6 +15,7 @@ import WaitlistPopup from '@/components/ui/WaitlistPopup'
 import ScrollToTop from '@/components/layout/ScrollToTop'
 import { ProtectedRoute } from '@/components/layout/ProtectedLayout'
 import { DepositModal } from '@/components/ui/DepositModal'
+import { WithdrawModal } from '@/components/ui/WithdrawModal'
 
 // Lazy loaded Public Pages
 const HomePage = React.lazy(() => import('@/pages/public/Home'))
@@ -323,6 +324,7 @@ function App() {
 
       {/* Global Modals */}
       <DepositModal />
+      <WithdrawModal />
 
     </QueryClientProvider>
   )

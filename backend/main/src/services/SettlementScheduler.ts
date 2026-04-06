@@ -8,11 +8,12 @@
  * Uses setInterval with a mutex lock to prevent concurrent executions.
  */
 import { paymentService, SettlementResult } from "./PaymentService";
+import { forceRequeueActiveJobs } from "./FrameQueueService";
 
 // ── Config ───────────────────────────────────────────────────────────────────
 // Change these two lines:
 const CHECK_INTERVAL_MS = 10 * 1000;  // 10 seconds for testing
-const JOB_THRESHOLD = 3;              // Trigger on every new job for testing
+const JOB_THRESHOLD = 1;              // Trigger on every new job for testing
 const TIME_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 1 day
 
 export class SettlementScheduler {
@@ -94,6 +95,10 @@ export class SettlementScheduler {
         console.log(`[SettlementScheduler] 🚀 Triggering settlement: ${reason}`);
         await this.runSettlement();
       }
+
+      // Also trigger a background recovery sweep for BullMQ frames
+      // This will recover stuck frames or purge zombie frames from BullMQ.
+      await forceRequeueActiveJobs();
     } catch (error: any) {
       console.error("[SettlementScheduler] Check failed:", error.message);
     }

@@ -97,35 +97,39 @@ const NodeDashboard: React.FC = () => {
                 const s = [
                     {
                         label: 'Released Credits',
-                        value: statsRes.data.earnings?.released?.toFixed(2) || '0.00',
+                        value: statsRes.data.earnings?.released?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) || '0.00',
                         unit: 'RNDR',
-                        icon: <CheckCircle2 className="w-5 h-5 text-emerald-400" />,
+                        icon: <CheckCircle2 className="w-5 h-5 text-purple-400" />,
                         trend: 'On-chain',
-                        trendUp: true
+                        trendUp: true,
+                        color: 'purple'
                     },
                     {
                         label: 'Pending Settlement',
-                        value: statsRes.data.earnings?.pending?.toFixed(2) || '0.00',
+                        value: statsRes.data.earnings?.pending?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) || '0.00',
                         unit: 'credits',
-                        icon: <Clock className="w-5 h-5 text-amber-400" />,
+                        icon: <Clock className="w-5 h-5 text-cyan-400" />,
                         trend: 'In Queue',
-                        trendUp: false
+                        trendUp: false,
+                        color: 'cyan'
                     },
                     {
                         label: 'Avg Frame Time',
                         value: statsRes.data.performance?.avgFrameTime || '0.00',
                         unit: 's',
                         icon: <Zap className="w-5 h-5 text-amber-400" />,
-                        trend: 'Network avg',
-                        trendUp: true
+                        trend: 'Performance',
+                        trendUp: true,
+                        color: 'amber'
                     },
                     {
                         label: 'Total Rendered',
                         value: statsRes.data.performance?.totalJobsCompleted?.toLocaleString() || '0',
                         unit: 'jobs',
-                        icon: <Cpu className="w-5 h-5 text-purple-400" />,
+                        icon: <Cpu className="w-5 h-5 text-indigo-400" />,
                         trend: 'Historical',
-                        trendUp: true
+                        trendUp: true,
+                        color: 'indigo'
                     }
                 ]
                 setStats(s)

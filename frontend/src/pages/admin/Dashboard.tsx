@@ -41,6 +41,7 @@ const AdminDashboard: React.FC = () => {
     } = jobStore()
 
     const [applicationsCount, setApplicationsCount] = useState(0)
+    const [platformFees, setPlatformFees] = useState<{ balance: number; collectorWallet: string } | null>(null)
     const [refreshing, setRefreshing] = useState(false)
 
     useEffect(() => {
@@ -68,6 +69,13 @@ const AdminDashboard: React.FC = () => {
                 import('@/services/authService').then(async ({ authService }) => {
                     const res = await authService.getApplications()
                     if (res.success && res.applications) setApplicationsCount(res.applications.length)
+                }),
+                fetch(`${import.meta.env.VITE_API_URL}/admin/platform-fees`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                }).then(res => res.json()).then(res => {
+                    if (res.success) setPlatformFees(res.data)
                 })
             ])
         } catch (error) {
@@ -141,6 +149,14 @@ const AdminDashboard: React.FC = () => {
             bg: 'from-amber-500/20 to-yellow-500/20',
             description: 'Pending review',
             action: () => navigate('/admin/applications')
+        },
+        {
+            label: 'Platform Fees',
+            value: platformFees ? platformFees.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) : '0.00',
+            icon: DollarSign,
+            color: 'text-indigo-400',
+            bg: 'from-indigo-500/20 to-purple-500/20',
+            description: platformFees ? `Collector: ${platformFees.collectorWallet.slice(0, 8)}...` : 'Fetching...',
         }
     ]
 

@@ -92,6 +92,11 @@ export interface Job {
   userRerenderCount?: number
   userRerenderMax?: number
   rerenderedHistory?: number[]
+  escrow?: {
+    lockedAmount: number
+    releasedAmount: number
+    paymentStatus: string
+  }
 }
 
 interface JobStore {

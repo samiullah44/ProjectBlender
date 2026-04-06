@@ -271,6 +271,68 @@ export function useRenderNetwork() {
     }
   };
 
+  // Execute Withdraw Transaction
+  const withdrawFromAccount = async (amountInTokens: number) => {
+    if (!program || !wallet) throw new Error("Wallet not connected");
+
+    const rawAmount = new BN(amountInTokens * 1e6);
+
+    if (!user?.solanaSeed) {
+        throw new Error("Your account is not fully initialized. Please try logging out and back in.");
+    }
+
+    let userIdPubkey: PublicKey;
+    try {
+        if (user.solanaSeed.length === 64 && /^[0-9a-fA-F]+$/.test(user.solanaSeed)) {
+            userIdPubkey = new PublicKey(Buffer.from(user.solanaSeed, 'hex'));
+        } else {
+            userIdPubkey = new PublicKey(user.solanaSeed);
+        }
+    } catch (e) {
+        console.error("Invalid Solana Identity Seed format:", user.solanaSeed);
+        throw new Error("Your Solana Identity Seed is invalid.");
+    }
+
+    const [userAccountPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from(SEED_USER_ACCOUNT), userIdPubkey.toBuffer()],
+      programId
+    );
+
+    const userWalletAta = getAssociatedTokenAddressSync(mintProgramId, wallet.publicKey);
+    const pdaDepositAta = getAssociatedTokenAddressSync(mintProgramId, userAccountPda, true);
+
+    console.log("Preparing withdraw transaction...");
+    
+    try {
+      const tx = await program.methods
+        .withdrawFromAccount(rawAmount)
+        .accounts({
+          user: wallet.publicKey,
+          userAccount: userAccountPda,
+          mint: mintProgramId,
+          userTokenAccount: userWalletAta,
+          userDepositTokenAccount: pdaDepositAta,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+
+      console.log("Withdraw Transaction successful! Signature:", tx);
+      
+      // Delay for propagation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      await fetchCreditBalance();
+      window.dispatchEvent(new Event('refresh_credit_balance'));
+      
+      return { tx };
+    } catch (err: any) {
+      console.error(err);
+      throw err;
+    }
+  };
+
   // [Zero-Prompt] Handled by Backend
   // This hook now simply returns a success signature to allow the frontend flow to continue
   // without triggering a manual wallet prompt.
@@ -302,6 +364,7 @@ export function useRenderNetwork() {
     fetchCreditBalance,
     syncSolanaSeed,
     depositToAccount,
+    withdrawFromAccount,
     lockPayment,
     cancelJobOnchain
   };

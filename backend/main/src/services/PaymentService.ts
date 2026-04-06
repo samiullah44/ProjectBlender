@@ -399,9 +399,10 @@ export class PaymentService {
 
     // Increment provider database earnings upon success
     for (const payout of item.payouts) {
-      await User.findByIdAndUpdate(payout.userId, {
-        $inc: { "nodeProvider.earnings": payout.amount / 1_000_000 }
-      });
+      const providerUser = await User.findById(payout.userId);
+      if (providerUser) {
+        await providerUser.addEarnings(payout.amount / 1_000_000);
+      }
     }
 
     // Notify frontend to refresh its state via WebSocket
