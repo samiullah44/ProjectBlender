@@ -17,7 +17,8 @@ import {
     Shield,
     Layers,
     Timer,
-    Rocket
+    Rocket,
+    Settings
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -28,6 +29,8 @@ import jobStore, { type Job } from '@/stores/jobStore'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
 import { websocketService } from '@/services/websocketService'
+import { WithdrawProfitModal } from '@/components/ui/WithdrawProfitModal'
+import { UpdateConfigModal } from '@/components/ui/UpdateConfigModal'
 
 const AdminDashboard: React.FC = () => {
     const navigate = useNavigate()
@@ -41,8 +44,10 @@ const AdminDashboard: React.FC = () => {
     } = jobStore()
 
     const [applicationsCount, setApplicationsCount] = useState(0)
-    const [platformFees, setPlatformFees] = useState<{ balance: number; collectorWallet: string } | null>(null)
+    const [platformFees, setPlatformFees] = useState<{ balance: number; collectorWallet: string; adminWallet: string; platformFeeBps: number } | null>(null)
     const [refreshing, setRefreshing] = useState(false)
+    const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false)
+    const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
 
     useEffect(() => {
         fetchData()
@@ -157,6 +162,7 @@ const AdminDashboard: React.FC = () => {
             color: 'text-indigo-400',
             bg: 'from-indigo-500/20 to-purple-500/20',
             description: platformFees ? `Collector: ${platformFees.collectorWallet.slice(0, 8)}...` : 'Fetching...',
+            action: () => setIsWithdrawModalOpen(true)
         }
     ]
 
@@ -189,6 +195,14 @@ const AdminDashboard: React.FC = () => {
                             >
                                 <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                                 Refresh
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsConfigModalOpen(true)}
+                                className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                            >
+                                <Settings className="w-4 h-4 mr-2" />
+                                System Settings
                             </Button>
                             <Button
                                 onClick={() => navigate('/admin/jobs')}
@@ -373,6 +387,30 @@ const AdminDashboard: React.FC = () => {
                     </motion.div>
                 </div>
             </div>
+
+            {platformFees && (
+                <WithdrawProfitModal
+                    isOpen={isWithdrawModalOpen}
+                    onClose={() => setIsWithdrawModalOpen(false)}
+                    currentBalance={platformFees.balance}
+                    collectorWallet={platformFees.collectorWallet}
+                    onSuccess={fetchData}
+                    onOpenConfig={() => setIsConfigModalOpen(true)}
+                />
+            )}
+
+            {platformFees && (
+                <UpdateConfigModal
+                    isOpen={isConfigModalOpen}
+                    onClose={() => setIsConfigModalOpen(false)}
+                    currentConfig={{
+                        admin: platformFees.adminWallet,
+                        feeCollector: platformFees.collectorWallet,
+                        platformFeeBps: platformFees.platformFeeBps
+                    }}
+                    onSuccess={fetchData}
+                />
+            )}
         </motion.div>
     )
 }

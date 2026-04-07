@@ -15,4 +15,11 @@ router.get(
   AdminController.getPlatformFees
 );
 
+router.post(
+  '/update-config',
+  authenticate,
+  authorize('admin'),
+  AdminController.updateConfig
+);
+
 export default router;

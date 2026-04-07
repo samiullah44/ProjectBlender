@@ -107,6 +107,19 @@ export class SolanaService {
             },
           ],
         },
+        {
+          name: "updateGlobalConfig",
+          accounts: [
+            { name: "config", isMut: true, isSigner: false },
+            { name: "admin", isMut: true, isSigner: true },
+            { name: "systemProgram", isMut: false, isSigner: false },
+          ],
+          args: [
+            { name: "newAdmin", type: { option: "publicKey" } },
+            { name: "newFeeCollector", type: { option: "publicKey" } },
+            { name: "newPlatformFeeBps", type: { option: "u64" } },
+          ],
+        },
       ],
       accounts: [
         {
@@ -369,8 +382,46 @@ export class SolanaService {
   /**
    * Fetch current platform fee statistics from on-chain.
    */
+  /**
+   * Update the on-chain global configuration using the backend admin wallet.
+   */
+  public async updateGlobalConfig(
+    newAdmin: string | null,
+    newFeeCollector: string | null,
+    newFeeBps: number | null
+  ): Promise<string> {
+    try {
+      const [configPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("config_v3")],
+        this.program.programId
+      );
+
+      const argAdmin = newAdmin ? new PublicKey(newAdmin) : null;
+      const argCollector = newFeeCollector ? new PublicKey(newFeeCollector) : null;
+      const argBps = newFeeBps !== null ? new anchor.BN(newFeeBps) : null;
+
+      console.log(`[SolanaService] Updating Global Config at ${configPda.toBase58()}...`);
+      
+      const tx = await (this.program.methods as any).updateGlobalConfig(
+        argAdmin,
+        argCollector,
+        argBps
+      ).accounts({
+        config: configPda,
+        admin: this.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      }).rpc();
+
+      return tx;
+    } catch (error: any) {
+      console.error("[SolanaService] updateGlobalConfig Failed:", error.message);
+      throw error;
+    }
+  }
+
   public async getPlatformFeeStats(): Promise<{ 
     collectorWallet: string; 
+    adminWallet: string;
     feeTokenAccount: string; 
     balance: number;
     platformFeeBps: number;
@@ -405,6 +456,7 @@ export class SolanaService {
 
       return {
         collectorWallet: feeCollector.toBase58(),
+        adminWallet: (configAccount.admin as PublicKey).toBase58(),
         feeTokenAccount: feeTokenAccount.toBase58(),
         balance,
         platformFeeBps
