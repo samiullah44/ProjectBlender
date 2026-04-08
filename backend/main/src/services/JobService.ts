@@ -318,6 +318,85 @@ export class JobService {
         const stillInFlight = job.frames.assigned.length;
         const stillFailed = job.frames.failed.filter((f: number) => !job.frames.rendered.includes(f)).length;
 
+        // If the job is cancelling and all active frames have finished shutting down gracefully
+        if (job.status === 'cancelling' && stillInFlight === 0) {
+            job.status = 'cancelled';
+            job.completedAt = new Date();
+
+            // Calculate actual credits distributed for all successfully rendered frames
+            // This is critical because normal `totalCreditsDistributed` is only computed for
+            // normally completed jobs, but for cancelled jobs, we compute it proportionally here.
+            let dynamicCreditsSpent = 0;
+            job.frameAssignments.forEach((a: any) => {
+                if (a.status === 'rendered') {
+                    dynamicCreditsSpent += (a.creditsEarned || 0);
+                }
+            });
+            job.totalCreditsDistributed = dynamicCreditsSpent;
+
+            const usesOnchainEscrow = !!(job as any).escrow?.txSignature;
+            try {
+                // Determine precision refund amount (locked minus actually spent)
+                const refundAmount = usesOnchainEscrow
+                    ? ((job as any).escrow?.lockedAmount || job.estimatedCost) - dynamicCreditsSpent
+                    : Math.max(0, job.estimatedCost! - dynamicCreditsSpent);
+
+                if (refundAmount > 0) {
+                    const user = await User.findById(job.userId);
+                    if (user && user.solanaSeed) {
+                        // 1. Release unused locked funds on-chain
+                        if (usesOnchainEscrow && (job as any).escrow.status === 'locked') {
+                            try {
+                                console.log(`[JobService] Attempting precision on-chain unlock for gracefully cancelled job ${jobId}`);
+                                const unlockTx = await solanaService.cancelPayment(
+                                    user.solanaSeed,
+                                    (job as any).escrow.onchainJobId,
+                                    refundAmount
+                                );
+                                console.log(`[JobService] ✅ Precision Unlock Successful: ${unlockTx}`);
+                                (job as any).escrow.status = 'refunded';
+                                (job as any).escrow.unlockTxSignature = unlockTx;
+                            } catch (err) {
+                                console.error('[JobService] ❌ Precision On-chain Unlock Failed:', err);
+                            }
+                        }
+
+                        // 2. Refund DB UI balance
+                        if (user.role !== 'admin') {
+                            await User.findByIdAndUpdate(job.userId, {
+                                $inc: { tokenBalance: Number(refundAmount) }
+                            });
+                            console.log(`Refunded ${refundAmount} DB balance for gracefully cancelled job ${jobId}`);
+                            this.wsService?.emitToUser(job.userId.toString(), 'credit_balance_updated', {});
+                        }
+                    }
+                }
+            } catch (refundErr) {
+                console.error(`[JobService] Error processing refund for graceful cancellation of job ${jobId}:`, refundErr);
+            }
+
+            // Clean up any remaining nodes assigned to this job just in case
+            let nodeIds: string[] = [];
+            if (job.assignedNodes instanceof Map) {
+                nodeIds = Array.from(job.assignedNodes.keys());
+            } else if (typeof job.assignedNodes === 'object' && job.assignedNodes !== null) {
+                nodeIds = Object.keys(job.assignedNodes);
+            }
+            if (nodeIds.length > 0) {
+                await Node.updateMany(
+                    { nodeId: { $in: nodeIds } },
+                    { $set: { status: 'online', currentJob: undefined, currentProgress: undefined } }
+                );
+                nodeIds.forEach(nodeId => {
+                    this.wsService?.broadcastNodeUpdate(nodeId, { status: 'online', currentJob: undefined });
+                });
+            }
+
+            await job.save();
+            this.wsService?.broadcastJobUpdate(jobId);
+            return job;
+        }
+
         // If rendering is done (all frames reached rendered or failed state, and none are in progress)
         if ((renderedFrames + stillFailed >= totalFramesToRender) && stillInFlight === 0) {
             const oldStatus = job.status;
@@ -657,74 +736,101 @@ export class JobService {
             throw new AppError(`Job is already ${job.status}`, 400);
         }
 
-        const wasProcessing = job.status === 'processing';
+        const oldStatus = job.status;
+        const wasProcessing = oldStatus === 'processing';
 
-        job.status = 'cancelled';
+        if (wasProcessing) {
+            job.status = 'cancelling';
+        } else {
+            job.status = 'cancelled';
+        }
         job.cancelledAt = new Date();
-        if ((job as any).escrow?.txSignature && (job as any).escrow.status === 'locked') {
-            try {
-                const user = await User.findById(job.userId);
-                if (user && user.solanaSeed) {
-                    console.log(`[JobService] Attempting on-chain unlock for job ${jobId}`);
-                    const unlockTx = await solanaService.cancelPayment(
-                        user.solanaSeed,
-                        (job as any).escrow.onchainJobId,
-                        (job as any).escrow.lockedAmount || job.estimatedCost
-                    );
-                    console.log(`[JobService] ✅ On-chain Unlock Successful: ${unlockTx}`);
-                    (job as any).escrow.status = 'refunded';
-                    (job as any).escrow.unlockTxSignature = unlockTx;
+
+        // 1. Full Immediate Refund for Non-Processing Jobs
+        if (!wasProcessing) {
+            if ((job as any).escrow?.txSignature && (job as any).escrow.status === 'locked') {
+                try {
+                    const user = await User.findById(job.userId);
+                    if (user && user.solanaSeed) {
+                        console.log(`[JobService] Attempting on-chain unlock for job ${jobId}`);
+                        const unlockTx = await solanaService.cancelPayment(
+                            user.solanaSeed,
+                            (job as any).escrow.onchainJobId,
+                            (job as any).escrow.lockedAmount || job.estimatedCost
+                        );
+                        console.log(`[JobService] ✅ On-chain Unlock Successful: ${unlockTx}`);
+                        (job as any).escrow.status = 'refunded';
+                        (job as any).escrow.unlockTxSignature = unlockTx;
+                    }
+                } catch (err) {
+                    console.error('[JobService] ❌ On-chain Unlock Failed (Non-fatal for DB):', err);
                 }
-            } catch (err) {
-                console.error('[JobService] ❌ On-chain Unlock Failed (Non-fatal for DB):', err);
-                // We continue with DB cancellation even if chain unlock fails, 
-                // but the locked_amount stays high on-chain until manual intervention.
+            }
+
+            const usesOnchainEscrow = !!(job as any).escrow?.txSignature;
+            if (usesOnchainEscrow || oldStatus === 'pending') {
+                const user = await User.findById(userId);
+                if (user && user.role !== 'admin') {
+                    const refundAmount = usesOnchainEscrow
+                        ? (job as any).escrow?.lockedAmount || job.estimatedCost
+                        : job.estimatedCost!;
+                    if (refundAmount > 0) {
+                        await User.findByIdAndUpdate(userId, { $inc: { tokenBalance: Number(refundAmount) } });
+                        console.log(`Refunded ${refundAmount} to User ${userId} DB balance for cancelled job ${jobId}`);
+                        this.wsService?.emitToUser(userId.toString(), 'credit_balance_updated', {});
+                    }
+                }
             }
         }
+        
         await job.save();
 
-        // Remove queued (not yet active) frames from BullMQ immediately.
-        // Frames currently being rendered are stopped via the STOP_JOB heartbeat command.
+        // 2. Remove unassigned queued frames from BullMQ immediately
         try {
             const framesToRemove = job.frames.selected?.length > 0
                 ? job.frames.selected
                 : Array.from({ length: job.frames.end - job.frames.start + 1 }, (_, i) => job.frames.start + i);
             const unrenderedFrames = framesToRemove.filter(
-                (f: number) => !job.frames.rendered.includes(f)
+                // Do not remove frames that are currently assigned so they can finish gracefully
+                (f: number) => !job.frames.rendered.includes(f) && !job.frames.assigned.includes(f)
             );
             if (unrenderedFrames.length > 0) {
                 await removeJobFrames(jobId, unrenderedFrames, job.settings.engine, job.settings.device);
             }
         } catch (queueErr) {
-            console.warn(`⚠️  Failed to remove BullMQ frames for cancelled job ${jobId}:`, queueErr);
+            console.warn(`⚠️  Failed to remove unassigned BullMQ frames for cancelled job ${jobId}:`, queueErr);
         }
 
-        // Refund DB credits only for legacy credit-based jobs.
-        // Multipart/on-chain jobs lock payments via the contract, and DB credits are not deducted.
-        const usesOnchainEscrow = !!(job as any).escrow?.txSignature;
+        // 3. Node Management
+        let nodeIds: string[] = [];
+        if (job.assignedNodes instanceof Map) {
+            nodeIds = Array.from(job.assignedNodes.keys());
+        } else if (typeof job.assignedNodes === 'object' && job.assignedNodes !== null) {
+            nodeIds = Object.keys(job.assignedNodes);
+        }
 
-        // Refund credits if job was in progress or was an on-chain escrow job.
-        // We now refund the DB balance even for on-chain jobs because we deduct it during "Lock"
-        // to maintain a synchronized UI experience.
-        if (wasProcessing || usesOnchainEscrow) {
-            const user = await User.findById(userId);
-            if (user && user.role !== 'admin') {
-                // For on-chain jobs, the full estimatedCost was deducted from DB.
-                // For legacy jobs, we deduct the difference between estimate and spent.
-                const refundAmount = usesOnchainEscrow
-                    ? (job as any).escrow?.lockedAmount || job.estimatedCost
-                    : Math.max(0, job.estimatedCost! - (job.totalCreditsDistributed || 0));
-
-                if (refundAmount > 0) {
-                    await User.findByIdAndUpdate(userId, {
-                        $inc: { tokenBalance: Number(refundAmount) }
-                    });
-                    console.log(`Refunded ${refundAmount} to User ${userId} DB balance for cancelled job ${jobId}`);
-                }
+        if (!wasProcessing) {
+            // For non-processing jobs, disconnect immediately
+            if (nodeIds.length > 0) {
+                await Node.updateMany(
+                    { nodeId: { $in: nodeIds } },
+                    { $set: { status: 'online', currentJob: undefined, currentProgress: undefined } }
+                );
             }
+            nodeIds.forEach(nodeId => {
+                this.wsService?.broadcastNodeUpdate(nodeId, { status: 'online', currentJob: undefined });
+            });
+        } else {
+            // If processing, nodes keep working on assigned frames.
+            // But we notify them the job status changed (optional, but good for UI).
+            // Do not reset currentJob here!
+            nodeIds.forEach(nodeId => {
+                // Just an informational ping
+                this.wsService?.broadcastNodeUpdate(nodeId, { status: 'busy' });
+            });
         }
 
-        // Cleanup S3 files if requested
+        // Cleanup S3 files if explicitly requested
         if (cleanupS3) {
             try {
                 await this.s3Service.deleteFile(job.blendFileKey);
@@ -736,35 +842,13 @@ export class JobService {
             }
         }
 
-        // Update nodes that were working on this job
-        let nodeIds: string[] = [];
-        if (job.assignedNodes instanceof Map) {
-            nodeIds = Array.from(job.assignedNodes.keys());
-        } else if (typeof job.assignedNodes === 'object' && job.assignedNodes !== null) {
-            nodeIds = Object.keys(job.assignedNodes);
+        if (wasProcessing && job.frames.assigned.length === 0) {
+            console.log(`[JobService] Job ${jobId} cancelled while processing but 0 assigned frames. Forcing sync.`);
+            await this.syncJobStatus(jobId);
+        } else {
+            // Broadcast updates
+            this.wsService?.broadcastJobUpdate(jobId);
         }
-
-        if (nodeIds.length > 0) {
-            await Node.updateMany(
-                { nodeId: { $in: nodeIds } },
-                {
-                    $set: {
-                        status: 'online',
-                        currentJob: undefined,
-                        currentProgress: undefined
-                    }
-                }
-            );
-        }
-
-        // Broadcast updates
-        this.wsService?.broadcastJobUpdate(jobId);
-        nodeIds.forEach(nodeId => {
-            this.wsService?.broadcastNodeUpdate(nodeId, {
-                status: 'online',
-                currentJob: undefined
-            });
-        });
 
         return true;
     }
@@ -913,7 +997,7 @@ export class JobService {
             pendingJobs: (statusCounts.pending || 0) + (statusCounts.pending_payment || 0),
             completedJobs: statusCounts.completed || 0,
             failedJobs: statusCounts.failed || 0,
-            cancelledJobs: statusCounts.cancelled || 0,
+            cancelledJobs: (statusCounts.cancelled || 0) + (statusCounts.cancelling || 0),
             pausedJobs: statusCounts.paused || 0,
             completedToday: todayStats.completedToday,
             totalRenderTime: totalRenderTimeSec,

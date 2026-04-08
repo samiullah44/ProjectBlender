@@ -106,7 +106,7 @@ namespace BlendFarm.Node.Models
         public string? Camera { get; set; }
 
         [JsonPropertyName("creditsPerFrame")]
-        public int CreditsPerFrame { get; set; } = 1;
+        public double CreditsPerFrame { get; set; } = 1.0;
 
         [JsonPropertyName("blenderVersion")]
         public string? BlenderVersion { get; set; } = "4.5.0";

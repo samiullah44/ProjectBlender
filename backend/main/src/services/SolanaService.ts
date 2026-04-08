@@ -264,7 +264,7 @@ export class SolanaService {
 
       console.log(`[SolanaService] Unlocking ${amount} for User ${userId}, Job ${jobId}`);
 
-      const rawAmount = new anchor.BN(amount * 1_000_000);
+      const rawAmount = new anchor.BN(Math.round(amount * 1_000_000));
       const tx = await (this.program.methods as any)
         .adminCancelPayment(new anchor.BN(jobId), rawAmount)
         .accounts({

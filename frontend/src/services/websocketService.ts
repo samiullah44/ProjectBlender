@@ -107,6 +107,9 @@ class WebSocketService {
       case 'credit_balance_updated':
         console.log('💳 Credit balance update received, refreshing...')
         window.dispatchEvent(new Event('refresh_credit_balance'))
+        import('@/stores/authStore').then(({ useAuthStore }) => {
+          useAuthStore.getState().getProfile()
+        })
         break
       case 'pong':
         // Heartbeat response

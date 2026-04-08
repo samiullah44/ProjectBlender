@@ -125,7 +125,7 @@ export interface IJob {
     frameAssignments: IFrameAssignment[];
 
     /** 'pending_payment' = job created but on-chain escrow not yet locked */
-    status: 'pending_payment' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    status: 'pending_payment' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'cancelling' | 'paused';
     progress: number;
 
     /** On-chain escrow state — populated after lockPayment succeeds */

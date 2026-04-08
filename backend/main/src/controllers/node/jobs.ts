@@ -11,6 +11,7 @@ import { AuthRequest } from '../../middleware/auth';
 import os from 'os';
 import { wsService } from '../../app';
 import { dequeueFramesForNode, nackFrame, requeueFramesFromOfflineNode, ackFrame, getQueueName, forceRequeueActiveJobs, purgeJobFromAllQueues } from '../../services/FrameQueueService';
+import { JobService } from '../../services/JobService';
 
 const s3Service = new S3Service();
 
@@ -710,6 +711,20 @@ export const frameCompleted = async (req: Request, res: Response): Promise<void>
     // Extra safety: ensure Mongoose sees all changes to the Map
     job.markModified('assignedNodes');
     await job.save();
+
+    // ✅ CRITICAL FIX: Re-read the job from the DB to get the TRUE current status.
+    // The in-memory `job.status` was loaded at the start of this handler and may be STALE.
+    // A concurrent cancelJob() call could have set status='cancelling' in the DB while
+    // this frame was being processed. We MUST check the DB value after our save.
+    const freshJob = await Job.findOne({ jobId });
+    const freshStillInFlight = freshJob?.frames?.assigned?.length ?? 0;
+    if (freshJob?.status === 'cancelling' && freshStillInFlight === 0) {
+      console.log(`[frameCompleted] Job ${jobId} is cancelling with 0 assigned frames after frame ${frame} — triggering graceful finalize.`);
+      const wsSvc = getWsService(req);
+      const tempJobService = new JobService(s3Service, wsSvc);
+      await tempJobService.syncJobStatus(jobId);
+      job.status = 'cancelled';
+    }
 
     console.log(`✅ Frame ${frame} completed for job ${jobId} by node ${nodeId} (Progress: ${job.progress}%)`);
     console.log(`📁 Frame stored at: ${s3Key}`);

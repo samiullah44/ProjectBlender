@@ -56,8 +56,8 @@ export class PaymentService {
 
     // Step 1: Find all eligible jobs (no populate — we need userId as raw ObjectId string)
     const jobs = await Job.find({
-      status: { $in: ["completed", "failed"] },
-      "escrow.status": "locked",
+      status: { $in: ["completed", "failed", "cancelled"] },
+      "escrow.status": { $in: ["locked", "refunded"] },
       $or: [
         { "escrow.paymentStatus": "unsettled" },
         { "escrow.paymentStatus": { $exists: false } },
@@ -460,8 +460,8 @@ export class PaymentService {
    */
   public async getUnsettledJobCount(): Promise<number> {
     return Job.countDocuments({
-      status: { $in: ["completed", "failed"] },
-      "escrow.status": "locked",
+      status: { $in: ["completed", "failed", "cancelled"] },
+      "escrow.status": { $in: ["locked", "refunded"] },
       $or: [
         { "escrow.paymentStatus": "unsettled" },
         { "escrow.paymentStatus": { $exists: false } },

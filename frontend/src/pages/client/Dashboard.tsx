@@ -60,6 +60,7 @@ interface SystemStats {
   totalFramesRendered: number
   avgRenderTimePerFrame: number
   framesRenderedToday: number
+  cancelledJobs: number
 }
 
 const NodeProviderCard: React.FC = () => {
@@ -267,7 +268,8 @@ const AllJobsTab: React.FC<{
         completed: globalStats.completedJobs || 0,
         processing: globalStats.processingJobs || 0,
         pending: globalStats.pendingJobs || 0,
-        failed: globalStats.failedJobs || 0
+        failed: globalStats.failedJobs || 0,
+        cancelled: globalStats.cancelledJobs || 0
       }
     }, [globalStats, pagination.total])
 
@@ -306,21 +308,22 @@ const AllJobsTab: React.FC<{
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-2 mb-4">
-            {['all', 'processing', 'completed', 'pending', 'failed'].map((status) => (
+          <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+            {['all', 'processing', 'completed', 'pending', 'cancelled', 'failed'].map((status) => (
               <Button
                 key={status}
                 variant={filter === status ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setFilter(status)}
-                className="border-white/20 text-xs"
+                className="border-white/20 text-xs shrink-0"
               >
                 {status === 'all' ? 'All' : status}
                 <Badge className={`ml-1 ${filter === status ? 'bg-white/20' :
                   status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
                     status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
                       status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
-                        'bg-red-500/20 text-red-400'
+                        status === 'cancelled' ? 'bg-gray-500/20 text-gray-400' :
+                          'bg-red-500/20 text-red-400'
                   }`}>
                   {statusCounts[status as keyof typeof statusCounts]}
                 </Badge>
@@ -345,7 +348,8 @@ const AllJobsTab: React.FC<{
                       <div className={`p-2 rounded-full transition-transform duration-300 group-hover:scale-110 ${job.status === 'completed' ? 'bg-emerald-500/20' :
                         job.status === 'processing' ? 'bg-blue-500/20' :
                           job.status === 'failed' ? 'bg-red-500/20' :
-                            'bg-amber-500/20'
+                            job.status === 'cancelled' ? 'bg-gray-500/20' :
+                              'bg-amber-500/20'
                         }`}>
                         {job.status === 'completed' ? (
                           <CheckCircle className="w-4 h-4 text-emerald-400" />
@@ -353,6 +357,8 @@ const AllJobsTab: React.FC<{
                           <RefreshCw className="w-4 h-4 text-blue-400" />
                         ) : job.status === 'failed' ? (
                           <AlertCircle className="w-4 h-4 text-red-400" />
+                        ) : job.status === 'cancelled' ? (
+                          <X className="w-4 h-4 text-gray-400" />
                         ) : (
                           <Clock className="w-4 h-4 text-amber-400" />
                         )}
@@ -363,7 +369,8 @@ const AllJobsTab: React.FC<{
                           <Badge className={`px-2 py-0.5 text-xs ${job.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
                             job.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
                               job.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                                'bg-amber-500/20 text-amber-400'
+                                job.status === 'cancelled' ? 'bg-gray-500/20 text-gray-400' :
+                                  'bg-amber-500/20 text-amber-400'
                             }`}>
                             {job.status}
                           </Badge>
@@ -375,24 +382,6 @@ const AllJobsTab: React.FC<{
                             <>
                               <span>•</span>
                               <span>{progress}%</span>
-                            </>
-                          )}
-                          {job.escrow && (
-                            <>
-                              <span>•</span>
-                              <span className="flex items-center gap-1 text-amber-400/90">
-                                <Shield className="w-3 h-3" />
-                                {job.escrow.lockedAmount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) || '0.00'} Locked
-                              </span>
-                              {job.escrow.paymentStatus === 'settled' && (
-                                <>
-                                  <span>•</span>
-                                  <span className="flex items-center gap-1 text-emerald-400">
-                                    <CheckCircle className="w-3 h-3" />
-                                    {job.escrow.releasedAmount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) || '0.00'} Released
-                                  </span>
-                                </>
-                              )}
                             </>
                           )}
                         </div>
@@ -747,6 +736,7 @@ const ClientDashboard: React.FC = () => {
     const completedJobs = jobs.filter(j => j.status === 'completed')
     const activeJobs = jobs.filter(j => j.status === 'processing' || j.status === 'pending' || j.status === 'pending_payment')
     const failedJobs = jobs.filter(j => j.status === 'failed')
+    const cancelledJobs = jobs.filter(j => j.status === 'cancelled' || j.status === 'cancelling')
 
     // Local fallback for today's stats (still useful for immediate feedback)
     const framesRenderedTodayLocal = completedJobs.reduce((total, job) => {
@@ -767,6 +757,7 @@ const ClientDashboard: React.FC = () => {
         jobs.filter(j => j.status === 'pending' || j.status === 'pending_payment').length,
       completedJobs: realTimeStats?.completedJobs || systemStats?.completedJobs || completedJobs.length,
       failedJobs: realTimeStats?.failedJobs || systemStats?.failedJobs || failedJobs.length,
+      cancelledJobs: realTimeStats?.cancelledJobs || systemStats?.cancelledJobs || cancelledJobs.length,
       completedToday: realTimeStats?.completedToday || systemStats?.completedToday || completedJobs.filter(j => {
         const jobDate = new Date(j.updatedAt || j.createdAt)
         return jobDate >= today
@@ -921,7 +912,6 @@ const ClientDashboard: React.FC = () => {
       color: 'text-blue-400',
       bg: 'from-blue-500/20 to-cyan-500/20',
       description: 'Currently processing',
-      change: '+2 this week'
     },
     {
       label: 'Frames Today',
@@ -930,7 +920,6 @@ const ClientDashboard: React.FC = () => {
       color: 'text-emerald-400',
       bg: 'from-emerald-500/20 to-green-500/20',
       description: 'Rendered today',
-      change: '+15% from yesterday'
     },
     {
       label: 'Total Frames',
@@ -939,7 +928,6 @@ const ClientDashboard: React.FC = () => {
       color: 'text-purple-400',
       bg: 'from-purple-500/20 to-pink-500/20',
       description: 'All-time rendered',
-      change: 'Lifetime total'
     },
     {
       label: 'Time Saved',
@@ -948,7 +936,6 @@ const ClientDashboard: React.FC = () => {
       color: 'text-amber-400',
       bg: 'from-amber-500/20 to-orange-500/20',
       description: 'Render time saved',
-      change: 'Accumulated'
     },
   ]
 

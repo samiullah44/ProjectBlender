@@ -68,6 +68,7 @@ const JobDetails: React.FC = () => {
   const [zipBytesLoaded, setZipBytesLoaded] = useState(0)
   const [zipBytesTotal, setZipBytesTotal] = useState<number | null>(null)
   const [isRerenderModalOpen, setIsRerenderModalOpen] = useState(false)
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false)
   const [selectedRerenderFrames, setSelectedRerenderFrames] = useState<number[]>([])
 
   // Use TanStack Query as the single source of truth
@@ -179,26 +180,29 @@ const JobDetails: React.FC = () => {
     return () => clearInterval(interval)
   }, [jobId, autoRefresh, job?.status, refetch])
 
-  const handleCancelJob = async () => {
+  const handleCancelJobClick = () => {
+    setIsCancelModalOpen(true)
+  }
+
+  const confirmCancelJob = async () => {
     if (!jobId) return
-
-    if (window.confirm('Are you sure you want to cancel this job?')) {
-      try {
-        // If the on-chain escrow is already locked, refund it on-chain first.
-        const escrowTxSignature = (job as any)?.escrow?.txSignature as string | undefined
-        if (escrowTxSignature) {
-          toast.loading('Refunding locked payment on-chain...', { id: 'cancel-onchain' })
-          await cancelJobOnchain(jobId)
-          toast.success('On-chain refund completed', { id: 'cancel-onchain' })
-        }
-
-        await cancelJobMutation.mutateAsync({ jobId, cleanupS3: false })
-        toast.success('Job cancelled successfully')
-        navigate('/client/dashboard')
-      } catch (error) {
-        console.error('Cancel job error:', error)
-        toast.error('Failed to cancel job')
+    setIsCancelModalOpen(false)
+    
+    try {
+      // If the on-chain escrow is already locked, refund it on-chain first.
+      const escrowTxSignature = (job as any)?.escrow?.txSignature as string | undefined
+      if (escrowTxSignature) {
+        toast.loading('Refunding locked payment on-chain...', { id: 'cancel-onchain' })
+        await cancelJobOnchain(jobId)
+        toast.success('On-chain refund completed', { id: 'cancel-onchain' })
       }
+
+      await cancelJobMutation.mutateAsync({ jobId, cleanupS3: false })
+      toast.success('Job cancelled successfully')
+      navigate('/client/dashboard')
+    } catch (error) {
+      console.error('Cancel job error:', error)
+      toast.error('Failed to cancel job')
     }
   }
 
@@ -456,6 +460,7 @@ const JobDetails: React.FC = () => {
     switch (status) {
       case 'completed': return 'bg-emerald-500'
       case 'processing': return 'bg-blue-500'
+      case 'cancelling': return 'bg-amber-500/80 justify-center animate-pulse'
       case 'pending':
       case 'pending_payment': return 'bg-amber-500'
       case 'failed': return 'bg-red-500'
@@ -468,6 +473,7 @@ const JobDetails: React.FC = () => {
     switch (status) {
       case 'completed': return CheckCircle
       case 'processing': return RefreshCw
+      case 'cancelling': return Loader2
       case 'pending':
       case 'pending_payment': return Clock
       case 'failed': return AlertCircle
@@ -610,7 +616,7 @@ const JobDetails: React.FC = () => {
     completedAt,
     blendFileUrl,
     blendFileKey
-  } = job
+  } = job || {}
 
   const displayName = name || blendFileName || 'Unnamed Job'
   const startTime = startedAt || createdAt
@@ -706,10 +712,10 @@ const JobDetails: React.FC = () => {
                   </Button>
                 )}
 
-                {status === 'processing' && (
+                {(status === 'processing' || status === 'pending' || status === 'pending_payment') && (
                   <Button
                     variant="outline"
-                    onClick={handleCancelJob}
+                    onClick={handleCancelJobClick}
                     disabled={cancelJobMutation.isPending}
                     className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50"
                   >
@@ -747,7 +753,7 @@ const JobDetails: React.FC = () => {
                   </div>
                 )}
 
-                {status === 'completed' && cachedFrames.length > 0 && (
+                {(status === 'completed' || status === 'cancelled') && cachedFrames.length > 0 && (
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col gap-2">
                       <Button
@@ -762,7 +768,7 @@ const JobDetails: React.FC = () => {
                           </>
                         ) : (
                           <>
-                            <Archive className="w-4 h-4 mr-2" />
+                            <Download className="w-4 h-4 mr-2" />
                             Download ZIP ({cachedFrames.length})
                           </>
                         )}
@@ -1434,7 +1440,7 @@ const JobDetails: React.FC = () => {
                     Refresh Status
                   </Button>
 
-                  {status === 'completed' && cachedFrames.length > 0 && (
+                  {(status === 'completed' || status === 'cancelled') && cachedFrames.length > 0 && (
                     <>
                       <Button
                         variant="outline"
@@ -1464,11 +1470,11 @@ const JobDetails: React.FC = () => {
                     Create New Job
                   </Button>
 
-                  {status === 'processing' && (
+                  {(status === 'processing' || status === 'pending' || status === 'pending_payment') && (
                     <Button
                       variant="outline"
                       className="w-full justify-start border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50"
-                      onClick={handleCancelJob}
+                      onClick={handleCancelJobClick}
                     >
                       <X className="w-4 h-4 mr-2" />
                       Cancel Job
@@ -1671,6 +1677,50 @@ const JobDetails: React.FC = () => {
                     className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
                   >
                     Queue Re-render
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {isCancelModalOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md rounded-2xl bg-[#020617] border border-red-500/20 p-6 shadow-2xl"
+            >
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-2">
+                  <AlertCircle className="w-6 h-6 text-red-400" />
+                </div>
+                <h2 className="text-xl font-semibold text-white">Cancel Job?</h2>
+                <p className="text-sm text-gray-400">
+                  Are you absolutely sure you want to cancel {displayName}? 
+                  Pending work will be halted, but you will still be charged for any active frames that complete rendering during shutdown.
+                </p>
+                <div className="w-full flex gap-3 pt-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-white/10 hover:bg-white/5"
+                    onClick={() => setIsCancelModalOpen(false)}
+                  >
+                    Keep Processing
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30"
+                    onClick={confirmCancelJob}
+                    disabled={cancelJobMutation.isPending}
+                  >
+                    {cancelJobMutation.isPending ? 'Cancelling...' : 'Yes, Cancel Job'}
                   </Button>
                 </div>
               </div>

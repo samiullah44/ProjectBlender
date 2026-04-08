@@ -191,7 +191,7 @@ const JobSchema = new Schema<IJob>({
 
   status: {
     type: String,
-    enum: ['pending', 'pending_payment', 'processing', 'completed', 'failed', 'cancelled', 'paused'],
+    enum: ['pending', 'pending_payment', 'processing', 'completed', 'failed', 'cancelled', 'cancelling', 'paused'],
     default: 'pending',
     index: true
   },
@@ -378,6 +378,11 @@ JobSchema.statics.getUserStats = async function (userId: string) {
             $cond: [{ $in: ['$status', ['pending', 'pending_payment', 'processing', 'paused']] }, 1, 0]
           }
         },
+        cancelledJobs: {
+          $sum: {
+            $cond: [{ $in: ['$status', ['cancelled', 'cancelling']] }, 1, 0]
+          }
+        },
         totalSpent: { $sum: { $ifNull: ['$actualCost', 0] } },
         totalCreditsSpent: { $sum: { $ifNull: ['$totalCreditsDistributed', 0] } },
         totalRenderTime: { $sum: { $ifNull: ['$renderTime', 0] } },
@@ -392,6 +397,7 @@ JobSchema.statics.getUserStats = async function (userId: string) {
     totalJobs: 0,
     completedJobs: 0,
     activeJobs: 0,
+    cancelledJobs: 0,
     totalSpent: 0,
     totalCreditsSpent: 0,
     totalRenderTime: 0,

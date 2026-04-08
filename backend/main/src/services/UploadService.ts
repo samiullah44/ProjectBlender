@@ -116,6 +116,7 @@ export class UploadService {
           ...jobSettings,
           engine,
           device,
+          creditsPerFrame: (roundedCredits / totalFrames) || 1, // DERIVED: Ensure node payout perfectly matches escrow
           blenderVersion: normalizeBlenderVersion(jobSettings?.blenderVersion || '4.5.0')
         },
         frames: {

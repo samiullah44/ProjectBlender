@@ -41,7 +41,7 @@ export interface Job {
   blendFileKey: string
   blendFileUrl: string
   type: 'image' | 'animation'
-  status: 'pending' | 'pending_payment' | 'processing' | 'completed' | 'failed' | 'cancelled'
+  status: 'pending' | 'pending_payment' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'cancelling'
   progress: number
   settings: {
     engine: string
@@ -141,6 +141,7 @@ interface JobStore {
     totalFramesRendered: number
     avgRenderTimePerFrame: number
     framesRenderedToday: number
+    cancelledJobs: number
   }>
   createJobMultipart: (
     file: File,
@@ -618,6 +619,7 @@ const jobStore = create<JobStore>((set, get) => ({
         pendingJobs: 0,
         completedJobs: 0,
         failedJobs: 0,
+        cancelledJobs: 0,
         completedToday: 0,
         totalRenderTime: 0,
         totalCreditsUsed: 0,

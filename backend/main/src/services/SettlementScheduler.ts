@@ -12,8 +12,8 @@ import { forceRequeueActiveJobs } from "./FrameQueueService";
 
 // ── Config ───────────────────────────────────────────────────────────────────
 // Change these two lines:
-const CHECK_INTERVAL_MS = 10 * 1000;  // 10 seconds for testing
-const JOB_THRESHOLD = 1;              // Trigger on every new job for testing
+const CHECK_INTERVAL_MS = 60 * 60 * 1000;  // 1 hours for testing
+const JOB_THRESHOLD = 10;              // Trigger on every 10 jobs
 const TIME_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 1 day
 
 export class SettlementScheduler {
