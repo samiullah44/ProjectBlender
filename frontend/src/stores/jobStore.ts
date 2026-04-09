@@ -92,10 +92,15 @@ export interface Job {
   userRerenderCount?: number
   userRerenderMax?: number
   rerenderedHistory?: number[]
+  totalCreditsDistributed?: number
   escrow?: {
+    txSignature?: string
     lockedAmount: number
     releasedAmount: number
     paymentStatus: string
+    status: string
+    settledAt?: string
+    settlementTxSignatures?: string[]
   }
 }
 

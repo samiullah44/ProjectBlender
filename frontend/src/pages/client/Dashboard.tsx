@@ -30,7 +30,11 @@ import {
   Timer,
   Search,
   Filter,
-  X
+  X,
+  ChevronDown,
+  User,
+  Globe,
+  CreditCard
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -46,6 +50,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
 import { type Job } from '@/stores/jobStore'
 import { useRenderNetwork } from '@/hooks/useRenderNetwork'
+import { cn } from '@/lib/utils'
 
 interface SystemStats {
   totalJobs: number
@@ -133,7 +138,7 @@ const StatsSection: React.FC<{ stats: any[], isLoading: boolean }> = ({ stats, i
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
-    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+    className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
   >
     {stats.map((stat, index) => (
       <motion.div
@@ -720,6 +725,7 @@ const ClientDashboard: React.FC = () => {
     webSocketConnected
   } = jobStore()
 
+  const { user } = useAuthStore()
   const { lockedAmount } = useRenderNetwork()
 
   const [refreshing, setRefreshing] = useState(false)
@@ -955,12 +961,13 @@ const ClientDashboard: React.FC = () => {
       >
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div>
-              <h1 className="text-4xl font-bold mb-2">
-                Welcome to <span className="text-blue-400">BlendFarm</span>
+            <div className="flex flex-col gap-1">
+              <h1 className="text-4xl font-bold tracking-tight">
+                Welcome back, <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">{user?.name}</span>
               </h1>
-              <p className="text-gray-400">
-                Distributed Blender rendering across global nodes
+              <p className="text-gray-400 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-blue-500/50" />
+                <span>Distributed Blender rendering across global nodes</span>
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -1066,7 +1073,7 @@ const ClientDashboard: React.FC = () => {
         <StatsSection stats={stats} isLoading={isLoading} />
 
         {/* Main Content with Tabs */}
-        <Tabs defaultValue="dashboard" className="space-y-6" onValueChange={setActiveTab}>
+        <Tabs value={activeTab} className="space-y-6" onValueChange={setActiveTab}>
           <TabsList className="grid grid-cols-2 bg-gray-900/50 border border-white/10">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
@@ -1100,109 +1107,91 @@ const ClientDashboard: React.FC = () => {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.2 }}
                 >
-                  <Card className="bg-gradient-to-br from-blue-900/30 to-purple-900/30 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Zap className="w-5 h-5 text-amber-400" />
+                  <Card className="bg-gray-900/50 border-white/5 backdrop-blur-xl hover:border-blue-500/30 transition-all duration-500 group overflow-hidden relative">
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                        <Zap className="w-5 h-5 text-amber-400 fill-amber-400/20" />
                         Quick Actions
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-4 relative z-10">
                         <Button
-                          variant="outline"
-                          className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
+                          variant="ghost"
+                          className="flex-col h-auto py-6 bg-white/5 border border-white/5 hover:border-blue-500/50 hover:bg-blue-500/10 hover:scale-[1.02] transition-all duration-300 active:scale-95 group/btn"
                           onClick={() => navigate('/client/create-job')}
                         >
-                          <Upload className="w-6 h-6 mb-2" />
-                          <span className="text-sm font-medium">New Job</span>
+                          <div className="p-3 rounded-xl bg-blue-500/10 mb-3 group-hover/btn:bg-blue-500/20 transition-colors">
+                            <Upload className="w-6 h-6 text-blue-400" />
+                          </div>
+                          <span className="text-sm font-semibold text-gray-200">New Job</span>
                         </Button>
                         <Button
-                          variant="outline"
-                          className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
-                          onClick={() => navigate('/client/jobs')}
+                          variant="ghost"
+                          className="flex-col h-auto py-6 bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/10 hover:scale-[1.02] transition-all duration-300 active:scale-95 group/btn"
+                          onClick={() => setActiveTab('all-jobs')}
                         >
-                          <FileText className="w-6 h-6 mb-2" />
-                          <span className="text-sm font-medium">All Jobs</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
-                          onClick={() => navigate('/client/settings')}
-                        >
-                          <Settings className="w-6 h-6 mb-2" />
-                          <span className="text-sm font-medium">Settings</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="flex-col h-auto py-4 border-white/20 hover:bg-white/5 hover:scale-105 transition-all duration-300 active:scale-95"
-                          onClick={() => navigate('/client/billing')}
-                        >
-                          <DollarSign className="w-6 h-6 mb-2" />
-                          <span className="text-sm font-medium">Credits</span>
+                          <div className="p-3 rounded-xl bg-cyan-500/10 mb-3 group-hover/btn:bg-cyan-500/20 transition-colors">
+                            <FileText className="w-6 h-6 text-cyan-400" />
+                          </div>
+                          <span className="text-sm font-semibold text-gray-200">All Jobs</span>
                         </Button>
                       </div>
                     </CardContent>
                   </Card>
                 </motion.div>
 
-                {/* System Status */}
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.3 }}
                 >
-                  <Card className="bg-gray-900/50 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        {/* {webSocketConnected ? (
-                          <Wifi className="w-5 h-5 text-emerald-400 animate-pulse" />
-                        ) : (
-                          <WifiOff className="w-5 h-5 text-red-400" />
-                        )} */}
+                  <Card className="bg-gray-900/40 border-white/5 backdrop-blur-xl relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                      <Activity className="w-24 h-24" />
+                    </div>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-lg font-bold">
                         System Status
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400">Connection:</span>
-                          <Badge className={`px-2 py-1 ${webSocketConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                            {webSocketConnected ? 'Live Connected' : 'Disconnected'}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400">Live Jobs:</span>
-                          <span className="font-medium text-blue-400">{jobSubscriptions.size}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400">Total Jobs:</span>
-                          <span className="font-medium">{dashboardStats.totalJobs}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400">Completed:</span>
-                          <span className="font-medium text-emerald-400">{dashboardStats.completedJobs}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400">Failed:</span>
-                          <span className="font-medium text-red-400">{dashboardStats.failedJobs}</span>
-                        </div>
 
-                        <div className="pt-4 border-t border-white/10">
-                          <div className="text-sm text-gray-400 mb-2 flex items-center justify-between">
-                            <span>Credits Usage</span>
-                            <span className="font-medium">{dashboardStats.creditsUsed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} used</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 rounded-xl bg-white/5 border border-white/5 hover:border-blue-500/20 transition-all">
+                            <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase font-bold mb-1">
+                              <PlayCircle className="w-3 h-3 text-blue-400" />
+                              Live Jobs
+                            </div>
+                            <div className="text-xl font-bold text-blue-400">{jobSubscriptions.size}</div>
                           </div>
-                          <Progress
-                            value={Math.min((dashboardStats.creditsUsed / 1000) * 100, 100)}
-                            className="h-2 mb-1"
-                          />
-                          <div className="text-xs text-gray-400 flex justify-between">
-                            <span>0 credits</span>
-                            <span>1000 credits</span>
+                          <div className="p-3 rounded-xl bg-white/5 border border-white/5 hover:border-blue-500/20 transition-all">
+                            <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase font-bold mb-1">
+                              <FileText className="w-3 h-3 text-blue-400" />
+                              Total Jobs
+                            </div>
+                            <div className="text-xl font-bold">{dashboardStats.totalJobs}</div>
+                          </div>
+                          <div className="p-3 rounded-xl bg-white/5 border border-white/5 hover:border-emerald-500/20 transition-all">
+                            <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase font-bold mb-1">
+                              <CheckCircle className="w-3 h-3 text-emerald-400" />
+                              Completed
+                            </div>
+                            <div className="text-xl font-bold text-emerald-400">{dashboardStats.completedJobs}</div>
+                          </div>
+                          <div className="p-3 rounded-xl bg-white/5 border border-white/5 hover:border-red-500/20 transition-all">
+                            <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase font-bold mb-1">
+                              <X className="w-3 h-3 text-red-400" />
+                              Failed
+                            </div>
+                            <div className="text-xl font-bold text-red-400">{dashboardStats.failedJobs}</div>
                           </div>
                         </div>
                       </div>
+
+
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -1213,55 +1202,71 @@ const ClientDashboard: React.FC = () => {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.4 }}
                 >
-                  <Card className="bg-gradient-to-br from-emerald-900/30 to-cyan-900/30 border-white/10 backdrop-blur-sm hover:border-white/20 transition-all duration-300">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
+                  <Card className="bg-gray-900/40 border-white/5 backdrop-blur-xl group relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/5 to-cyan-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-lg font-bold">
                         <TrendingUp className="w-5 h-5 text-emerald-400" />
-                        Performance
+                        Node Performance
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="text-center p-3 rounded-lg bg-white/5">
-                            <div className="text-2xl font-bold mb-1">{dashboardStats.framesRenderedToday}</div>
-                            <div className="text-xs text-gray-400">Frames Today</div>
-                          </div>
-                          <div className="text-center p-3 rounded-lg bg-white/5">
-                            <div className="text-2xl font-bold mb-1">
-                              {formatTime(dashboardStats.estimatedRenderTime)}
+                    <CardContent className="space-y-6 pt-4 relative z-10">
+                      <div className="grid grid-cols-1 gap-3">
+                        <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/10 group-hover:border-emerald-500/20 transition-all">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-xl bg-emerald-500/10 shadow-lg shadow-emerald-500/10">
+                              <Layers className="w-5 h-5 text-emerald-400" />
                             </div>
-                            <div className="text-xs text-gray-400">Time Saved</div>
+                            <div>
+                              <div className="text-[10px] text-gray-500 uppercase font-bold leading-none mb-1">Frames Today</div>
+                              <div className="text-2xl font-bold text-emerald-400 tabular-nums">{dashboardStats.framesRenderedToday}</div>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="text-sm text-gray-400 space-y-2">
-                          <div className="flex justify-between">
-                            <span>Avg. Frame Time:</span>
-                            <span className="font-medium">~120s</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Jobs Today:</span>
-                            <span className="font-medium text-emerald-400">{dashboardStats.completedToday}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Success Rate:</span>
-                            <span className="font-medium">{
-                              dashboardStats.totalJobs > 0
-                                ? `${Math.round((dashboardStats.completedJobs / dashboardStats.totalJobs) * 100)}%`
-                                : '100%'
-                            }</span>
+                        <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-cyan-500/10 to-transparent border border-cyan-500/10 group-hover:border-cyan-500/20 transition-all">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-xl bg-cyan-500/10 shadow-lg shadow-cyan-500/10">
+                              <Timer className="w-5 h-5 text-cyan-400" />
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-gray-500 uppercase font-bold leading-none mb-1">Time Saved</div>
+                              <div className="text-2xl font-bold text-cyan-400 tabular-nums">
+                                {formatTime(dashboardStats.estimatedRenderTime)}
+                              </div>
+                            </div>
                           </div>
                         </div>
-
-                        <Button
-                          className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 transition-all duration-300 hover:scale-105 active:scale-95"
-                          onClick={() => navigate('/client/analytics')}
-                        >
-                          View Analytics
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
                       </div>
+
+                      <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-3">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-400">Success Rate</span>
+                          <span className="font-bold text-emerald-400 tabular-nums">
+                            {dashboardStats.totalJobs > 0
+                              ? `${Math.round((dashboardStats.completedJobs / dashboardStats.totalJobs) * 100)}%`
+                              : '100%'}
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-1000"
+                            style={{ width: `${dashboardStats.totalJobs > 0 ? (dashboardStats.completedJobs / dashboardStats.totalJobs) * 100 : 100}%` }}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
+                          <div>
+                            <div className="text-[9px] text-gray-500 uppercase font-bold mb-0.5">Avg Time</div>
+                            <div className="text-sm font-semibold text-gray-300">~120s / frame</div>
+                          </div>
+                          <div>
+                            <div className="text-[9px] text-gray-500 uppercase font-bold mb-0.5">Completed</div>
+                            <div className="text-sm font-semibold text-gray-300">{dashboardStats.completedToday} today</div>
+                          </div>
+                        </div>
+                      </div>
+
+
                     </CardContent>
                   </Card>
                 </motion.div>

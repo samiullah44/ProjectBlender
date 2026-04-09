@@ -43,11 +43,11 @@ const Footer: React.FC = () => {
                   How It Works
                 </Link>
               </li>
-              {/* <li>
-                <Link to="/pricing" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
-                  Pricing
+              <li>
+                <Link to="/faq" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
+                  FAQ
                 </Link>
-              </li> */}
+              </li>
             </ul>
           </div>
 
@@ -63,6 +63,21 @@ const Footer: React.FC = () => {
               <li>
                 <Link to="/terms" className="text-sm text-gray-400 hover:text-white transition-colors">
                   Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link to="/risk" className="text-sm text-gray-400 hover:text-white transition-colors">
+                  Risk Disclosure
+                </Link>
+              </li>
+              <li>
+                <Link to="/refund" className="text-sm text-gray-400 hover:text-white transition-colors">
+                  Refund Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/aup" className="text-sm text-gray-400 hover:text-white transition-colors">
+                  Acceptable Use
                 </Link>
               </li>
             </ul>

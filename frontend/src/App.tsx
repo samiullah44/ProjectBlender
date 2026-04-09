@@ -30,17 +30,31 @@ const RegisterPage = React.lazy(() => import('@/pages/public/Register'))
 const OAuthCallback = React.lazy(() => import('@/pages/public/OAuthCallback'))
 const VerifyEmailPage = React.lazy(() => import('@/pages/public/VerifyEmail'))
 const NotificationsPage = React.lazy(() => import('@/pages/public/Notifications'))
+const ProfilePage = React.lazy(() => import('@/pages/public/Profile'))
+const SettingsPage = React.lazy(() => import('@/pages/public/Settings'))
+const FAQPage = React.lazy(() => import('@/pages/public/FAQ'))
+
+// Legal Pages
+const TermsOfService = React.lazy(() => import('@/pages/public/TermsOfService'))
+const PrivacyPolicy = React.lazy(() => import('@/pages/public/PrivacyPolicy'))
+const RiskDisclosure = React.lazy(() => import('@/pages/public/RiskDisclosure'))
+const RefundPolicy = React.lazy(() => import('@/pages/public/RefundPolicy'))
+const AcceptableUse = React.lazy(() => import('@/pages/public/AcceptableUse'))
 
 // Lazy loaded Client Pages
+const ForgotPasswordPage = React.lazy(() => import('@/pages/public/ForgotPassword'))
+const ResetPasswordPage = React.lazy(() => import('@/pages/public/ResetPassword'))
 const ClientDashboard = React.lazy(() => import('@/pages/client/Dashboard'))
 const CreateJob = React.lazy(() => import('@/pages/client/CreateJob'))
 const JobDetails = React.lazy(() => import('@/pages/client/JobDetails'))
 const ApplyNodeProvider = React.lazy(() => import('@/pages/client/ApplyNodeProvider'))
+const ClientBilling = React.lazy(() => import('@/pages/client/Billing'))
 
 // Lazy loaded Node Pages
 const NodeDashboard = React.lazy(() => import('@/pages/node/Dashboard'))
 const NodeDetails = React.lazy(() => import('@/pages/node/NodeDetails'))
 const NodeSetupGuide = React.lazy(() => import('@/pages/node/NodeSetupGuide'))
+const NodeEarnings = React.lazy(() => import('@/pages/node/Earnings'))
 
 // Lazy loaded Admin Pages
 const AdminDashboard = React.lazy(() => import('@/pages/admin/Dashboard'))
@@ -173,10 +187,10 @@ const MainLayout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
+    <div className="min-h-screen bg-gray-950 flex flex-col overflow-x-hidden">
       <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
       <Navbar hideWaitlist={showTopBar} />
-      <main className="mx-auto flex-1 w-full">
+      <main className="mx-auto flex-1 w-full overflow-x-hidden">
         <React.Suspense fallback={<PageLoader />}>
           <Outlet />
         </React.Suspense>
@@ -215,8 +229,8 @@ function App() {
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/auth/callback" element={<OAuthCallback />} />
               <Route path="/verify-email" element={<VerifyEmailPage />} />
-              {/* <Route path="/forgot-password" element={<ForgotPasswordPage />} /> */}
-              {/* <Route path="/reset-password" element={<ResetPasswordPage />} /> */}
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
             </Route>
             {/* Public Routes with Navbar */}
             <Route element={<MainLayout />}>
@@ -227,6 +241,15 @@ function App() {
               <Route path="/features/analytics" element={<FeaturesAnalyticsPage />} />
               {/* <Route path="/features/pricing" element={<FeaturesCostPage />} /> */}
               <Route path="/how-it-works" element={<HowItWorksPage />} />
+              <Route path="/faq" element={<FAQPage />} />
+
+              {/* Legal Routes */}
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/risk" element={<RiskDisclosure />} />
+              <Route path="/refund" element={<RefundPolicy />} />
+              <Route path="/aup" element={<AcceptableUse />} />
+
               <Route path="/apply-node-provider" element={
                 <ProtectedRoute allowedRoles={['client', 'admin']}>
                   <ApplyNodeProvider />
@@ -235,6 +258,16 @@ function App() {
               <Route path="/notifications" element={
                 <ProtectedRoute allowedRoles={['client', 'admin', 'node_provider']}>
                   <NotificationsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/profile" element={
+                <ProtectedRoute allowedRoles={['client', 'admin', 'node_provider']}>
+                  <ProfilePage />
+                </ProtectedRoute>
+              } />
+              <Route path="/settings" element={
+                <ProtectedRoute allowedRoles={['client', 'admin', 'node_provider']}>
+                  <SettingsPage />
                 </ProtectedRoute>
               } />
               {/* <Route path="/login" element={<LoginPage />} /> */}
@@ -261,7 +294,7 @@ function App() {
                       <Route path="/jobs/:jobId" element={<JobDetails />} /> {/* Add this route */}
                       {/* <Route path="/jobs" element={<ClientJobs />} /> */}
                       {/* <Route path="/settings" element={<ClientSettings />} /> */}
-                      {/* <Route path="/billing" element={<Billing />} /> */}
+                      <Route path="/billing" element={<ClientBilling />} />
                     </Routes>
                   </ProtectedRoute>
                 }
@@ -276,6 +309,7 @@ function App() {
                       <Route path="/dashboard" element={<NodeDashboard />} />
                       <Route path="/nodes/:nodeId" element={<NodeDetails />} />
                       <Route path="/setup-guide" element={<NodeSetupGuide />} />
+                      <Route path="/earnings" element={<NodeEarnings />} />
                     </Routes>
                   </ProtectedRoute>
                 }
@@ -311,8 +345,20 @@ function App() {
         toastOptions={{
           duration: 4000,
           style: {
-            color: 'hsl(var(--foreground))',
-            border: '1px solid hsl(var(--border))',
+            background: '#111827',
+            color: '#f9fafb',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '12px',
+            fontSize: '14px',
+            fontWeight: 500,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(12px)',
+          },
+          success: {
+            iconTheme: { primary: '#10b981', secondary: '#111827' },
+          },
+          error: {
+            iconTheme: { primary: '#ef4444', secondary: '#111827' },
           },
         }}
       />
