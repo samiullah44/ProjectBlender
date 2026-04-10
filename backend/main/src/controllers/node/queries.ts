@@ -63,7 +63,16 @@ export const getAllNodes = async (req: Request, res: Response): Promise<void> =>
         $group: {
           _id: "$frameAssignments.nodeId",
           totalEarnings: { $sum: { $ifNull: ["$frameAssignments.creditsEarned", 0] } },
-          totalFrames: { $sum: 1 }
+          totalFrames: { $sum: 1 },
+          uniqueJobIds: { $addToSet: "$jobId" }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          totalEarnings: 1,
+          totalFrames: 1,
+          uniqueJobsCount: { $size: "$uniqueJobIds" }
         }
       }
     ]);
@@ -82,7 +91,7 @@ export const getAllNodes = async (req: Request, res: Response): Promise<void> =>
         Node.updateOne({ nodeId: node.nodeId }, { status: 'offline', updatedAt: now, lastStatusChange: now }).catch(() => {});
       }
 
-      const hStats = statsMap.get(node.nodeId) || { totalEarnings: 0, totalFrames: 0 };
+      const hStats = statsMap.get(node.nodeId) || { totalEarnings: 0, totalFrames: 0, uniqueJobsCount: 0 };
 
       return {
         nodeId: node.nodeId,
@@ -101,7 +110,7 @@ export const getAllNodes = async (req: Request, res: Response): Promise<void> =>
         ipAddress: node.ipAddress,
         currentJob: node.currentJob,
         currentProgress: node.currentProgress,
-        jobsCompleted: node.jobsCompleted,
+        jobsCompleted: hStats.uniqueJobsCount,
         connectionCount: node.connectionCount || 0,
         isRevoked: node.isRevoked || false,
         createdAt: node.createdAt,

@@ -340,6 +340,21 @@ class WebSocketService {
     }
   }
 
+  sendCommand(targetNodeId: string, cmd: string, data?: any) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.send({
+        type: 'admin_cmd',
+        targetNodeId,
+        cmd,
+        data
+      })
+      console.log(`📡 Sent admin command ${cmd} to node ${targetNodeId}`)
+      toast.success(`Sent ${cmd} command to node`)
+    } else {
+      toast.error('WebSocket not connected')
+    }
+  }
+
   isConnected(): boolean {
     return this.socket?.readyState === WebSocket.OPEN
   }

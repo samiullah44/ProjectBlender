@@ -193,16 +193,8 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
         label: 'Admin Panel',
         href: '/admin/dashboard',
         icon: <Shield className="w-4 h-4" />,
-        color: 'text-red-400',
-        bgColor: 'bg-red-500/10',
-        roles: ['admin']
-      })
-      baseLinks.push({
-        label: 'Network Nodes',
-        href: '/admin/nodes',
-        icon: <HardDrive className="w-4 h-4" />,
-        color: 'text-cyan-400',
-        bgColor: 'bg-cyan-500/10',
+        color: 'text-amber-400',
+        bgColor: 'bg-amber-500/10',
         roles: ['admin']
       })
     }

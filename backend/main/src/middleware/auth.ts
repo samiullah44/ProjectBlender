@@ -7,7 +7,7 @@ export interface AuthRequest extends Request {
 }
 
 // Authentication middleware
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.replace('Bearer ', '');
@@ -28,7 +28,36 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
       });
     }
 
+    // Proactive check for revoked users
+    const { User } = require('../models/User');
+    const user = await User.findById(decoded.userId).select('isRevoked');
+    if (!user || user.isRevoked) {
+      return res.status(401).json({
+        success: false,
+        error: 'Account suspended or not found'
+      });
+    }
+
     req.user = decoded;
+
+    // ── IMPERSONATION SUPPORT ────────────────────────────────────────────────
+    const impersonatedUserId = req.headers['x-impersonating-user'] as string;
+    if (impersonatedUserId && req.user.roles?.includes('admin')) {
+      const { User } = require('../models/User');
+      const targetUser = await User.findById(impersonatedUserId).lean();
+      if (targetUser) {
+        req.user = {
+          userId: targetUser._id.toString(),
+          email: targetUser.email,
+          username: targetUser.username,
+          roles: targetUser.roles || [targetUser.role],
+          isImpersonated: true,
+          adminId: decoded.userId // Original admin ID for audit trail
+        };
+        console.log(`[Auth] Admin ${decoded.userId} impersonating user ${impersonatedUserId}`);
+      }
+    }
+
     next();
   } catch (error) {
     return res.status(401).json({

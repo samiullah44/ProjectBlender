@@ -18,6 +18,7 @@ export interface IUser extends Document {
   tokenBalance: number;
   solanaSeed?: string;
   payoutWallet?: string; // NEW: Specific wallet for receiving render earnings
+  isRevoked?: boolean; // NEW: Ban flag
 
   // OAuth fields
   provider?: 'google' | 'github' | 'local';
@@ -146,6 +147,11 @@ const userSchema = new Schema<IUser>(
     payoutWallet: {
       type: String,
       sparse: true,
+      index: true
+    },
+    isRevoked: {
+      type: Boolean,
+      default: false,
       index: true
     },
 

@@ -85,6 +85,11 @@ interface AuthStore {
     }
     switchRole: (role: 'client' | 'node_provider' | 'admin') => Promise<{ success: boolean; error?: string }>
     handleOAuthCallback: () => Promise<void>
+    
+    // Impersonation
+    impersonatingUser: { id: string; name: string; username: string } | null
+    impersonate: (user: { id: string; name: string; username: string }) => void
+    stopImpersonating: () => void
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -95,6 +100,7 @@ export const useAuthStore = create<AuthStore>()(
             isAuthenticated: false,
             isLoading: false,
             error: null,
+            impersonatingUser: null,
 
             login: async (email: string, password: string) => {
                 try {
@@ -293,12 +299,31 @@ export const useAuthStore = create<AuthStore>()(
 
             logout: () => {
                 localStorage.removeItem('token')
+                localStorage.removeItem('impersonatingUserId')
                 set({
                     user: null,
                     token: null,
-                    isAuthenticated: false
+                    isAuthenticated: false,
+                    impersonatingUser: null
                 })
                 toast.success('Logged out successfully')
+            },
+
+            impersonate: (user) => {
+                localStorage.setItem('impersonatingUserId', user.id)
+                set({ impersonatingUser: user })
+                toast.success(`Now impersonating ${user.name}`)
+                window.location.href = '/' // Force redirect to home to refresh context
+            },
+
+            stopImpersonating: () => {
+                localStorage.removeItem('impersonatingUserId')
+                set({ 
+                    impersonatingUser: null,
+                    user: null // Clear the impersonated user profile to force a fresh fetch
+                })
+                toast.success('Exited impersonation mode')
+                window.location.href = '/admin/users' // Force fresh load to restore admin profile
             },
 
             updateProfile: async (updates) => {
@@ -441,7 +466,8 @@ export const useAuthStore = create<AuthStore>()(
             partialize: (state) => ({
                 token: state.token,
                 user: state.user,
-                isAuthenticated: state.isAuthenticated
+                isAuthenticated: state.isAuthenticated,
+                impersonatingUser: state.impersonatingUser
             })
         }
     )

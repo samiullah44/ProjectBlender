@@ -19,6 +19,10 @@ axiosInstance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    const impersonatingId = localStorage.getItem('impersonatingUserId')
+    if (impersonatingId) {
+      config.headers['X-Impersonating-User'] = impersonatingId
+    }
     return config
   },
   (error) => {

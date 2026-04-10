@@ -195,6 +195,14 @@ export class AuthService {
         };
       }
 
+      // Check if user is banned
+      if (user.isRevoked) {
+        return {
+          success: false,
+          error: 'Your account has been suspended. Please contact support.'
+        };
+      }
+
       // Check if user is verified
       if (!user.isVerified) {
         return {
@@ -432,6 +440,10 @@ export class AuthService {
     const user = await User.findById(userId).select('-password -otp -expiresAt');
     if (!user) {
       throw new Error('User not found');
+    }
+
+    if (user.isRevoked) {
+      throw new Error('User account is suspended');
     }
 
     // Auto-generate solanaSeed for existing users if missing

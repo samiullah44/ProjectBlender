@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { authService } from '../services/AuthService';
+import { AuditService } from '../services/AuditService';
 import { validateEmail, validatePassword } from '../utils/authUtils';
 import { env } from '../config/env';
 
@@ -363,6 +364,16 @@ export class AuthController {
 
       const user = await authService.addCredits(userId, amount);
 
+      // Log the action
+      await AuditService.log({
+        adminId: req.user.userId,
+        action: 'CREDIT_ADD',
+        targetId: userId,
+        targetType: 'User',
+        details: { amount },
+        req
+      });
+
       res.json({
         success: true,
         message: 'Credits added successfully',
@@ -477,6 +488,15 @@ export class AuthController {
         return res.status(400).json(result);
       }
 
+      // Log the action
+      await AuditService.log({
+        adminId: req.user.userId,
+        action: 'APPLICATION_APPROVE',
+        targetId: userId,
+        targetType: 'Application',
+        req
+      });
+
       res.json(result);
     } catch (error: any) {
       console.error('Approve application error:', error);
@@ -512,6 +532,16 @@ export class AuthController {
       if (!result.success) {
         return res.status(400).json(result);
       }
+
+      // Log the action
+      await AuditService.log({
+        adminId: req.user.userId,
+        action: 'APPLICATION_REJECT',
+        targetId: userId,
+        targetType: 'Application',
+        details: { reason },
+        req
+      });
 
       res.json(result);
     } catch (error: any) {

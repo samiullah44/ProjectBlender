@@ -1,9 +1,10 @@
 // App.tsx
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'react-hot-toast'
+import { ImpersonationBanner } from './components/admin/ImpersonationBanner'
 
 import { Loader2 } from 'lucide-react'
 
@@ -58,10 +59,13 @@ const NodeEarnings = React.lazy(() => import('@/pages/node/Earnings'))
 
 // Lazy loaded Admin Pages
 const AdminDashboard = React.lazy(() => import('@/pages/admin/Dashboard'))
+const AdminAnalytics = React.lazy(() => import('@/pages/admin/Analytics'))
 const AdminJobs = React.lazy(() => import('@/pages/admin/Jobs'))
 const AdminJobDetails = React.lazy(() => import('@/pages/admin/JobDetails'))
 const AdminApplications = React.lazy(() => import('@/pages/admin/Applications'))
 const AdminNodes = React.lazy(() => import('@/pages/admin/Nodes'))
+const AdminUsers = React.lazy(() => import('@/pages/admin/Users'))
+const AdminAudit = React.lazy(() => import('@/pages/admin/AuditLogs'))
 
 import { useAuthStore } from '@/stores/authStore'
 
@@ -188,6 +192,7 @@ const MainLayout = () => {
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col overflow-x-hidden">
+      <ImpersonationBanner />
       <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
       <Navbar hideWaitlist={showTopBar} />
       <main className="mx-auto flex-1 w-full overflow-x-hidden">
@@ -209,6 +214,7 @@ const MainLayout = () => {
 const AuthLayout = () => {
   return (
     <div className="min-h-screen bg-gray-950">
+      <ImpersonationBanner />
       <React.Suspense fallback={<PageLoader />}>
         <Outlet />
       </React.Suspense>
@@ -322,11 +328,14 @@ function App() {
                   <ProtectedRoute allowedRoles={['admin']}>
                     <Routes>
                       <Route path="/dashboard" element={<AdminDashboard />} />
+                      <Route path="/analytics" element={<AdminAnalytics />} />
                       <Route path="/jobs" element={<AdminJobs />} />
                       <Route path="/jobs/:jobId" element={<AdminJobDetails />} />
                       <Route path="/applications" element={<AdminApplications />} />
                       <Route path="/nodes" element={<AdminNodes />} />
                       <Route path="/nodes/:nodeId" element={<NodeDetails />} />
+                      <Route path="/users" element={<AdminUsers />} />
+                      <Route path="/audit" element={<AdminAudit />} />
                     </Routes>
                   </ProtectedRoute>
                 }
