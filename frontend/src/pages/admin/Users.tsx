@@ -1,8 +1,10 @@
 // pages/admin/Users.tsx — New user management page
 import React, { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Users, Search, X, ShieldOff, ShieldCheck, Loader2, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Users, Search, X, ShieldOff, ShieldCheck, Loader2, RefreshCw, AlertTriangle, ShieldCheck as ShieldCheckIcon, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
+import { cn } from '@/lib/utils'
 import { toast } from 'react-hot-toast'
 import axiosInstance from '@/lib/axios'
 import AdminLayout from '@/components/admin/AdminLayout'
@@ -21,21 +23,23 @@ interface PlatformUser {
     createdAt: string
     totalSpent?: number
     totalJobsSubmitted?: number
+    solanaSeed?: string
+    payoutWallet?: string
 }
 
 const ROLES: Record<string, string> = {
-    client:        'text-cyan-400    bg-cyan-500/10',
+    client: 'text-cyan-400    bg-cyan-500/10',
     node_provider: 'text-purple-400  bg-purple-500/10',
-    admin:         'text-amber-400   bg-amber-500/10',
+    admin: 'text-amber-400   bg-amber-500/10',
 }
 
 const AdminUsers: React.FC = () => {
-    const [users, setUsers]         = useState<PlatformUser[]>([])
-    const [total, setTotal]         = useState(0)
-    const [page, setPage]           = useState(1)
-    const [search, setSearch]       = useState('')
-    const [loading, setLoading]     = useState(true)
-    const [actionId, setActionId]   = useState<string | null>(null)
+    const [users, setUsers] = useState<PlatformUser[]>([])
+    const [total, setTotal] = useState(0)
+    const [page, setPage] = useState(1)
+    const [search, setSearch] = useState('')
+    const [loading, setLoading] = useState(true)
+    const [actionId, setActionId] = useState<string | null>(null)
     const { impersonate } = useAuthStore()
 
     const fetchUsers = useCallback(async (p = page, q = search) => {
@@ -92,8 +96,8 @@ const AdminUsers: React.FC = () => {
                 <div className="grid grid-cols-3 gap-3">
                     {[
                         { label: 'Total Users', value: total },
-                        { label: 'Banned',      value: users.filter(u => u.isRevoked).length },
-                        { label: 'Admins',      value: users.filter(u => u.roles?.includes('admin')).length },
+                        { label: 'Banned', value: users.filter(u => u.isRevoked).length },
+                        { label: 'Admins', value: users.filter(u => u.roles?.includes('admin')).length },
                     ].map(s => (
                         <div key={s.label} className="rounded-xl border border-white/[0.07] bg-[#111118] p-4">
                             <p className="text-xl font-bold text-white">{s.value}</p>
@@ -102,15 +106,13 @@ const AdminUsers: React.FC = () => {
                     ))}
                 </div>
 
-                {/* Table */}
                 <div className="rounded-2xl border border-white/[0.07] bg-[#111118] overflow-hidden">
-                    {/* Header */}
-                    <div className="grid grid-cols-12 gap-3 px-5 py-3 border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-gray-500 font-medium">
-                        <span className="col-span-4">User</span>
-                        <span className="col-span-2">Roles</span>
-                        <span className="col-span-2 hidden md:block">Wallet</span>
-                        <span className="col-span-2 hidden md:block">Joined</span>
-                        <span className="col-span-2 text-right">Action</span>
+                    <div className="grid grid-cols-12 gap-2 lg:gap-3 px-3 lg:px-5 py-3 border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+                        <span className="col-span-6 lg:col-span-4">User</span>
+                        <span className="hidden lg:block lg:col-span-2">Roles</span>
+                        <span className="col-span-3 lg:col-span-2 text-center lg:text-left">Credits</span>
+                        <span className="col-span-3 lg:col-span-2 text-right lg:text-left">Jobs</span>
+                        <span className="hidden lg:block lg:col-span-2 text-right">Actions</span>
                     </div>
 
                     {loading ? (
@@ -120,72 +122,89 @@ const AdminUsers: React.FC = () => {
                     ) : users.length > 0 ? (
                         <div className="divide-y divide-white/[0.04]">
                             {users.map((u, i) => (
-                                <motion.div key={u._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                                    className={`grid grid-cols-12 gap-3 px-5 py-3 items-center transition-colors ${u.isRevoked ? 'bg-red-500/[0.04]' : 'hover:bg-white/[0.02]'}`}>
-                                    {/* Name + email */}
-                                    <div className="col-span-4 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${u.isRevoked ? 'bg-red-500/20 text-red-400' : 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-300'}`}>
-                                                {(u.name || u.email || '?').charAt(0).toUpperCase()}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-sm text-white/90 font-medium truncate">{u.name || '—'}</p>
-                                                <p className="text-[10px] text-gray-500 truncate">{u.email}</p>
-                                            </div>
+                                <motion.div 
+                                    key={u._id} 
+                                    initial={{ opacity: 0 }} 
+                                    animate={{ opacity: 1 }} 
+                                    transition={{ delay: i * 0.02 }}
+                                    className={cn(
+                                        "grid grid-cols-12 gap-2 lg:gap-3 px-3 lg:px-5 py-4 items-center transition-colors hover:bg-white/[0.02]",
+                                        u.isRevoked ? 'bg-red-500/[0.04]' : ''
+                                    )}
+                                >
+                                    <div className="col-span-6 lg:col-span-4 flex items-center gap-3">
+                                        <div className={cn(
+                                            "w-8 h-8 lg:w-9 lg:h-9 rounded-full flex items-center justify-center font-bold text-xs lg:text-sm",
+                                            u.isRevoked 
+                                                ? "bg-red-500/20 text-red-400 border border-red-500/30" 
+                                                : "bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-500 border border-amber-500/30"
+                                        )}>
+                                            {(u.name || u.email || '?').substring(0, 1).toUpperCase()}
+                                        </div>
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-xs lg:text-sm font-medium text-white truncate">{u.name || '—'}</span>
+                                            <span className="text-[10px] text-gray-500 truncate">{u.email}</span>
                                         </div>
                                     </div>
 
-                                    {/* Roles */}
-                                    <div className="col-span-2 flex flex-wrap gap-1">
-                                        {(u.roles || [u.primaryRole]).map(r => (
-                                            <span key={r} className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${ROLES[r] || 'text-gray-400 bg-white/10'}`}>
-                                                {r?.replace('_', ' ')}
-                                            </span>
+                                    <div className="hidden lg:flex col-span-2 items-center gap-1 flex-wrap">
+                                        {(u.roles || [u.primaryRole]).map(role => (
+                                            <Badge key={role} variant="outline" className={cn("text-[9px] uppercase px-1 py-0 h-auto", ROLES[role] || 'border-gray-500/20 text-gray-500 bg-gray-500/5')}>
+                                                {role?.replace('_', ' ')}
+                                            </Badge>
                                         ))}
                                     </div>
 
-                                    {/* Wallet */}
-                                    <div className="col-span-2 hidden md:block text-[10px] text-gray-500 font-mono">
-                                        {u.solanaSeed || u.payoutWallet ? (
-                                            <p className="truncate" title={u.solanaSeed || u.payoutWallet}>
-                                                {(u.solanaSeed || u.payoutWallet)?.slice(0, 4)}…{(u.solanaSeed || u.payoutWallet)?.slice(-4)}
-                                            </p>
-                                        ) : '—'}
+                                    <div className="col-span-3 lg:col-span-2 text-center lg:text-left">
+                                        <div className="text-xs lg:text-sm font-semibold text-white">
+                                            {typeof u.totalSpent === 'number' ? u.totalSpent.toFixed(1) : '0.0'}
+                                        </div>
+                                        <p className="lg:hidden text-[9px] text-gray-500 uppercase">Credits</p>
                                     </div>
 
-                                    {/* Joined */}
-                                    <div className="col-span-2 hidden md:block">
-                                        <p className="text-[11px] text-gray-500">{new Date(u.createdAt).toLocaleDateString()}</p>
+                                    <div className="col-span-3 lg:col-span-2 text-right lg:text-left">
+                                        <div className="text-xs lg:text-sm text-gray-400 font-medium">
+                                            {u.totalJobsSubmitted || 0}
+                                        </div>
+                                        <p className="lg:hidden text-[9px] text-gray-500 uppercase">Jobs</p>
                                     </div>
 
-                                    {/* Action */}
-                                    <div className="col-span-2 flex items-center justify-end gap-2">
-                                        {u.isRevoked && (
-                                            <span className="flex items-center gap-1 text-[10px] text-red-400">
-                                                <AlertTriangle className="w-3 h-3" /> Banned
-                                            </span>
-                                        )}
-                                        {!u.roles?.includes('admin') && (
-                                            <div className="flex gap-2">
-                                                <Button size="sm" variant="outline" 
-                                                    onClick={() => impersonate({ id: u._id, name: u.name, username: u.email })}
-                                                    className="h-7 text-[10px] px-2.5 border-white/10 hover:bg-white/5 text-gray-400">
-                                                    <UserIcon className="w-3 h-3 mr-1" /> View As
-                                                </Button>
-                                                <Button size="sm" variant="outline" disabled={actionId === u._id}
-                                                    onClick={() => handleBan(u._id, !!u.isRevoked)}
-                                                    className={`h-7 text-[10px] px-2.5 ${u.isRevoked
-                                                        ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10'
-                                                        : 'border-red-500/30 text-red-400 hover:bg-red-500/10'}`}>
-                                                    {actionId === u._id
-                                                        ? <Loader2 className="w-3 h-3 animate-spin" />
-                                                        : u.isRevoked
-                                                            ? <><ShieldCheck className="w-3 h-3 mr-1" />Unban</>
-                                                            : <><ShieldOff className="w-3 h-3 mr-1" />Ban</>
-                                                    }
-                                                </Button>
-                                            </div>
-                                        )}
+                                    <div className="col-span-12 lg:col-span-2 flex items-center justify-end gap-2 mt-2 lg:mt-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-white/[0.05]">
+                                        <span className="hidden md:block lg:hidden text-[10px] text-gray-500 uppercase mr-auto font-mono">
+                                            {u.solanaSeed?.slice(0, 4)}...{u.solanaSeed?.slice(-4)}
+                                        </span>
+                                        <div className="flex items-center gap-1.5 ml-auto">
+                                            {u.isRevoked && (
+                                                <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20 text-[9px] px-1.5">Banned</Badge>
+                                            )}
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                disabled={actionId === u._id}
+                                                onClick={() => handleBan(u._id, !!u.isRevoked)}
+                                                className={cn(
+                                                    "h-7 px-2.5 text-[10px] font-bold border flex items-center gap-1.5",
+                                                    u.isRevoked 
+                                                        ? "border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10" 
+                                                        : "border-red-500/20 text-red-400 hover:bg-red-500/10"
+                                                )}
+                                            >
+                                                {actionId === u._id ? (
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                ) : u.isRevoked ? (
+                                                    <><ShieldCheckIcon className="w-3 h-3" /> Restore</>
+                                                ) : (
+                                                    <><ShieldOff className="w-3 h-3" /> Ban</>
+                                                )}
+                                            </Button>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="h-7 w-7 p-0 text-gray-500 hover:text-white bg-white/5 border border-white/10"
+                                            >
+                                                <ChevronRight className="w-3.5 h-3.5" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </motion.div>
                             ))}

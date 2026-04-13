@@ -1,5 +1,6 @@
 // pages/admin/Nodes.tsx — Redesigned with AdminLayout
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { HardDrive, Search, Wifi, WifiOff, RefreshCw, Cpu, MemoryStick, Zap, Pause, Play, RotateCcw, ArrowUpCircle, Layers, CreditCard } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -29,6 +30,7 @@ function formatTimeAgo(dateString: string) {
 }
 
 const AdminNodes: React.FC = () => {
+    const navigate = useNavigate();
     const [nodes, setNodes]         = useState<Node[]>([])
     const [search, setSearch]       = useState('')
     const [loading, setLoading]     = useState(true)
@@ -36,7 +38,7 @@ const AdminNodes: React.FC = () => {
 
     const fetchNodes = async () => {
         try {
-            const res = await axiosInstance.get('/nodes')
+            const res = await axiosInstance.get('/nodes?adminView=true')
             if (res.data?.nodes) setNodes(res.data.nodes)
         } catch { toast.error('Failed to load nodes') }
         finally { setLoading(false) }
@@ -123,7 +125,8 @@ const AdminNodes: React.FC = () => {
                                 : 'Never'
                             return (
                                 <motion.div key={node.nodeId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-                                    className="rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
+                                    onClick={() => navigate(`/admin/nodes/${node.nodeId}`)}
+                                    className="rounded-2xl border border-white/[0.07] bg-[#111118] p-5 cursor-pointer hover:border-purple-500/40 transition-all shadow-xl group relative overflow-hidden">
                                     {/* Header row */}
                                     <div className="flex items-start justify-between mb-3">
                                         <div className="flex items-center gap-2.5">
@@ -167,26 +170,26 @@ const AdminNodes: React.FC = () => {
                                                 <div className="flex gap-2">
                                                     {node.status !== 'offline' && (
                                                         node.status === 'busy' || node.status === 'online' ? (
-                                                            <Button variant="outline" size="sm" onClick={() => handleNodeCommand(node.nodeId, 'pause')}
+                                                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleNodeCommand(node.nodeId, 'pause'); }}
                                                                 title="Suspend node from accepting more jobs"
                                                                 className="flex-1 h-8 text-[10px] border-amber-500/20 text-amber-400 hover:bg-amber-500/10">
                                                                 <Pause className="w-3 h-3 mr-1" /> Pause
                                                             </Button>
                                                         ) : (
-                                                            <Button variant="outline" size="sm" onClick={() => handleNodeCommand(node.nodeId, 'resume')}
+                                                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleNodeCommand(node.nodeId, 'resume'); }}
                                                                 title="Allow node to start accepting jobs again"
                                                                 className="flex-1 h-8 text-[10px] border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10">
                                                                 <Play className="w-3 h-3 mr-1" /> Resume
                                                             </Button>
                                                         )
                                                     )}
-                                                    <Button variant="outline" size="sm" onClick={() => handleNodeCommand(node.nodeId, 'update')}
+                                                    <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleNodeCommand(node.nodeId, 'update'); }}
                                                         title="Force node to update its client software"
                                                         className="flex-1 h-8 text-[10px] border-blue-500/20 text-blue-400 hover:bg-blue-500/10">
                                                         <ArrowUpCircle className="w-3 h-3 mr-1" /> Update
                                                     </Button>
                                                 </div>
-                                                <Button variant="outline" size="sm" onClick={() => handleRevoke(node.nodeId, node.name)}
+                                                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleRevoke(node.nodeId, node.name); }}
                                                     className="w-full h-8 text-[10px] border-red-500/25 text-red-400 hover:bg-red-500/10">
                                                     Revoke Node
                                                 </Button>

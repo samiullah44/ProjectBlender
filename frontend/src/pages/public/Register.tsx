@@ -38,7 +38,7 @@ type RegisterFormData = z.infer<typeof registerSchema>
 
 const RegisterPage: React.FC = () => {
     const navigate = useNavigate()
-    const { register: registerUser, isLoading, error, clearError, getOAuthUrls } = useAuthStore()
+    const { register: registerUser, isAuthenticated, isLoading, error, clearError, getOAuthUrls } = useAuthStore()
     const [showPassword, setShowPassword] = useState(false)
     const [showConfirmPassword, setShowConfirmPassword] = useState(false)
     const [isOAuthLoading, setIsOAuthLoading] = useState(false)
@@ -58,13 +58,17 @@ const RegisterPage: React.FC = () => {
     })
 
     useEffect(() => {
+        if (isAuthenticated) {
+            navigate('/', { replace: true })
+            return
+        }
         // Load remembered email
         const rememberedEmail = localStorage.getItem('rememberedEmail')
         if (rememberedEmail) {
             setValue('email', rememberedEmail)
             setValue('rememberMe', true)
         }
-    }, [setValue])
+    }, [isAuthenticated, navigate, setValue])
 
     const onSubmit = async (data: RegisterFormData) => {
         clearError()

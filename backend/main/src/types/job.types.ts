@@ -162,6 +162,7 @@ export interface IJob {
     userRerenderCount?: number;
     userRerenderMax?: number;
     rerenderedHistory?: number[];
+    isAdminJob?: boolean;
 }
 
 export interface JobFilterOptions {
@@ -175,6 +176,7 @@ export interface JobFilterOptions {
     endDate?: Date;
     search?: string;
     approved?: boolean;
+    adminView?: boolean;
 }
 
 export interface PaginationOptions {
@@ -227,6 +229,7 @@ export interface CreateJobRequest {
     tags?: string[];
     priority?: 'low' | 'normal' | 'high' | 'urgent';
     requireApproval?: boolean;
+    isAdminJob?: boolean;
 }
 
 export interface CreateJobResponse {

@@ -24,7 +24,7 @@ type LoginFormData = z.infer<typeof loginSchema>
 const LoginPage: React.FC = () => {
     const navigate = useNavigate()
     const location = useLocation()
-    const { login, isLoading, error, clearError, getOAuthUrls } = useAuthStore()
+    const { login, isAuthenticated, isLoading, error, clearError, getOAuthUrls } = useAuthStore()
     const [showPassword, setShowPassword] = useState(false)
     const [isOAuthLoading, setIsOAuthLoading] = useState(false)
 
@@ -41,9 +41,13 @@ const LoginPage: React.FC = () => {
         }
     })
 
-    const from = (location.state as any)?.from?.pathname || '/dashboard'
+    const from = (location.state as any)?.from?.pathname || '/'
 
     useEffect(() => {
+        if (isAuthenticated) {
+            navigate('/', { replace: true })
+            return
+        }
         clearError()
 
         // Load remembered email
@@ -52,7 +56,7 @@ const LoginPage: React.FC = () => {
             setValue('email', rememberedEmail)
             setValue('rememberMe', true)
         }
-    }, [setValue, clearError])
+    }, [isAuthenticated, navigate, setValue, clearError])
 
     const onSubmit = async (data: LoginFormData) => {
         // Handle Remember Me
@@ -64,7 +68,7 @@ const LoginPage: React.FC = () => {
 
         const result = await login(data.email, data.password)
         if (result.success) {
-            navigate(from, { replace: true })
+            navigate('/', { replace: true })
         }
     }
 

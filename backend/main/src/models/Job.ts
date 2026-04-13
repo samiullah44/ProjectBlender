@@ -241,6 +241,7 @@ const JobSchema = new Schema<IJob>({
   actualCost: Number,
   tags: [String],
   description: String,
+  isAdminJob: { type: Boolean, default: false },
 
   // Timestamps
   cancelledAt: Date,

@@ -98,18 +98,18 @@ const AdminApplications: React.FC = () => {
         <AdminLayout title="Applications" subtitle="Review node provider applications to join the render network" actions={headerActions}>
             <div className="space-y-5 mt-4">
                 {/* Stats */}
-                <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-xl border border-white/[0.07] bg-[#111118] p-4 flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-amber-500/10"><Clock className="w-4 h-4 text-amber-400" /></div>
-                        <div><p className="text-xl font-bold text-white">{counts.pending}</p><p className="text-xs text-gray-500">Pending Review</p></div>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="rounded-xl border border-white/[0.07] bg-[#111118] p-3 lg:p-4 flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-amber-500/10 shrink-0"><Clock className="w-4 h-4 text-amber-400" /></div>
+                        <div className="min-w-0"><p className="text-lg lg:text-xl font-bold text-white leading-none">{counts.pending}</p><p className="text-[10px] text-gray-500 mt-1 truncate">Pending Review</p></div>
                     </div>
-                    <div className="rounded-xl border border-white/[0.07] bg-[#111118] p-4 flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-emerald-500/10"><CheckCircle className="w-4 h-4 text-emerald-400" /></div>
-                        <div><p className="text-xl font-bold text-white">{counts.approved}</p><p className="text-xs text-gray-500">Approved Total</p></div>
+                    <div className="rounded-xl border border-white/[0.07] bg-[#111118] p-3 lg:p-4 flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-emerald-500/10 shrink-0"><CheckCircle className="w-4 h-4 text-emerald-400" /></div>
+                        <div className="min-w-0"><p className="text-lg lg:text-xl font-bold text-white leading-none">{counts.approved}</p><p className="text-[10px] text-gray-500 mt-1 truncate">Approved Total</p></div>
                     </div>
-                    <div className="rounded-xl border border-white/[0.07] bg-[#111118] p-4 flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-purple-500/10"><Shield className="w-4 h-4 text-purple-400" /></div>
-                        <div><p className="text-xl font-bold text-white">{counts.all}</p><p className="text-xs text-gray-500">Total Received</p></div>
+                    <div className="col-span-2 lg:col-span-1 rounded-xl border border-white/[0.07] bg-[#111118] p-3 lg:p-4 flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-purple-500/10 shrink-0"><Shield className="w-4 h-4 text-purple-400" /></div>
+                        <div className="min-w-0"><p className="text-lg lg:text-xl font-bold text-white leading-none">{counts.all}</p><p className="text-[10px] text-gray-500 mt-1 truncate">Total Received</p></div>
                     </div>
                 </div>
 

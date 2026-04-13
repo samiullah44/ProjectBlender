@@ -101,7 +101,8 @@ const CreateJob: React.FC = () => {
   } = jobStore()
 
   const { creditedAmount, isRefreshing, fetchCreditBalance, lockPayment, cancelJobOnchain } = useRenderNetwork()
-  const { getProfile } = useAuthStore()
+  const { user, getProfile } = useAuthStore()
+  const isAdmin = user?.role === 'admin'
 
   const [currentStep, setCurrentStep] = useState<Step>('upload')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -237,7 +238,7 @@ const CreateJob: React.FC = () => {
     try {
       // Pre-check on-chain credits
       const freshBalance = await fetchCreditBalance()
-      if (freshBalance < estimatedCost) {
+      if (!isAdmin && freshBalance < estimatedCost) {
         toast.error(`Insufficient credits: ${freshBalance.toFixed(2)} available, ${estimatedCost} required.`)
         return
       }
@@ -1209,12 +1210,12 @@ const CreateJob: React.FC = () => {
                         <div 
                           className={cn(
                             "h-full transition-all duration-1000",
-                            (creditedAmount ?? 0) >= estimatedCost ? "bg-blue-500" : "bg-red-500"
+                            (isAdmin || (creditedAmount ?? 0) >= estimatedCost) ? "bg-blue-500" : "bg-red-500"
                           )} 
-                          style={{ width: `${Math.min(100, ((creditedAmount ?? 0) / estimatedCost) * 100)}%` }} 
+                          style={{ width: `${Math.min(100, (isAdmin ? 1 : ((creditedAmount ?? 0) / estimatedCost)) * 100)}%` }} 
                         />
                       </div>
-                      {(creditedAmount ?? 0) < estimatedCost && (
+                      {!isAdmin && (creditedAmount ?? 0) < estimatedCost && (
                         <div className="mt-3 space-y-2">
                           <p className="text-[10px] text-red-400 font-medium">Insufficient balance to start job</p>
                           <Button 
@@ -1254,10 +1255,10 @@ const CreateJob: React.FC = () => {
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={isUploading || isLocking || ((creditedAmount ?? 0) < estimatedCost && !isRefreshing)}
+                disabled={isUploading || isLocking || (!isAdmin && (creditedAmount ?? 0) < estimatedCost && !isRefreshing)}
                 className={cn(
                   "relative overflow-hidden group h-16 px-12 rounded-2xl font-black text-lg transition-all active:scale-95 disabled:opacity-50",
-                  ((creditedAmount ?? 0) < estimatedCost && !isRefreshing) ? "bg-gray-800 text-gray-500 cursor-not-allowed" : "bg-white text-black"
+                  (!isAdmin && (creditedAmount ?? 0) < estimatedCost && !isRefreshing) ? "bg-gray-800 text-gray-500 cursor-not-allowed" : "bg-white text-black"
                 )}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-cyan-500 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
@@ -1270,7 +1271,7 @@ const CreateJob: React.FC = () => {
                   ) : (
                     <>
                       <Play className="w-6 h-6 fill-current" />
-                      {(creditedAmount ?? 0) < estimatedCost ? 'Insufficient Credits' : 'Start Job'}
+                      {!isAdmin && (creditedAmount ?? 0) < estimatedCost ? 'Insufficient Credits' : 'Start Job'}
                     </>
                   )}
                 </span>

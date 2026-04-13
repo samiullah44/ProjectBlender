@@ -19,3 +19,11 @@
         font-family: var(--font-sans);
     }
 }
+
+@utility no-scrollbar {
+    &::-webkit-scrollbar {
+        display: none;
+    }
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}

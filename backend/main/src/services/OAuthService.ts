@@ -74,7 +74,9 @@ export class OAuthService {
                     credits: user.credits,
                     solanaSeed: user.solanaSeed,
                     isVerified: user.isVerified,
-                    provider: user.provider
+                    provider: user.provider,
+                    roles: user.roles || [user.role],
+                    primaryRole: user.primaryRole
                 }
 
             };
@@ -100,6 +102,8 @@ export class OAuthService {
                 userId: user._id,
                 email: user.email,
                 role: user.role,
+                roles: user.roles || [user.role],
+                primaryRole: user.primaryRole,
                 username: user.username,
                 name: user.name
             },

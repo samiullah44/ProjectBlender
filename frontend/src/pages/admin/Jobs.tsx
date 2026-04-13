@@ -1,13 +1,14 @@
-// pages/admin/Jobs.tsx — Redesigned with AdminLayout
 import React, { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import {
     FileText, Search, X, CheckCircle, AlertCircle, Clock,
-    Loader2, RefreshCw, ArrowRight, Shield, Film, Trash2
+    Loader2, RefreshCw, ArrowRight, Shield, Film, Trash2,
+    Layers, HardDrive, ChevronRight, User as UserIcon
 } from 'lucide-react'
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/Progress'
 import { Input } from '@/components/ui/Input'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -51,7 +52,7 @@ const AdminJobs: React.FC = () => {
 
     const loadJobs = async () => {
         setRefreshing(true)
-        try { await listJobs({ limit: 100 }) } catch { toast.error('Failed to load jobs') }
+        try { await listJobs({ limit: 100, adminView: true }) } catch { toast.error('Failed to load jobs') }
         finally { setRefreshing(false) }
     }
 
@@ -90,20 +91,21 @@ const AdminJobs: React.FC = () => {
 
     const handleApprove = async (e: React.MouseEvent, jobId: string) => {
         e.stopPropagation()
-        if (await approveJob(jobId)) await refreshJobs()
+        if (await approveJob(jobId)) await refreshJobs(true)
     }
     const handleCancel = async (e: React.MouseEvent, jobId: string) => {
         e.stopPropagation()
-        if (window.confirm('Cancel this job?')) if (await cancelJob(jobId)) await refreshJobs()
+        if (window.confirm('Cancel this job?')) if (await cancelJob(jobId)) await refreshJobs(true)
     }
 
     const filters = ['all', 'needs_approval', 'pending', 'processing', 'completed', 'failed', 'cancelled']
 
     const headerActions = (
-        <Button variant="outline" size="sm" onClick={loadJobs} disabled={refreshing} className="border-white/15 hover:bg-white/5 text-gray-300">
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={loadJobs} disabled={refreshing} className="border-white/10 hover:bg-white/5">
+                <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
+            </Button>
+        </div>
     )
 
     return (
@@ -128,32 +130,32 @@ const AdminJobs: React.FC = () => {
                 </div>
 
                 {/* Filters + Search */}
-                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                    <div className="flex items-center gap-1 bg-white/[0.04] border border-white/[0.07] rounded-xl p-1 flex-wrap">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        <input
+                            type="text"
+                            placeholder="Search jobs, IDs, or users..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-amber-500/30 transition-all font-medium"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0 flex-wrap">
                         {filters.map(s => (
                             <button key={s} onClick={() => setFilter(s)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${filter === s
-                                    ? 'bg-amber-500/20 text-amber-300'
-                                    : 'text-gray-400 hover:text-white'}`}>
+                                className={cn(
+                                    "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold capitalize transition-all whitespace-nowrap border",
+                                    filter === s
+                                        ? "bg-amber-500/10 text-amber-500 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)]"
+                                        : "bg-white/[0.02] text-gray-500 border-white/[0.05] hover:text-gray-300 hover:bg-white/[0.05]"
+                                )}>
                                 {s === 'all' ? 'All' : s}
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${filter === s ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-gray-500'}`}>
                                     {statusCounts[s as keyof typeof statusCounts]}
                                 </span>
                             </button>
                         ))}
-                    </div>
-                    <div className="relative ml-auto">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
-                        <input
-                            value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Search by name, ID, user…"
-                            className="bg-[#111118] border border-white/[0.07] text-white text-sm rounded-xl pl-9 pr-8 py-2 w-64 focus:outline-none focus:border-white/20"
-                        />
-                        {searchQuery && (
-                            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-                                <X className="w-3.5 h-3.5" />
-                            </button>
-                        )}
                     </div>
                 </div>
 
@@ -165,69 +167,67 @@ const AdminJobs: React.FC = () => {
                         </div>
                     ) : filteredJobs.length > 0 ? (
                         <div className="divide-y divide-white/[0.05]">
-                            {filteredJobs.map((job, idx) => {
-                                const statusCls  = STATUS_COLORS[job.status] || STATUS_COLORS.pending
-                                const dotCls     = DOT_COLOR[job.status]     || DOT_COLOR.pending
-                                const needsOK    = (job as any).requireApproval && !(job as any).approved
-                                const canCancel  = ['pending','pending_payment','processing'].includes(job.status) && !(job as any).escrow?.txSignature
-                                const totalF     = job.frames?.total || 0
-                                const renderedF  = job.frames?.rendered?.length || 0
-                                const progress   = job.progress || 0
-
-                                return (
-                                    <motion.div key={job.jobId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.02 }}
-                                        onClick={() => navigate(`/admin/jobs/${job.jobId}`)}
-                                        className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.03] cursor-pointer transition-all group">
-                                        {/* Status dot */}
-                                        <span className={`w-2 h-2 rounded-full shrink-0 ${dotCls}`} />
-
-                                        {/* Info */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-0.5">
-                                                <span className="text-sm font-medium text-white/90 truncate">{job.blendFileName}</span>
-                                                {needsOK && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-semibold shrink-0">Needs Approval</span>}
+                            {filteredJobs.map((job, idx) => (
+                                <motion.div 
+                                    key={job.jobId} 
+                                    initial={{ opacity: 0 }} 
+                                    animate={{ opacity: 1 }} 
+                                    transition={{ delay: idx * 0.02 }}
+                                    onClick={() => navigate(`/admin/jobs/${job.jobId}`)}
+                                    className="p-4 lg:p-5 hover:bg-white/[0.01] transition-all group border-b border-white/[0.04] last:border-0 cursor-pointer"
+                                >
+                                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 lg:gap-6">
+                                        <div className="flex items-start gap-4 flex-1 min-w-0">
+                                            <div className={cn(
+                                                "w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105",
+                                                job.status === 'completed' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" :
+                                                job.status === 'failed' ? "bg-red-500/10 border-red-500/20 text-red-500" :
+                                                job.status === 'processing' ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-500" :
+                                                "bg-amber-500/10 border-amber-500/20 text-amber-500"
+                                            )}>
+                                                <Layers className="w-5 h-5 lg:w-6 lg:h-6" />
                                             </div>
-                                            <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                                                <span className="uppercase font-mono">{job.type}</span>
-                                                <span>·</span>
-                                                <Film className="w-3 h-3" />{renderedF}/{totalF} frames
-                                                <span>·</span>
-                                                <span className="font-mono">{job.userId?.slice(0, 10)}…</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <h3 className="font-bold text-white text-sm lg:text-base truncate">{job.blendFileName || 'Untitled Render'}</h3>
+                                                    <Badge className={cn("text-[10px] uppercase px-1.5 py-0", STATUS_COLORS[job.status] || 'bg-gray-500/20')}>
+                                                        {job.status}
+                                                    </Badge>
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 font-medium">
+                                                    <span className="flex items-center gap-1.5 min-w-0 max-w-[150px] lg:max-w-none">
+                                                        <UserIcon className="w-3.5 h-3.5 shrink-0" />
+                                                        <span className="truncate">{(job as any).userName || job.userId?.slice(0, 10)}</span>
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5">
+                                                        <Film className="w-3.5 h-3.5 shrink-0" />
+                                                        {job.frames?.rendered?.length || 0} / {job.frames?.total || 0}
+                                                    </span>
+                                                    <span className="hidden sm:inline text-white/20">•</span>
+                                                    <span className="hidden sm:inline italic opacity-60">ID: {job.jobId}</span>
+                                                </div>
+                                                {job.status === 'processing' && (
+                                                    <Progress value={job.progress || 0} className="h-1 mt-2 w-full lg:w-48 bg-white/5" />
+                                                )}
                                             </div>
-                                            {job.status === 'processing' && (
-                                                <Progress value={progress} className="h-1 mt-1.5 w-48" />
-                                            )}
                                         </div>
 
-                                        {/* Status badge */}
-                                        <span className={`text-[10px] px-2 py-1 rounded-full border font-semibold capitalize shrink-0 ${statusCls}`}>
-                                            {job.status.replace('_', ' ')}
-                                        </span>
-
-                                        {/* Date */}
-                                        <span className="text-[11px] text-gray-600 hidden md:block shrink-0">
-                                            {new Date(job.createdAt).toLocaleDateString()}
-                                        </span>
-
-                                        {/* Actions */}
-                                        <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
-                                            {needsOK && (
-                                                <Button size="sm" onClick={(e) => handleApprove(e, job.jobId)}
-                                                    className="h-7 text-[10px] px-2.5 bg-emerald-600/80 hover:bg-emerald-600">
-                                                    <CheckCircle className="w-3 h-3 mr-1" />OK
-                                                </Button>
-                                            )}
-                                            {canCancel && (
-                                                <Button size="sm" variant="outline" onClick={(e) => handleCancel(e, job.jobId)}
-                                                    className="h-7 text-[10px] px-2.5 border-red-500/30 text-red-400 hover:bg-red-500/10">
-                                                    <Trash2 className="w-3 h-3" />
-                                                </Button>
-                                            )}
+                                        <div className="flex items-center justify-between lg:justify-end gap-6 pl-14 lg:pl-0 border-t lg:border-t-0 border-white/5 pt-3 lg:pt-0">
+                                            <div className="text-right flex lg:block items-center gap-3">
+                                                <div className="text-sm lg:text-base font-bold text-white">
+                                                    {(job.escrow?.lockedAmount || job.totalCreditsDistributed || 0).toFixed(2)} <span className="text-[10px] text-amber-500 font-bold uppercase">RNDR</span>
+                                                </div>
+                                                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                                                    {new Date(job.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                </div>
+                                            </div>
+                                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 hover:bg-white/5 border border-white/5 group/btn">
+                                                <ChevronRight className="w-4 h-4 text-gray-500 group-hover/btn:text-white transition-colors" />
+                                            </Button>
                                         </div>
-                                        <ArrowRight className="w-3.5 h-3.5 text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                                    </motion.div>
-                                )
-                            })}
+                                    </div>
+                                </motion.div>
+                            ))}
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-20 text-gray-500">

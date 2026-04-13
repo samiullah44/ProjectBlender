@@ -25,6 +25,7 @@ export class UploadService {
     parts,
     jobSettings,
     userId,
+    isAdminJob,
     projectId,
     type,
     inputType,
@@ -38,6 +39,7 @@ export class UploadService {
     parts: Array<{ PartNumber: number; ETag: string }>;
     jobSettings: any;
     userId: string;
+    isAdminJob?: boolean;
     projectId: string;
     type: 'image' | 'animation';
     inputType: 'blend' | 'archive';
@@ -81,7 +83,7 @@ export class UploadService {
       let lockTxSignature = '';
       const onchainJobId = Date.now();
 
-      if (user.role !== 'admin' && user.solanaSeed) {
+      if (!isAdminJob && user.role !== 'admin' && user.solanaSeed) {
         try {
           console.log(`[UploadService] Initiating on-chain lock for user ${userId}, amount: ${roundedCredits}`);
           lockTxSignature = await solanaService.lockPayment(
@@ -112,11 +114,12 @@ export class UploadService {
         blendFileName: filename,
         type,
         inputType,
+        isAdminJob: !!isAdminJob,
         settings: {
           ...jobSettings,
           engine,
           device,
-          creditsPerFrame: (roundedCredits / totalFrames) || 1, // DERIVED: Ensure node payout perfectly matches escrow
+          creditsPerFrame: isAdminJob ? 0 : ((roundedCredits / totalFrames) || 1), // DERIVED: Ensure node payout perfectly matches escrow
           blenderVersion: normalizeBlenderVersion(jobSettings?.blenderVersion || '4.5.0')
         },
         frames: {
@@ -133,12 +136,12 @@ export class UploadService {
         status: 'pending', // Now that payment is locked, it's ready.
         progress: 0,
         outputUrls: [],
-        estimatedCost: roundedCredits,
+        estimatedCost: isAdminJob ? 0 : roundedCredits,
         escrow: {
           onchainJobId,
           txSignature: lockTxSignature,
-          status: lockTxSignature ? 'locked' : 'none',
-          lockedAmount: roundedCredits,
+          status: isAdminJob ? 'none' : (lockTxSignature ? 'locked' : 'none'),
+          lockedAmount: isAdminJob ? 0 : roundedCredits,
           lockedAt: lockTxSignature ? new Date() : undefined
         },
         createdAt: new Date(),

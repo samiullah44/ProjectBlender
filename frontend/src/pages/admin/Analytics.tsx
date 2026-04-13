@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button'
 import { toast } from 'react-hot-toast'
 import axiosInstance from '@/lib/axios'
 import AdminLayout from '@/components/admin/AdminLayout'
+import { formatGraphDate, cn } from '@/lib/utils'
 
 // ── Types ──────────────────────────────────────────────────────────
 type Period = 'daily' | 'weekly' | 'monthly' | '3months' | 'yearly' | 'all'
@@ -88,7 +89,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null
     return (
         <div className="bg-[#18181f] border border-white/[0.08] rounded-xl p-3 text-xs shadow-2xl">
-            <p className="text-gray-400 mb-2">{label}</p>
+            <p className="text-gray-400 mb-2">{formatGraphDate(label)}</p>
             {payload.map((p: any) => (
                 <p key={p.name} style={{ color: p.color }} className="mb-0.5">
                     <span className="font-semibold">{p.name}:</span> {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
@@ -141,20 +142,21 @@ const AdminAnalytics: React.FC = () => {
 
     const headerActions = (
         <div className="flex items-center gap-2">
-            <div className="flex items-center bg-white/[0.05] border border-white/[0.08] rounded-lg p-0.5 gap-0.5">
+            <div className="hidden sm:flex items-center bg-white/[0.05] border border-white/[0.08] rounded-lg p-0.5 gap-0.5">
                 {PERIODS.map(p => (
                     <button key={p.value}
                         onClick={() => setPeriod(p.value)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${period === p.value
-                            ? 'bg-amber-500/20 text-amber-300'
-                            : 'text-gray-400 hover:text-white'}`}>
+                        className={cn(
+                            "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                            period === p.value ? "bg-amber-500/20 text-amber-300" : "text-gray-400 hover:text-white"
+                        )}>
                         {p.label}
                     </button>
                 ))}
             </div>
             <Button variant="outline" size="sm" onClick={() => fetchAnalytics(period, limit)} disabled={loading}
-                className="border-white/15 hover:bg-white/5 text-gray-300">
-                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                className="border-white/10 hover:bg-white/5 text-gray-300 h-8 lg:h-9">
+                <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
             </Button>
         </div>
     )
@@ -174,27 +176,42 @@ const AdminAnalytics: React.FC = () => {
     )
 
     return (
-        <AdminLayout title="Analytics" subtitle="Platform performance across all time ranges" actions={headerActions}>
-            {loading && !data ? (
-                <div className="flex items-center justify-center h-64">
-                    <div className="text-center">
-                        <RefreshCw className="w-8 h-8 animate-spin text-amber-400 mx-auto mb-3" />
-                        <p className="text-sm text-gray-400">Loading analytics...</p>
-                    </div>
+        <AdminLayout title="Analytics" subtitle="Platform performance metrics" actions={headerActions}>
+            <div className="space-y-4 lg:space-y-6 mt-4">
+                {/* Mobile Period Selector */}
+                <div className="sm:hidden flex items-center bg-[#111118]/60 border border-white/[0.08] rounded-xl p-1 gap-1 overflow-x-auto no-scrollbar">
+                    {PERIODS.map(p => (
+                        <button key={p.value}
+                            onClick={() => setPeriod(p.value)}
+                            className={cn(
+                                "flex-1 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
+                                period === p.value ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-sm" : "text-gray-500 hover:text-gray-300"
+                            )}>
+                            {p.label}
+                        </button>
+                    ))}
                 </div>
-            ) : (
-                <div className="space-y-6 mt-4">
 
-                    {/* ── KPI Strip ─────────────────────────────────────────── */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                        {[
-                            { label: 'Total Jobs',      value: (kpi.totalJobs || 0).toLocaleString(),     color: 'text-blue-400',    icon: Film },
-                            { label: 'Completed',       value: (kpi.completedJobs || 0).toLocaleString(), color: 'text-emerald-400', icon: CheckCircle },
-                            { label: 'Failed',          value: (kpi.failedJobs || 0).toLocaleString(),    color: 'text-red-400',     icon: XCircle },
-                            { label: 'Success Rate',    value: `${kpi.successRate || 0}%`,                color: 'text-green-400',   icon: TrendingUp },
-                            { label: 'Frames Rendered', value: (kpi.totalFramesRendered || 0).toLocaleString(), color: 'text-purple-400', icon: Cpu },
-                            { label: 'Avg Render',      value: kpi.avgRenderTimeMs ? `${(kpi.avgRenderTimeMs/60000).toFixed(1)}m` : '—', color: 'text-cyan-400', icon: Clock },
-                        ].map((s, i) => (
+                {loading && !data ? (
+                    <div className="flex items-center justify-center h-64">
+                        <div className="text-center">
+                            <RefreshCw className="w-8 h-8 animate-spin text-amber-400 mx-auto mb-3" />
+                            <p className="text-sm text-gray-400">Restoring session...</p>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-5 lg:space-y-6">
+
+                        {/* ── KPI Strip ─────────────────────────────────────────── */}
+                        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 lg:gap-4">
+                            {[
+                                { label: 'Total Jobs',      value: (kpi.totalJobs || 0).toLocaleString(),     color: 'text-blue-400',    icon: Film },
+                                { label: 'Completed',       value: (kpi.completedJobs || 0).toLocaleString(), color: 'text-emerald-400', icon: CheckCircle },
+                                { label: 'Failed',          value: (kpi.failedJobs || 0).toLocaleString(),    color: 'text-red-400',     icon: XCircle },
+                                { label: 'Success Rate',    value: `${kpi.successRate || 0}%`,                color: 'text-green-400',   icon: TrendingUp },
+                                { label: 'Frames Rendered', value: (kpi.totalFramesRendered || 0).toLocaleString(), color: 'text-purple-400', icon: Cpu },
+                                { label: 'Avg Render',      value: kpi.avgRenderTimeMs ? `${(kpi.avgRenderTimeMs/60000).toFixed(1)}m` : '—', color: 'text-cyan-400', icon: Clock },
+                            ].map((s, i) => (
                             <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                                 <MiniStat {...s} />
                             </motion.div>
@@ -214,7 +231,7 @@ const AdminAnalytics: React.FC = () => {
                                     ))}
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                                <XAxis dataKey="date" tick={{ fill: '#4b5563', fontSize: 10 }} tickFormatter={v => v.slice(5)} tickLine={false} axisLine={false} />
+                                <XAxis dataKey="date" tick={{ fill: '#4b5563', fontSize: 10 }} tickFormatter={formatGraphDate} tickLine={false} axisLine={false} />
                                 <YAxis tick={{ fill: '#4b5563', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
                                 <RTooltip content={<CustomTooltip />} />
                                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: '#9ca3af' }} />
@@ -227,32 +244,32 @@ const AdminAnalytics: React.FC = () => {
                     </Section>
 
                     {/* ── Revenue + Pie row ─────────────────────────────────── */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6">
                         {/* Revenue over time */}
                         <Section title="Revenue Over Time" sub="Completed job earnings (credits)" className="lg:col-span-2">
-                            <ResponsiveContainer width="100%" height={200}>
-                                <LineChart data={revenueOverTime} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                                    <XAxis dataKey="date" tick={{ fill: '#4b5563', fontSize: 10 }} tickFormatter={v => v.slice(5)} tickLine={false} axisLine={false} />
+                            <ResponsiveContainer width="100%" height={240}>
+                                <LineChart data={revenueOverTime} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                                    <XAxis dataKey="date" tick={{ fill: '#4b5563', fontSize: 10 }} tickFormatter={formatGraphDate} tickLine={false} axisLine={false} dy={10} />
                                     <YAxis tick={{ fill: '#4b5563', fontSize: 10 }} tickLine={false} axisLine={false} />
                                     <RTooltip content={<CustomTooltip />} />
-                                    <Line type="monotone" dataKey="revenue" stroke="#f59e0b" strokeWidth={2} dot={false} name="Revenue (credits)" />
+                                    <Line type="monotone" dataKey="revenue" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 4, fill: '#f59e0b', strokeWidth: 2, stroke: '#111118' }} name="Revenue (credits)" />
                                 </LineChart>
                             </ResponsiveContainer>
                         </Section>
 
                         {/* Job status donut */}
-                        <Section title="Job Status Breakdown" sub="Distribution for selected period">
-                            <ResponsiveContainer width="100%" height={180}>
+                        <Section title="Job Status Breakdown" sub="Status distribution">
+                            <ResponsiveContainer width="100%" height={240}>
                                 <PieChart>
-                                    <Pie data={statusPieData} cx="50%" cy="50%" innerRadius={45} outerRadius={75}
-                                        dataKey="value" nameKey="name" paddingAngle={2}>
+                                    <Pie data={statusPieData} cx="50%" cy="45%" innerRadius={60} outerRadius={85}
+                                        dataKey="value" nameKey="name" paddingAngle={4}>
                                         {statusPieData.map((entry, i) => (
                                             <Cell key={i} fill={entry.color} stroke="transparent" />
                                         ))}
                                     </Pie>
                                     <RTooltip content={<CustomTooltip />} />
-                                    <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, color: '#9ca3af' }} />
+                                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: '#9ca3af', paddingTop: 20 }} />
                                 </PieChart>
                             </ResponsiveContainer>
                         </Section>
@@ -343,8 +360,9 @@ const AdminAnalytics: React.FC = () => {
                             </ResponsiveContainer>
                         </Section>
                     </div>
-                </div>
-            )}
+                    </div>
+                )}
+            </div>
         </AdminLayout>
     )
 }

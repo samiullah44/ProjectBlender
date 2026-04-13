@@ -550,6 +550,7 @@ export class JobService {
             const query: any = {};
 
             // Apply user filtering
+            const adminView = filters.adminView;
             if (userId) {
                 if (mongoose.isValidObjectId(userId)) {
                     query.userId = new Types.ObjectId(userId);
@@ -558,8 +559,8 @@ export class JobService {
                     // To avoid CastError, we can either return empty or use a query that won't match.
                     query.userId = new Types.ObjectId(); // Guarantee no match
                 }
-            } else if (requestingUserId && requestingUserRole !== 'admin') {
-                // Non-admin users can only see their own jobs
+            } else if (requestingUserId && (requestingUserRole !== 'admin' || !adminView)) {
+                // Non-admin users (or admins outside of adminView mode) can only see their own jobs
                 if (mongoose.isValidObjectId(requestingUserId)) {
                     query.userId = new Types.ObjectId(requestingUserId);
                 } else {
@@ -896,11 +897,11 @@ export class JobService {
     }
 
     // Get job statistics
-    async getJobStats(userId?: string, role?: string): Promise<JobStats> {
+    async getJobStats(userId?: string, role?: string, adminView?: boolean): Promise<JobStats> {
         const matchStage: any = {};
 
-        // Non-admin users can only see their own stats
-        if (userId && role !== 'admin') {
+        // Non-admin users (OR admins without adminView specified) can only see their own stats
+        if (userId && (role !== 'admin' || !adminView)) {
             matchStage.userId = new Types.ObjectId(userId);
         }
 

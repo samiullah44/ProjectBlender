@@ -30,7 +30,7 @@ import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 
 // --- Data Constants ---
-const HERO_IMAGES = ["/hero.jpg", "/hero1.jpg", "/hero3.png", "/hero2.png"]
+const HERO_IMAGES = ["/hero.jpg", "/hero2.png", "/hero1.jpg", "/hero3.png"]
 const FEATURE_IMAGE_1 = "/gpu.png"
 const NETWORK_IMAGE = "/network.png"
 
@@ -142,7 +142,7 @@ const HeroSection: React.FC = () => {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-6xl mx-auto">
           <div className="mb-6 flex justify-center">
             <span className="px-4 py-1.5 rounded-full bg-[#EA7600]/10 border border-[#EA7600]/60 text-[#EA7600] font-bold text-sm tracking-widest flex items-center gap-2 backdrop-blur-xl">
-              <BlenderIcon className="w-5 h-5 object-contain" /> Blender it. Render it. Done.
+              <BlenderIcon className="w-5 h-5 object-contain" /> Blender it. Render it
             </span>
           </div>
           <div className="mb-8">
@@ -198,7 +198,8 @@ const ProjectConceptSection: React.FC = () => {
             <Badge variant="outline" className="text-purple-400 border-purple-500/30 font-mono uppercase tracking-tighter">Project Concept</Badge>
             <h2 className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-tight">
               Unleash the Power of <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-emerald-400">Cycles & Eevee Networks</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-emerald-400">Cycles & Eevee</span>
+              {" "}Networks
             </h2>
             <p className="text-gray-400 text-lg leading-relaxed">
               Built exclusively for Blender artists. We bridge the gap between 3D Studios who need massive computational power and hardware owners with idle high-end GPUs. No complex setups—just upload your packed <span className="text-white font-mono bg-white/10 px-1 py-0.5 rounded">.blend</span> project and watch the magic happen.

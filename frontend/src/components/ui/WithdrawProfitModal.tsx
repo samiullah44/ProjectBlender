@@ -170,47 +170,47 @@ export const WithdrawProfitModal: React.FC<WithdrawProfitModalProps> = ({
                         className="relative w-full max-w-lg bg-gray-950 border border-white/10 rounded-3xl shadow-[0_0_50px_-12px_rgba(245,158,11,0.3)] overflow-hidden"
                     >
                         {/* Header */}
-                        <div className="p-8 border-b border-white/5 bg-gradient-to-r from-amber-500/10 to-orange-500/10">
+                        <div className="p-5 lg:p-8 border-b border-white/5 bg-gradient-to-r from-amber-500/10 to-orange-500/10">
                             <div className="flex justify-between items-start">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center border border-amber-500/30">
-                                        <DollarSign className="w-8 h-8 text-amber-400" />
+                                <div className="flex items-start lg:items-center gap-3 lg:gap-4">
+                                    <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center border border-amber-500/30 shrink-0">
+                                        <DollarSign className="w-6 h-6 lg:w-8 lg:h-8 text-amber-400" />
                                     </div>
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-white leading-tight">Withdraw Profit</h2>
-                                        <p className="text-amber-400/70 font-medium">Available: {currentBalance.toLocaleString(undefined, { maximumFractionDigits: 6 })} Tokens</p>
+                                    <div className="min-w-0">
+                                        <h2 className="text-xl lg:text-2xl font-bold text-white leading-tight truncate">Withdraw Profit</h2>
+                                        <p className="text-xs lg:text-sm text-amber-400/80 font-bold mt-0.5">Available: {currentBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} Tokens</p>
                                     </div>
                                 </div>
                                 <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
-                                    <X className="w-6 h-6 text-gray-500" />
+                                    <X className="w-5 h-5 lg:w-6 lg:h-6 text-gray-500" />
                                 </button>
                             </div>
                         </div>
 
-                        <div className="p-8 space-y-6">
+                        <div className="p-5 lg:p-8 space-y-6">
                             {step === 1 ? (
-                                <div className="text-center py-4 space-y-6">
+                                <div className="text-center py-2 lg:py-4 space-y-6">
                                     <div className="space-y-2">
-                                        <p className="text-lg font-semibold text-white">Connect Fee Collector Wallet</p>
-                                        <p className="text-sm text-gray-400 max-w-[280px] mx-auto">
-                                            You must be the owner of the fee collector account to authorize this withdrawal.
+                                        <p className="text-lg font-bold text-white">Connect Admin Wallet</p>
+                                        <p className="text-xs lg:text-sm text-gray-500 max-w-[280px] mx-auto">
+                                            Only the authorized Fee Collector can withdraw network profits.
                                         </p>
                                     </div>
                                     
-                                    <div className="flex flex-col items-center gap-3">
-                                        <div className="p-2 rounded-lg bg-white/5 border border-white/10 font-mono text-[10px] text-gray-500">
-                                            REQUIRED: {collectorWallet}
+                                    <div className="flex flex-col items-center gap-4">
+                                        <div className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08] font-mono text-[9px] lg:text-[10px] text-gray-500 max-w-full truncate">
+                                            <span className="opacity-50">REQUIRED:</span> {collectorWallet}
                                         </div>
-                                        <div className="mt-4 scale-110">
+                                        <div className="scale-105 lg:scale-110">
                                             <WalletMultiButton />
                                         </div>
                                         {connected && (
                                             <Button 
                                                 variant="outline" 
                                                 onClick={() => setStep(2)}
-                                                className="mt-4 border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
+                                                className="mt-2 border-amber-500/20 text-amber-500 hover:bg-amber-500/10 font-bold"
                                             >
-                                                Continue with Connected Wallet
+                                                Continue Withdrawal
                                             </Button>
                                         )}
                                     </div>
@@ -237,30 +237,30 @@ export const WithdrawProfitModal: React.FC<WithdrawProfitModalProps> = ({
                                         </div>
                                     )}
 
-                                    <div className="space-y-4">
+                                    <div className="space-y-5">
                                         <div>
-                                            <label className="text-sm font-semibold text-gray-400 mb-2 block ml-1">Recipient Address</label>
+                                            <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider ml-1">Destination Address</label>
                                             <Input 
                                                 placeholder="Paste Solana Wallet Address"
                                                 value={destination}
                                                 onChange={(e) => setDestination(e.target.value)}
-                                                className="bg-white/5 border-white/10 py-6 text-white"
+                                                className="bg-white/5 border-white/10 py-5 lg:py-6 text-sm lg:text-base text-white font-medium"
                                             />
                                         </div>
 
                                         <div>
-                                            <label className="text-sm font-semibold text-gray-400 mb-2 block ml-1">Amount to Withdraw</label>
+                                            <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider ml-1">Tokens to Withdraw</label>
                                             <div className="relative">
                                                 <Input 
                                                     type="number"
                                                     placeholder="0.00"
                                                     value={amount}
                                                     onChange={(e) => setAmount(e.target.value)}
-                                                    className="bg-white/5 border-white/10 py-6 text-2xl font-bold text-white uppercase"
+                                                    className="bg-white/5 border-white/10 py-5 lg:py-6 text-xl lg:text-2xl font-bold text-white uppercase"
                                                 />
                                                 <button 
                                                     onClick={() => setAmount(currentBalance.toString())}
-                                                    className="absolute right-4 top-1/2 -translate-y-1/2 px-3 py-1 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-lg hover:bg-amber-500/30 transition-colors"
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-amber-500/10 text-amber-500 text-[10px] font-black rounded-lg hover:bg-amber-500/20 transition-all border border-amber-500/20"
                                                 >
                                                     MAX
                                                 </button>

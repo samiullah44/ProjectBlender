@@ -128,12 +128,13 @@ interface JobStore {
     projectId?: string;
     status?: string;
     page?: number;
-    limit?: number
+    limit?: number;
+    adminView?: boolean;
   }) => Promise<{ jobs: Job[]; pagination: any }>
   cancelJob: (jobId: string, cleanupS3?: boolean) => Promise<boolean>
   approveJob: (jobId: string) => Promise<boolean>
   selectFrames: (jobId: string, frames: number[]) => Promise<boolean>
-  getDashboardStats: () => Promise<{
+  getDashboardStats: (adminView?: boolean) => Promise<{
     totalJobs: number
     activeJobs: number
     processingJobs: number
@@ -177,7 +178,7 @@ interface JobStore {
   resetUploadState: () => void
 
   // Utility
-  refreshJobs: () => Promise<void>
+  refreshJobs: (adminView?: boolean) => Promise<void>
   clearError: () => void
   clearCurrentJob: () => void
 }
@@ -604,11 +605,13 @@ const jobStore = create<JobStore>((set, get) => ({
     }
   },
 
-  getDashboardStats: async () => {
+  getDashboardStats: async (adminView?: boolean) => {
     try {
       set({ isLoading: true, error: null })
 
-      const response = await axiosInstance.get('/jobs/dashboard/stats')
+      const response = await axiosInstance.get('/jobs/dashboard/stats', {
+        params: adminView ? { adminView: true } : {}
+      })
 
       set({ isLoading: false })
       return response.data.stats
@@ -701,11 +704,12 @@ const jobStore = create<JobStore>((set, get) => ({
     uploadStage: 'idle'
   }),
 
-  refreshJobs: async () => {
+  refreshJobs: async (adminView?: boolean) => {
     const { pagination } = get()
     await get().listJobs({
       limit: pagination.limit || 15,
-      page: pagination.page || 1
+      page: pagination.page || 1,
+      adminView
     })
   },
 

@@ -32,8 +32,10 @@ export const getAllNodes = async (req: Request, res: Response): Promise<void> =>
     const isAdmin = authReq.user?.role === 'admin' || authReq.user?.roles?.includes('admin');
     const userId = authReq.user?.userId;
 
-    let query = {};
-    if (!isAdmin) {
+    const adminView = req.query.adminView === 'true';
+
+    let query: any = {};
+    if (!isAdmin || !adminView) {
       if (!userId) {
         res.json({
           nodes: [],
@@ -56,7 +58,7 @@ export const getAllNodes = async (req: Request, res: Response): Promise<void> =>
 
     // BULK AGGREGATION: Get accurate historical stats for ALL nodes in the list in one query
     const bulkStatsAgg = await Job.aggregate([
-      { $match: { "frameAssignments.nodeId": { $in: nodeIds }, "frameAssignments.status": "rendered" } },
+      { $match: { "frameAssignments.nodeId": { $in: nodeIds }, "frameAssignments.status": "rendered", "isAdminJob": { $ne: true } } },
       { $unwind: "$frameAssignments" },
       { $match: { "frameAssignments.nodeId": { $in: nodeIds }, "frameAssignments.status": "rendered" } },
       {
@@ -190,7 +192,7 @@ export const getNode = async (req: Request, res: Response): Promise<void> => {
 
     // Calculate node-specific historical stats
     const nodeStatsAgg = await Job.aggregate([
-      { $match: { "frameAssignments.nodeId": nodeId, "frameAssignments.status": "rendered" } },
+      { $match: { "frameAssignments.nodeId": nodeId, "frameAssignments.status": "rendered", "isAdminJob": { $ne: true } } },
       { $unwind: "$frameAssignments" },
       { $match: { "frameAssignments.nodeId": nodeId, "frameAssignments.status": "rendered" } },
       {
@@ -251,9 +253,10 @@ export const getNodeStatistics = async (req: Request, res: Response): Promise<vo
     const authReq = req as AuthRequest;
     const isAdmin = authReq.user?.role === 'admin' || authReq.user?.roles?.includes('admin');
     const userId = authReq.user?.userId;
+    const adminView = req.query.adminView === 'true';
 
-    let query = {};
-    if (!isAdmin) {
+    let query: any = {};
+    if (!isAdmin || !adminView) {
       if (!userId) {
         res.json({
           total: 0,
@@ -277,7 +280,8 @@ export const getNodeStatistics = async (req: Request, res: Response): Promise<vo
       { 
         $match: { 
           "frameAssignments.nodeId": { $in: nodeIds },
-          "status": { $in: ["completed", "failed", "cancelled"] } // Include cancelled to show historical work
+          "status": { $in: ["completed", "failed", "cancelled"] }, // Include cancelled to show historical work
+          "isAdminJob": { $ne: true } // Exclude free admin jobs from node statistics
         } 
       },
       { $unwind: "$frameAssignments" },
@@ -396,7 +400,10 @@ export const getNodeHistory = async (req: Request, res: Response): Promise<void>
     }
 
     // Find all jobs where this node has assigned or rendered frames
-    const jobs = await Job.find({ "frameAssignments.nodeId": nodeId })
+    const jobs = await Job.find({ 
+      "frameAssignments.nodeId": nodeId,
+      "isAdminJob": { $ne: true }
+    })
       .sort({ createdAt: -1 })
       .lean(); // Use lean for faster subsequent processing
 

@@ -35,7 +35,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Check role-based access
   const userRoles = (user as any).roles || ((user as any).role ? [(user as any).role] : [])
   if (allowedRoles && !allowedRoles.some(role => userRoles.includes(role))) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to="/" replace />
   }
 
   // Render children if authenticated and authorized

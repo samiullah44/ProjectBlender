@@ -168,7 +168,9 @@ export class AuthService {
           tokenBalance: user.tokenBalance || 0,
           depositTokenAddress: user.depositTokenAddress,
           solanaSeed: user.solanaSeed,
-          isVerified: user.isVerified
+          isVerified: user.isVerified,
+          roles: user.roles || [user.role],
+          primaryRole: user.primaryRole
         }
 
       };
@@ -248,7 +250,9 @@ export class AuthService {
           depositTokenAddress: user.depositTokenAddress,
           solanaSeed: user.solanaSeed,
           isVerified: user.isVerified,
-          provider: user.provider
+          provider: user.provider,
+          roles: user.roles || [user.role],
+          primaryRole: user.primaryRole
         }
 
       };
@@ -486,7 +490,10 @@ export class AuthService {
           email: user.email,
           username: user.username,
           name: user.name,
-          preferences: user.preferences
+          preferences: user.preferences,
+          role: user.role,
+          roles: user.roles || [user.role],
+          primaryRole: user.primaryRole
         }
       };
 

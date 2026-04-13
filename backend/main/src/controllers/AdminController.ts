@@ -22,6 +22,8 @@ function getDateRange(period: string): { from: Date; to: Date } {
     case 'daily':   from.setDate(to.getDate() - 1); break;
     case 'weekly':  from.setDate(to.getDate() - 7); break;
     case 'monthly': from.setMonth(to.getMonth() - 1); break;
+    case '3months': from.setMonth(to.getMonth() - 3); break;
+    case 'yearly':  from.setFullYear(to.getFullYear() - 1); break;
     default:        from.setMonth(to.getMonth() - 1); // Default to monthly
   }
   return { from, to };

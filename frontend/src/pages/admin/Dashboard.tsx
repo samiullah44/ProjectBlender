@@ -11,6 +11,7 @@ import {
 import { AreaChart, Area, Tooltip as RTooltip, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/Progress'
 import { useNavigate as useNav } from 'react-router-dom'
 import jobStore from '@/stores/jobStore'
@@ -21,6 +22,7 @@ import { WithdrawProfitModal } from '@/components/ui/WithdrawProfitModal'
 import { UpdateConfigModal } from '@/components/ui/UpdateConfigModal'
 import axiosInstance from '@/lib/axios'
 import AdminLayout from '@/components/admin/AdminLayout'
+import { formatGraphDate } from '@/lib/utils'
 
 // ── Small stat card (Compact Version) ─────────────────────────────────────────
 const StatCard: React.FC<{
@@ -124,6 +126,7 @@ const AdminDashboard: React.FC = () => {
 
     const [platformFees, setPlatformFees] = useState<any>(null)
     const [analytics, setAnalytics] = useState<any>(null)
+    const [dashboardStats, setDashboardStats] = useState<any>(null)
     const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly')
     const [refreshing, setRefreshing] = useState(false)
     const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false)
@@ -140,10 +143,12 @@ const AdminDashboard: React.FC = () => {
     const fetchData = async (p = period) => {
         setRefreshing(true)
         try {
-            await Promise.all([
-                getDashboardStats(),
-                refreshJobs(),
+            const [statsRes] = await Promise.all([
+                getDashboardStats(true),
+                refreshJobs(true),
             ])
+            
+            setDashboardStats(statsRes)
 
             const [feesRes, analyticsRes] = await Promise.all([
                 axiosInstance.get('/admin/platform-fees'),
@@ -180,26 +185,26 @@ const AdminDashboard: React.FC = () => {
     const kpiCards = [
         {
             label: 'Total Jobs',
-            value: jobs.length.toLocaleString(),
-            sub: `${stats.processing} processing now`,
+            value: dashboardStats?.totalJobs?.toLocaleString() ?? '—',
+            sub: `${dashboardStats?.processingJobs ?? 0} processing now`,
             icon: Layers, color: 'text-blue-400', gradient: 'from-blue-500 to-cyan-500',
             onClick: () => navigate('/admin/jobs'),
         },
         {
             label: 'Completed',
-            value: stats.completed.toLocaleString(),
-            sub: kpi.successRate !== undefined ? `${kpi.successRate}% success rate` : '',
+            value: dashboardStats?.completedJobs?.toLocaleString() ?? '—',
+            sub: kpi.successRate !== undefined ? `${kpi.successRate}% success rate (7d)` : '',
             icon: CheckCircle, color: 'text-emerald-400', gradient: 'from-emerald-500 to-green-500',
         },
         {
             label: 'Failed / Cancelled',
-            value: `${stats.failed} / ${stats.cancelled}`,
-            sub: 'This session',
+            value: `${dashboardStats?.failedJobs ?? 0} / ${dashboardStats?.cancelledJobs ?? 0}`,
+            sub: 'All time',
             icon: AlertCircle, color: 'text-red-400', gradient: 'from-red-500 to-orange-500',
         },
         {
             label: 'Platform Balance',
-            value: platformFees ? `${platformFees.balance.toFixed(4)} SOL` : '—',
+            value: platformFees ? `${platformFees.balance.toFixed(4)} MRNDR` : '—',
             sub: platformFees ? `Fee: ${platformFees.platformFeeBps / 100}%` : '',
             icon: DollarSign, color: 'text-amber-400', gradient: 'from-amber-500 to-yellow-500',
             onClick: () => setIsWithdrawModalOpen(true),
@@ -221,18 +226,33 @@ const AdminDashboard: React.FC = () => {
     ]
 
     const headerActions = (
-        <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => fetchData()} disabled={refreshing} className="border-white/15 hover:bg-white/5 text-gray-300">
-                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh
+        <div className="flex items-center gap-1.5 lg:gap-2">
+            <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => fetchData()} 
+                disabled={refreshing} 
+                className="border-white/10 hover:bg-white/5 text-gray-400 h-8 lg:h-9"
+            >
+                <RefreshCw className={cn("w-3.5 h-3.5 sm:mr-1.5", refreshing && "animate-spin")} />
+                <span className="hidden sm:inline">Refresh</span>
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setIsConfigModalOpen(true)} className="border-blue-500/30 text-blue-300 hover:bg-blue-500/10">
-                <Settings className="w-3.5 h-3.5 mr-1.5" />
-                Settings
+            <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setIsConfigModalOpen(true)} 
+                className="border-blue-500/20 text-blue-400 hover:bg-blue-500/10 h-8 lg:h-9"
+            >
+                <Settings className="w-3.5 h-3.5 sm:mr-1.5" />
+                <span className="hidden sm:inline">Settings</span>
             </Button>
-            <Button size="sm" onClick={() => navigate('/admin/analytics')} className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700">
-                <BarChart3 className="w-3.5 h-3.5 mr-1.5" />
-                Analytics
+            <Button 
+                size="sm" 
+                onClick={() => navigate('/admin/analytics')} 
+                className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 h-8 lg:h-9"
+            >
+                <BarChart3 className="w-3.5 h-3.5 lg:mr-1.5" />
+                <span className="hidden lg:inline">Analytics</span>
             </Button>
         </div>
     )
@@ -240,7 +260,7 @@ const AdminDashboard: React.FC = () => {
     return (
         <AdminLayout title="Dashboard" subtitle="Platform overview and quick controls" actions={headerActions}>
             {/* KPI Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mt-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 lg:gap-4 mt-4">
                 {kpiCards.map((card, i) => (
                     <motion.div key={card.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} className="h-full">
                         <StatCard {...card} />
@@ -274,11 +294,12 @@ const AdminDashboard: React.FC = () => {
                                     <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                                 </linearGradient>
                             </defs>
-                            <XAxis dataKey="date" tick={{ fill: '#4b5563', fontSize: 10 }} tickFormatter={v => v.slice(5)} tickLine={false} axisLine={false} />
+                            <XAxis dataKey="date" tick={{ fill: '#4b5563', fontSize: 10 }} tickFormatter={formatGraphDate} tickLine={false} axisLine={false} />
                             <YAxis tick={{ fill: '#4b5563', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
                             <RTooltip
                                 contentStyle={{ background: '#18181f', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, fontSize: 12 }}
                                 labelStyle={{ color: '#9ca3af' }}
+                                labelFormatter={formatGraphDate}
                             />
                             <Area type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} fill="url(#gradTotal)" dot={false} name="Total" />
                             <Area type="monotone" dataKey="completed" stroke="#10b981" strokeWidth={2} fill="url(#gradDone)" dot={false} name="Completed" />

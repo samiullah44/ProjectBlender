@@ -321,7 +321,8 @@ export class JobController {
         startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
         endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
         search: req.query.search as string,
-        approved: req.query.approved ? req.query.approved === 'true' : undefined
+        approved: req.query.approved ? req.query.approved === 'true' : undefined,
+        adminView: req.query.adminView === 'true'
       };
 
       const pagination: PaginationOptions = {
@@ -489,7 +490,8 @@ export class JobController {
         throw new AppError('Authentication required', 401);
       }
 
-      const stats = await this.jobService.getJobStats(user.userId, user.role);
+      const adminView = req.query.adminView === 'true';
+      const stats = await this.jobService.getJobStats(user.userId, user.role, adminView);
 
       res.json({
         success: true,
