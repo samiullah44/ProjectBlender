@@ -26,7 +26,7 @@ const PrivacyPolicy = () => {
   ]
 
   return (
-    <div className="min-h-screen bg-[#030712] pt-32 pb-40 px-4 font-sans selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#050505] pt-32 pb-40 px-4 font-sans leading-relaxed selection:bg-emerald-500/30">
       <div className="max-w-4xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-20 border-b border-white/5 pb-12">
             <div>

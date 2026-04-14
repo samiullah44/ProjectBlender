@@ -42,9 +42,9 @@ const performanceFeatures = [
 ]
 
 const networkFeatures = [
-  { icon: Users, title: "Global Mesh Network", description: "GPUs across 15+ countries" },
-  { icon: Cloud, title: "Auto-scaling Power", description: "Scale from 1 to 500+ GPUs instantly" },
-  { icon: BarChart3, title: "Smart Load Balancing", description: "Optimized job distribution protocols" }
+  { icon: Users, title: "Global Mesh Network", description: "Vetted GPUs across multiple continents" },
+  { icon: Cloud, title: "Elastic Scaling", description: "On-demand power that grows with your project" },
+  { icon: BarChart3, title: "Smart Orchestration", description: "Optimized job distribution protocols" }
 ]
 
 // --- Custom Blender SVG Icons ---
@@ -218,7 +218,7 @@ const ProjectConceptSection: React.FC = () => {
                   <Network className="w-5 h-5 text-emerald-400" />
                 </div>
                 <h4 className="text-white font-semibold mb-1">Dynamic GPU Scaling</h4>
-                <p className="text-xs text-gray-500">Instantly distribute your sequence across 500+ GPUs.</p>
+                <p className="text-xs text-gray-500">Instantly distribute your sequence across our global network of nodes.</p>
               </div>
             </div>
           </motion.div>
@@ -415,7 +415,7 @@ const FeaturesSection: React.FC = () => {
                 </div>
                 <div>
                   <div className="text-sm text-gray-400 font-semibold mb-1">Compute Boost</div>
-                  <div className="text-3xl font-black text-white tracking-tighter">12.5x Faster</div>
+                  <div className="text-3xl font-black text-white tracking-tighter">Industrial Speed</div>
                 </div>
               </div>
             </motion.div>
@@ -465,7 +465,7 @@ const FeaturesSection: React.FC = () => {
 // --- Main Component ---
 const HomePage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-black text-white">
+    <div className="min-h-screen bg-[#050505] text-white">
       {/* Navigation - No changes here */}
 
       <HeroSection />

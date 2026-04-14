@@ -21,7 +21,15 @@ import {
   CreditCard,
   Cpu,
   ArrowLeftRight,
-  HardDrive
+  HardDrive,
+  Info,
+  Image,
+  Mail,
+  BookOpen,
+  Palette,
+  Network,
+  Building2,
+  Layers
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -151,13 +159,58 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
           description: 'Real-time rendering insights',
           icon: <BarChart3 className="w-4 h-4" />
         },
+        {
+          label: 'How It Works',
+          href: '/how-it-works',
+          description: 'Step-by-step render pipeline',
+          icon: <Layers className="w-4 h-4" />
+        },
       ]
     },
     {
-      label: 'How It Works',
-      href: '/how-it-works',
-      icon: <Settings className="w-4 h-4" />
-    }
+      label: 'About',
+      href: '/about',
+      icon: <Info className="w-4 h-4" />,
+      submenu: [
+        {
+          label: 'About Us',
+          href: '/about',
+          description: 'Our mission & story',
+          icon: <Info className="w-4 h-4" />
+        },
+        {
+          label: 'Contact',
+          href: '/contact',
+          description: 'Get in touch with us',
+          icon: <Mail className="w-4 h-4" />
+        },
+      ]
+    },
+    {
+      label: 'Participants',
+      href: '/participants/artists',
+      icon: <Network className="w-4 h-4" />,
+      submenu: [
+        {
+          label: 'Artists',
+          href: '/participants/artists',
+          description: 'For Blender creators',
+          icon: <Palette className="w-4 h-4" />
+        },
+        {
+          label: 'Node Providers',
+          href: '/participants/node-providers',
+          description: 'Monetize your idle GPU',
+          icon: <Server className="w-4 h-4" />
+        },
+        {
+          label: 'Compute Clients',
+          href: '/participants/compute-clients',
+          description: 'Enterprise rendering power',
+          icon: <Building2 className="w-4 h-4" />
+        },
+      ]
+    },
   ]
 
   const getModuleLinks = () => {
@@ -300,7 +353,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute left-0 mt-2 w-64 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden"
+                        className="absolute left-0 mt-2 w-72 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden"
                       >
                         <div className="py-2">
                           {item.submenu.map((subItem) => (

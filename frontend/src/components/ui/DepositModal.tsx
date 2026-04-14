@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { axiosInstance } from '@/lib/axios';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { X, CreditCard, Loader2 } from 'lucide-react';
+import { Loader2, ArrowUpRight, Wallet, Shield, CreditCard, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { toast } from 'react-hot-toast';
@@ -16,7 +17,7 @@ export const DepositModal = () => {
   const [amount, setAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
-  const { depositToAccount, fetchCreditBalance, pdaAddress } = useRenderNetwork();
+  const { depositToAccount, fetchCreditBalance, walletTokenBalance, fetchWalletTokenBalance } = useRenderNetwork();
   const { getProfile } = useAuthStore();
 
   // Track the 'connected' state to detect a new connection
@@ -26,6 +27,7 @@ export const DepositModal = () => {
     if (connected && !prevConnected && step === 1) {
       const timer = setTimeout(() => {
         setStep(2);
+        fetchWalletTokenBalance(); // Ensure balance is fresh when moving to step 2
       }, 600);
       return () => clearTimeout(timer);
     }
@@ -47,6 +49,11 @@ export const DepositModal = () => {
       return;
     }
 
+    if (Number(amount) > walletTokenBalance) {
+      toast.error(`Insufficient Balance! You only have ${walletTokenBalance} mRNDR in your wallet.`);
+      return;
+    }
+
     setIsLoading(true);
     try {
       toast.success('Initiating deposit transaction...');
@@ -60,27 +67,26 @@ export const DepositModal = () => {
           amount: parseFloat(amount)
         });
         
-        // Refresh the user profile to update the database balance (tokenBalance) in the store
+        // Refresh the user profile to update the database balance
         await getProfile();
       } catch (syncError) {
         console.error('Failed to sync with backend:', syncError);
-        // We don't block the UI here since the on-chain tx succeeded
       }
 
-      toast.success(`Successfully deposited ${amount} mRNDR! Confirmation: ${tx.slice(0, 8)}...`);
+      toast.success(`Successfully deposited ${amount} mRNDR!`);
       
-      // Delay for 2 seconds to allow the Solana RPC node to propagate the updated state
-      // before we fetch the new balance, otherwise it might fetch the old cached balance.
+      // Delay for propagation
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      await fetchCreditBalance(); // Refresh local balance instance
-      window.dispatchEvent(new Event('refresh_credit_balance')); // Refresh navbar balance
+      await fetchCreditBalance();
+      await fetchWalletTokenBalance();
+      window.dispatchEvent(new Event('refresh_credit_balance'));
       
       setIsOpen(false);
       setAmount('');
     } catch (error: any) {
       console.error(error);
-      toast.error(error?.message || 'Deposit failed. Do you have enough mRNDR?');
+      toast.error(error?.message || 'Deposit failed. Check your wallet balance.');
     } finally {
       setIsLoading(false);
     }
@@ -162,7 +168,12 @@ export const DepositModal = () => {
                   className="space-y-4"
                 >
                   <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm font-semibold text-gray-300">Step 2: Enter Amount</p>
+                    <div className="flex flex-col">
+                      <p className="text-sm font-semibold text-gray-300">Step 2: Enter Amount</p>
+                      <p className="text-[10px] text-emerald-400 font-bold mt-1 uppercase tracking-wide">
+                        Wallet Balance: {walletTokenBalance} mRNDR
+                      </p>
+                    </div>
                     <button 
                       onClick={() => setStep(1)}
                       className="text-xs text-gray-500 hover:text-gray-300 underline underline-offset-2 transition-colors"
@@ -181,26 +192,36 @@ export const DepositModal = () => {
                         className="pl-4 pr-16 py-6 text-lg bg-gray-800 border-gray-700 text-white placeholder-gray-500"
                         disabled={isLoading}
                       />
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-emerald-400">
+                      <button 
+                        onClick={() => setAmount(walletTokenBalance.toString())}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black bg-emerald-500/10 text-emerald-400 px-2.5 py-1.5 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition-all"
+                      >
                         MAX
-                      </div>
+                      </button>
                     </div>
                   </div>
 
-                  <Button
-                    onClick={handleDeposit}
-                    disabled={isLoading || !amount || Number(amount) <= 0}
-                    className="w-full py-6 text-base font-semibold bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 transition-all duration-300 shadow-lg shadow-emerald-500/20 mt-4"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-                        Confirm in Phantom...
-                      </>
-                    ) : (
-                      'Deposit to Balance'
-                    )}
-                  </Button>
+                  <div className="pt-4 space-y-4">
+                    <p className="text-[10px] text-gray-500 text-center leading-relaxed">
+                      By proceeding with this deposit, you acknowledge that you have read and agree to the 
+                      <Link to="/terms" className="text-emerald-400 hover:underline"> Terms of Service</Link> and 
+                      <Link to="/risk" className="text-emerald-400 hover:underline"> Risk Disclosure</Link>.
+                    </p>
+                    <Button
+                      onClick={handleDeposit}
+                      disabled={isLoading || !amount || Number(amount) <= 0 || Number(amount) > walletTokenBalance}
+                      className="w-full py-6 text-base font-semibold bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 transition-all duration-300 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                          Confirm in Phantom...
+                        </>
+                      ) : (
+                        Number(amount) > walletTokenBalance ? 'Insufficient Balance' : 'Deposit to Balance'
+                      )}
+                    </Button>
+                  </div>
                 </motion.div>
               )}
             </div>

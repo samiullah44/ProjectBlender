@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useAnchorWallet, useConnection } from '@solana/wallet-adapter-react';
 import { AnchorProvider, Program, BN } from '@coral-xyz/anchor';
 import type { Idl } from '@coral-xyz/anchor';
-import { PublicKey, SystemProgram } from '@solana/web3.js';
+import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
 
 import { idl, RENDER_NETWORK_PROGRAM_ID, SEED_USER_ACCOUNT } from '../idl/render_network';
@@ -151,17 +151,39 @@ export function useRenderNetwork() {
     }
   };
 
+  const [walletTokenBalance, setWalletTokenBalance] = useState<number>(0);
+
+  // Fetch the user's actual wallet token balance (ATA)
+  const fetchWalletTokenBalance = async () => {
+    if (!wallet?.publicKey || !connection) return 0;
+    try {
+      const ata = getAssociatedTokenAddressSync(mintProgramId, wallet.publicKey);
+      const balance = await connection.getTokenAccountBalance(ata);
+      const amount = Number(balance.value.uiAmount || 0);
+      setWalletTokenBalance(amount);
+      return amount;
+    } catch (e) {
+      console.log("Could not fetch wallet token balance (account might not exist)");
+      setWalletTokenBalance(0);
+      return 0;
+    }
+  };
+
   // Run automatically when the wallet connects or when a refresh event is fired
   useEffect(() => {
     fetchCreditBalance();
+    fetchWalletTokenBalance();
 
-    const handleGlobalRefresh = () => fetchCreditBalance();
+    const handleGlobalRefresh = () => {
+      fetchCreditBalance();
+      fetchWalletTokenBalance();
+    };
     window.addEventListener('refresh_credit_balance', handleGlobalRefresh);
 
     return () => {
       window.removeEventListener('refresh_credit_balance', handleGlobalRefresh);
     };
-  }, [program, user?.solanaSeed]);
+  }, [program, user?.solanaSeed, wallet?.publicKey]);
 
   // Sync the user's solanaSeed with their current wallet address
   // This is the "Professional" solution to update your identity to a new address
@@ -240,8 +262,8 @@ export function useRenderNetwork() {
     console.log("Credit PDA ATA:", pdaDepositAta.toBase58());
 
     try {
-      // 3. Build the Anchor RPC method (Pass user_id as argument)
-      const tx = await program.methods
+      // 3. Build the Anchor instruction
+      const instruction = await program.methods
         .depositToAccount(userIdPubkey, rawAmount)
         .accounts({
           userAccount: userAccountPda,
@@ -253,13 +275,24 @@ export function useRenderNetwork() {
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
         })
-        .rpc();
+        .instruction();
 
+      const { blockhash } = await connection.getLatestBlockhash();
+      const transaction = new Transaction().add(instruction);
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = wallet.publicKey;
+
+      // 4. Send via provider for proper simulation and wallet handling
+      const tx = await program.provider.sendAndConfirm!(transaction, [], {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      });
 
       console.log("Deposit Transaction successful! Signature:", tx);
       
       // Refresh balance immediately
       await fetchCreditBalance();
+      await fetchWalletTokenBalance();
       window.dispatchEvent(new Event('refresh_credit_balance'));
       
       return { tx, pdaDepositAta: pdaDepositAta.toBase58() };
@@ -304,7 +337,7 @@ export function useRenderNetwork() {
     console.log("Preparing withdraw transaction...");
     
     try {
-      const tx = await program.methods
+      const instruction = await program.methods
         .withdrawFromAccount(rawAmount)
         .accounts({
           user: wallet.publicKey,
@@ -316,7 +349,17 @@ export function useRenderNetwork() {
           systemProgram: SystemProgram.programId,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         })
-        .rpc();
+        .instruction();
+
+      const { blockhash } = await connection.getLatestBlockhash();
+      const transaction = new Transaction().add(instruction);
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = wallet.publicKey;
+
+      const tx = await program.provider.sendAndConfirm!(transaction, [], {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      });
 
       console.log("Withdraw Transaction successful! Signature:", tx);
       
@@ -324,6 +367,7 @@ export function useRenderNetwork() {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       await fetchCreditBalance();
+      await fetchWalletTokenBalance();
       window.dispatchEvent(new Event('refresh_credit_balance'));
       
       return { tx };
@@ -359,9 +403,11 @@ export function useRenderNetwork() {
     pdaAddress,
     creditedAmount,
     lockedAmount,
+    walletTokenBalance,
     isInitialized,
     isRefreshing,
     fetchCreditBalance,
+    fetchWalletTokenBalance,
     syncSolanaSeed,
     depositToAccount,
     withdrawFromAccount,

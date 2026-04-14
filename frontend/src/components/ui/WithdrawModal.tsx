@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { X, ArrowDownFromLine, Loader2 } from 'lucide-react';
+import { X, ArrowDownFromLine, Loader2, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { toast } from 'react-hot-toast';
@@ -57,17 +58,19 @@ export const WithdrawModal = () => {
       
       const { tx } = await withdrawFromAccount(parseFloat(amount));
       
-      toast.success(`Successfully withdrew ${amount} mRNDR! Confirmation: ${tx.slice(0, 8)}...`);
+      toast.success(`Successfully withdrew ${amount} mRNDR!`);
+      
+      // Delay for propagation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      await fetchCreditBalance();
+      window.dispatchEvent(new Event('refresh_credit_balance'));
       
       setIsOpen(false);
       setAmount('');
     } catch (error: any) {
       console.error(error);
-      if (error?.message?.includes('TokenAccountNotFoundError') || error?.message?.includes('Account does not exist')) {
-        toast.error('You do not have a standard Devnet USDC token account. Deposit first to initialize.');
-      } else {
-        toast.error(error?.message || 'Withdraw failed. Please ensure you have sufficient available balance.');
-      }
+      toast.error(error?.message || 'Withdraw failed. Please ensure you have sufficient available balance.');
     } finally {
       setIsLoading(false);
     }
@@ -181,20 +184,26 @@ export const WithdrawModal = () => {
                     </div>
                   </div>
 
-                  <Button
-                    onClick={handleWithdraw}
-                    disabled={isLoading || !amount || Number(amount) <= 0 || Number(amount) > availableBalance}
-                    className="w-full py-6 text-base font-semibold bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 transition-all duration-300 shadow-lg shadow-red-500/20 mt-4"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-                        Confirm in Wallet...
-                      </>
-                    ) : (
-                      'Withdraw to Wallet'
-                    )}
-                  </Button>
+                  <div className="pt-4 space-y-4">
+                    <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+                      Withdrawals are processed as on-chain transactions. By proceeding, you agree to the 
+                      <Link to="/terms" className="text-red-400 hover:underline"> Protocol Terms</Link>.
+                    </p>
+                    <Button
+                      onClick={handleWithdraw}
+                      disabled={isLoading || !amount || Number(amount) <= 0 || Number(amount) > availableBalance}
+                      className="w-full py-6 text-base font-semibold bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 transition-all duration-300 shadow-lg shadow-red-500/20 disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                          Confirm in Wallet...
+                        </>
+                      ) : (
+                        'Withdraw to Wallet'
+                      )}
+                    </Button>
+                  </div>
                 </motion.div>
               )}
             </div>

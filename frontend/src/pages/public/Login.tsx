@@ -81,7 +81,7 @@ const LoginPage: React.FC = () => {
     const oauthUrls = getOAuthUrls()
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-950 px-4 py-12">
+        <div className="min-h-screen flex items-center justify-center bg-[#050505] px-4 py-12">
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}

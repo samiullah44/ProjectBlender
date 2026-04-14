@@ -35,6 +35,14 @@ const ProfilePage = React.lazy(() => import('@/pages/public/Profile'))
 const SettingsPage = React.lazy(() => import('@/pages/public/Settings'))
 const FAQPage = React.lazy(() => import('@/pages/public/FAQ'))
 
+// New Public Pages
+const AboutUsPage = React.lazy(() => import('@/pages/public/AboutUs'))
+const ContactPage = React.lazy(() => import('@/pages/public/Contact'))
+const BlogPage = React.lazy(() => import('@/pages/public/Blog'))
+const ArtistsPage = React.lazy(() => import('@/pages/public/Artists'))
+const NodeProvidersPage = React.lazy(() => import('@/pages/public/NodeProviders'))
+const ComputeClientsPage = React.lazy(() => import('@/pages/public/ComputeClients'))
+
 // Legal Pages
 const TermsOfService = React.lazy(() => import('@/pages/public/TermsOfService'))
 const PrivacyPolicy = React.lazy(() => import('@/pages/public/PrivacyPolicy'))
@@ -249,6 +257,16 @@ function App() {
               <Route path="/how-it-works" element={<HowItWorksPage />} />
               <Route path="/faq" element={<FAQPage />} />
 
+              {/* About Pages */}
+              <Route path="/about" element={<AboutUsPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              <Route path="/blog" element={<BlogPage />} />
+
+              {/* Participant Pages */}
+              <Route path="/participants/artists" element={<ArtistsPage />} />
+              <Route path="/participants/node-providers" element={<NodeProvidersPage />} />
+              <Route path="/participants/compute-clients" element={<ComputeClientsPage />} />
+
               {/* Legal Routes */}
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
@@ -345,6 +363,10 @@ function App() {
             {/* Fallback Route */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+
+          {/* Global Modals must be inside Router for Link to work */}
+          <DepositModal />
+          <WithdrawModal />
         </Router>
       </AuthInitializer>
 
@@ -376,11 +398,6 @@ function App() {
       {import.meta.env.VITE_NODE_ENV === 'development' && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}
-
-      {/* Global Modals */}
-      <DepositModal />
-      <WithdrawModal />
-
     </QueryClientProvider>
   )
 }

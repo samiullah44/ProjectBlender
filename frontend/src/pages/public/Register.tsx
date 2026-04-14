@@ -99,7 +99,7 @@ const RegisterPage: React.FC = () => {
     const oauthUrls = getOAuthUrls()
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-950 px-4 py-12">
+        <div className="min-h-screen flex items-center justify-center bg-[#050505] px-4 py-12">
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -347,13 +347,21 @@ const RegisterPage: React.FC = () => {
                                 />
                             </div>
 
-                            <Button
-                                type="submit"
-                                className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700"
-                                disabled={isLoading}
-                            >
-                                {isLoading ? 'Creating account...' : 'Create Account'}
-                            </Button>
+                            <div className="space-y-4">
+                                <p className="text-[11px] text-gray-500 text-center leading-relaxed px-2">
+                                    By clicking Create Account, you agree to our 
+                                    <Link to="/terms" className="text-emerald-400 hover:underline mx-1">Terms of Service</Link> 
+                                    and acknowledge our 
+                                    <Link to="/privacy" className="text-emerald-400 hover:underline mx-1">Privacy Policy</Link>.
+                                </p>
+                                <Button
+                                    type="submit"
+                                    className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 py-6 text-lg font-bold shadow-lg shadow-emerald-500/20"
+                                    disabled={isLoading}
+                                >
+                                    {isLoading ? 'Creating account...' : 'Create Account'}
+                                </Button>
+                            </div>
                         </form>
 
                         <div className="mt-6 text-center text-sm">
