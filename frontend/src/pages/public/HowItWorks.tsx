@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
+import {
   UploadCloud, Scissors, Network, Play, Download, ArrowRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -62,11 +62,11 @@ const HowItWorks = () => {
 
   return (
     <div className="bg-[#0B0F19] min-h-screen text-white pt-24 pb-20 overflow-hidden">
-      
+
       {/* Hero Section */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 text-center mb-24 relative">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl aspect-square bg-indigo-500/10 blur-[150px] rounded-full pointer-events-none" />
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
           className="relative z-10 max-w-4xl mx-auto"
         >
@@ -76,19 +76,12 @@ const HowItWorks = () => {
           <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
             Experience rendering speeds 10x to 50x faster. Our seamless pipeline abstracts away the technical complexity, letting you focus entirely on your art.
           </p>
-          <Button 
-            onClick={() => window.dispatchEvent(new Event('open-waitlist'))}
-            variant="outline"
-            className="border-gray-700 hover:bg-white/5 text-white rounded-full px-8 py-6 text-lg"
-          >
-            Request Early Access
-          </Button>
         </motion.div>
       </section>
 
       {/* Interactive Timeline */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl relative">
-        
+
         {/* Vertical Line for Desktop */}
         <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-white/10 to-transparent -translate-x-1/2" />
 
@@ -96,7 +89,7 @@ const HowItWorks = () => {
           {steps.map((step, index) => {
             const isEven = index % 2 === 0;
             return (
-              <motion.div 
+              <motion.div
                 key={step.id}
                 initial={{ opacity: 0, y: 50 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -112,7 +105,7 @@ const HowItWorks = () => {
                 {/* Content Box */}
                 <div className="w-full md:w-1/2 p-4">
                   <div className={`bg-gradient-to-br ${step.color} border ${step.borderColor} backdrop-blur-sm rounded-3xl p-8 shadow-2xl relative overflow-hidden group hover:border-white/20 transition-all`}>
-                    
+
                     {/* Background glow icon */}
                     <div className="absolute -right-8 -bottom-8 opacity-5 scale-150 transform group-hover:scale-110 group-hover:opacity-10 transition-all duration-700">
                       {step.icon}
@@ -124,7 +117,7 @@ const HowItWorks = () => {
                       </div>
                       <h3 className="text-2xl font-bold">{step.title}</h3>
                     </div>
-                    
+
                     <p className="text-gray-400 text-lg leading-relaxed">
                       {step.description}
                     </p>
@@ -141,7 +134,7 @@ const HowItWorks = () => {
 
       {/* Speed Metrics & Inline CTA */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 mt-32 text-center">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
           className="inline-flex flex-col items-center p-12 bg-gray-900/50 rounded-3xl border border-white/10 w-full max-w-4xl mb-16"
         >
@@ -161,14 +154,13 @@ const HowItWorks = () => {
           <p className="text-gray-400 text-lg mb-8 max-w-xl mx-auto">
             Get early access to our exclusive beta. Experience the fastest rendering timeline you've ever seen, entirely powered by our secure distributed architecture.
           </p>
-          <Button 
+          <Button
             onClick={() => !isSubscribed && window.dispatchEvent(new Event('open-waitlist'))}
             disabled={isSubscribed}
-            className={`text-lg px-8 py-6 rounded-2xl font-bold transition-all ${
-              isSubscribed
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 cursor-not-allowed'
-                : 'bg-white text-indigo-950 hover:bg-gray-100 hover:scale-105 shadow-[0_0_30px_rgba(255,255,255,0.2)]'
-            }`}
+            className={`text-lg px-8 py-6 rounded-2xl font-bold transition-all ${isSubscribed
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 cursor-not-allowed'
+              : 'bg-white text-indigo-950 hover:bg-gray-100 hover:scale-105 shadow-[0_0_30px_rgba(255,255,255,0.2)]'
+              }`}
           >
             {isSubscribed ? "You're on the priority list!" : "Get Early Access"}
           </Button>

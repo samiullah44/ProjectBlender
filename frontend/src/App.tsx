@@ -94,7 +94,10 @@ const MainLayout = () => {
     const status = localStorage.getItem('waitlist_status')
     const dismissedAt = localStorage.getItem('waitlist_dismissed_at')
 
-    if (status === 'subscribed') return;
+    if (status === 'subscribed') {
+      setShowTopBar(true);
+      return;
+    }
 
     if (status === 'dismissed') {
       if (dismissedAt) {
@@ -160,13 +163,13 @@ const MainLayout = () => {
     if (status !== 'subscribed') {
       localStorage.setItem('waitlist_status', 'dismissed');
       localStorage.setItem('waitlist_dismissed_at', Date.now().toString());
-      setShowTopBar(true);
     }
+    setShowTopBar(true);
   };
 
   const handleSubscribe = () => {
     localStorage.setItem('waitlist_status', 'subscribed');
-    setShowTopBar(false);
+    setShowTopBar(true);
     setIsWaitlistOpen(false);
   };
 

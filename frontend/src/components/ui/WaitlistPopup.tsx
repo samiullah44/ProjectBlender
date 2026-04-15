@@ -33,6 +33,12 @@ const WaitlistPopup: React.FC<WaitlistPopupProps> = ({ isOpen, onClose, onSubscr
       return;
     }
 
+    const subscribedEmail = localStorage.getItem('waitlist_email');
+    if (email === subscribedEmail) {
+      toast.success('Email is already subscribed.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -52,8 +58,9 @@ const WaitlistPopup: React.FC<WaitlistPopupProps> = ({ isOpen, onClose, onSubscr
 
       setSuccess(true);
       toast.success(data.message || 'Successfully joined the waitlist!');
+      localStorage.setItem('waitlist_email', email);
       onSubscribe(); // Update parent state / localStorage
-      
+
       // Auto close after success
       setTimeout(() => {
         onClose();
@@ -104,7 +111,7 @@ const WaitlistPopup: React.FC<WaitlistPopupProps> = ({ isOpen, onClose, onSubscr
 
               <div className="p-8 sm:p-10">
                 {success ? (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className="flex flex-col items-center text-center py-6"
@@ -122,11 +129,11 @@ const WaitlistPopup: React.FC<WaitlistPopupProps> = ({ isOpen, onClose, onSubscr
                     <div className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-6 mx-auto">
                       Under Development
                     </div>
-                    
+
                     <h2 className="text-3xl font-bold text-white mb-4 tracking-tight">
                       Reinventing <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-emerald-400">Distributed Rendering</span>
                     </h2>
-                    
+
                     <p className="text-gray-400 mb-8 leading-relaxed">
                       We're building a high-performance network that delivers 10x faster renders at a fraction of the cost. Join the waitlist to get early access and exclusive perks.
                     </p>
@@ -143,7 +150,7 @@ const WaitlistPopup: React.FC<WaitlistPopupProps> = ({ isOpen, onClose, onSubscr
                           disabled={loading}
                         />
                       </div>
-                      
+
                       <button
                         type="submit"
                         disabled={loading}

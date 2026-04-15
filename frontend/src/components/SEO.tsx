@@ -1,7 +1,16 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 
-const SEO = ({
+interface SEOProps {
+  title?: string;
+  description: string;
+  canonical?: string;
+  ogImage?: string;
+  ogType?: string;
+  noIndex?: boolean;
+}
+
+const SEO: React.FC<SEOProps> = ({
   title,
   description,
   canonical,

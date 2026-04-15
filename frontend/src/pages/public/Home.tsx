@@ -155,17 +155,6 @@ const HeroSection: React.FC = () => {
             </motion.h1>
           </div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 1.2 }} className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-            <Link to="/client/dashboard">
-              <Button size="lg" className="group relative overflow-hidden bg-gradient-to-r from-emerald-600 via-cyan-600 to-blue-600 hover:from-emerald-700 hover:via-cyan-700 hover:to-blue-700 px-7 py-3.5 text-lg font-semibold rounded-2xl transition-all duration-300 hover:shadow-2xl hover:scale-105 active:scale-95">
-                <span className="relative z-10 flex items-center">
-                  Start Rendering
-                  <ChevronRight className="w-8 h-5 pt-1 group-hover:translate-x-1 transition-transform" />
-                </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              </Button>
-            </Link>
-          </motion.div>
         </motion.div>
       </div>
     </section>
