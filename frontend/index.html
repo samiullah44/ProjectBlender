@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/logo.png" />
@@ -11,7 +12,8 @@
 
   <!-- Primary Meta Tags (fallback — react-helmet overrides these per page) -->
   <title>RenderOnNodes – Distributed GPU Render Farm | Render Network</title>
-  <meta name="description" content="Join RenderOnNodes to contribute GPU power to the decentralized render network. Earn rewards as a node operator or submit rendering jobs at scale." />
+  <meta name="description"
+    content="Join RenderOnNodes to contribute GPU power to the decentralized render network. Earn rewards as a node operator or submit rendering jobs at scale." />
   <meta name="robots" content="index, follow" />
   <meta name="author" content="RenderOnNodes" />
   <link rel="canonical" href="https://www.renderonnodes.com/" />
@@ -21,7 +23,8 @@
   <meta property="og:url" content="https://www.renderonnodes.com/" />
   <meta property="og:site_name" content="RenderOnNodes" />
   <meta property="og:title" content="RenderOnNodes – Distributed GPU Render Farm" />
-  <meta property="og:description" content="Join RenderOnNodes to contribute GPU power to the decentralized render network. Earn rewards as a node operator or submit rendering jobs at scale." />
+  <meta property="og:description"
+    content="Join RenderOnNodes to contribute GPU power to the decentralized render network. Earn rewards as a node operator or submit rendering jobs at scale." />
   <meta property="og:image" content="https://www.renderonnodes.com/og-image.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
@@ -31,8 +34,20 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:site" content="@renderonnodes" />
   <meta name="twitter:title" content="RenderOnNodes – Distributed GPU Render Farm" />
-  <meta name="twitter:description" content="Join RenderOnNodes to contribute GPU power to the decentralized render network." />
+  <meta name="twitter:description"
+    content="Join RenderOnNodes to contribute GPU power to the decentralized render network." />
   <meta name="twitter:image" content="https://www.renderonnodes.com/og-image.jpg" />
+
+  <!-- Google Tag Manager -->
+  <script>(function (w, d, s, l, i) {
+      w[l] = w[l] || []; w[l].push({
+        'gtm.start':
+          new Date().getTime(), event: 'gtm.js'
+      }); var f = d.getElementsByTagName(s)[0],
+        j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src =
+          'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f);
+    })(window, document, 'script', 'dataLayer', 'GTM-PKMQBC3Q');</script>
+  <!-- End Google Tag Manager -->
 
   <!-- Schema.org Structured Data -->
   <script type="application/ld+json">
@@ -64,11 +79,17 @@
   </script>
 
 </head>
+
 <body>
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PKMQBC3Q" height="0" width="0"
+      style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
   <noscript>
     RenderOnNodes is a decentralized GPU render network. Please enable JavaScript to use this application.
   </noscript>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
+
 </html>

@@ -175,8 +175,10 @@ const MainLayout = () => {
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
-      <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
-      <Navbar hideWaitlist={showTopBar} />
+      <div className="sticky top-0 z-50">
+        <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
+        <Navbar hideWaitlist={showTopBar} />
+      </div>
       <main className="mx-auto flex-1 w-full">
         <React.Suspense fallback={<PageLoader />}>
           <Outlet />

@@ -249,7 +249,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
         animate={{ y: 0 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
         className={cn(
-          'sticky top-0 w-full z-50 transition-all duration-300 backdrop-blur-xl border-b',
+          'relative w-full transition-all duration-300 backdrop-blur-xl border-b',
           isProvider
             ? scrolled
               ? 'bg-[#0A0A0B]/95 border-purple-500/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)]'

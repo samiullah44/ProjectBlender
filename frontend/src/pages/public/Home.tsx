@@ -33,6 +33,8 @@ import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
 import SEO from '../../components/SEO'
 
+import IncomeCalculator from '@/components/ui/IncomeCalculator'
+
 // --- Data Constants ---
 const HERO_IMAGES = ["/hero.jpg", "/hero1.jpg", "/hero3.png", "/hero2.png"]
 const FEATURE_IMAGE_1 = "/gpu.png"
@@ -436,6 +438,42 @@ const FeaturesSection: React.FC = () => {
   )
 }
 
+const EarningsSection: React.FC = () => {
+  return (
+    <section className="py-24 relative overflow-hidden bg-black/40">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(99,102,241,0.05),transparent)] pointer-events-none" />
+      <div className="container mx-auto px-6 relative z-10">
+        <div className="text-center mb-16">
+          <Badge variant="outline" className="text-emerald-400 border-emerald-500/30 mb-4 px-4 py-1">Node Operators</Badge>
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
+            Turn Your Hardware into <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-400">Passive Income</span>
+          </h2>
+          <p className="text-gray-400 max-w-2xl mx-auto text-lg">
+            Discover your rig's monetization score and unlock your hardware's full earning capacity in the RenderOnNodes distributed ecosystem.
+          </p>
+        </div>
+        
+        <IncomeCalculator />
+        
+          <div className="mt-16 flex flex-wrap justify-center gap-12 text-center opacity-60 grayscale hover:grayscale-0 transition-all duration-700">
+            <div className="flex flex-col items-center">
+              <div className="text-2xl font-bold text-white">Any GPU</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500">Supported</div>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="text-2xl font-bold text-white">Global</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500">Mesh Access</div>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="text-2xl font-bold text-white">Instant</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500">Connectivity</div>
+            </div>
+          </div>
+      </div>
+    </section>
+  )
+}
+
 // --- Main Component ---
 const HomePage: React.FC = () => {
   return (
@@ -450,6 +488,7 @@ const HomePage: React.FC = () => {
       <HeroSection />
       <ProjectConceptSection />
       <WorkflowSection />
+      <EarningsSection />
       <DualCTASection />
       <FeaturesSection />
     </div>

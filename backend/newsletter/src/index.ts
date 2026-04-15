@@ -29,8 +29,11 @@ mongoose.connect(MONGODB_URI)
 
 // Routes
 app.post('/api/newsletter/subscribe', async (req: Request, res: Response) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ success: false, message: 'Database connecting... please try again in a moment.' });
+  }
   try {
-    const { email } = req.body;
+    const { email, role } = req.body;
 
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email is required' });
@@ -41,15 +44,21 @@ app.post('/api/newsletter/subscribe', async (req: Request, res: Response) => {
     if (existingSubscriber) {
       if (existingSubscriber.status === 'unsubscribed') {
         existingSubscriber.status = 'subscribed';
+        if (role) existingSubscriber.role = role;
         await existingSubscriber.save();
         return res.status(200).json({ success: true, message: 'Successfully resubscribed.' });
+      }
+      // Update role if changed
+      if (role && existingSubscriber.role !== role) {
+        existingSubscriber.role = role;
+        await existingSubscriber.save();
       }
       // If already subscribed, return 200 to prevent error cascades for the user, but note it
       return res.status(200).json({ success: true, message: 'Email is already subscribed.' });
     }
 
     // Create new subscriber
-    const newSubscriber = new Newsletter({ email });
+    const newSubscriber = new Newsletter({ email, role });
     await newSubscriber.save();
 
     return res.status(201).json({ success: true, message: 'Successfully subscribed to waitlist.' });
@@ -57,6 +66,19 @@ app.post('/api/newsletter/subscribe', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Newsletter Subscription Error:', error);
     return res.status(500).json({ success: false, message: 'Internal server error while subscribing.' });
+  }
+});
+
+app.get('/api/newsletter/count', async (req: Request, res: Response) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ success: false, message: 'Database connecting...', count: 0 });
+  }
+  try {
+    const count = await Newsletter.countDocuments({ status: 'subscribed' });
+    return res.status(200).json({ success: true, count });
+  } catch (error) {
+    console.error('Newsletter Count Error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error.' });
   }
 });
 
