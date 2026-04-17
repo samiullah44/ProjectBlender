@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select'
 import { useAuthStore } from '@/stores/authStore'
 import { Checkbox } from '@/components/ui/Checkbox'
+import { analytics } from '@/services/analytics'
 
 const registerSchema = z.object({
     email: z.string().email('Please enter a valid email address'),
@@ -347,6 +348,7 @@ const RegisterPage: React.FC = () => {
                                 type="submit"
                                 className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700"
                                 disabled={isLoading}
+                                onClick={() => analytics.trackClick('register_submit')}
                             >
                                 {isLoading ? 'Creating account...' : 'Create Account'}
                             </Button>

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Loader2, ArrowRight } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { axiosInstance } from '@/lib/axios';
+import { analytics } from '@/services/analytics';
 
 interface WaitlistPopupProps {
   isOpen: boolean;
@@ -25,18 +27,11 @@ const WaitlistPopup: React.FC<WaitlistPopupProps> = ({ isOpen, onClose, onSubscr
   useEffect(() => {
     const fetchCount = async () => {
       try {
-        // Use relative path for proxying or full URL if CORS is sorted
-        const response = await fetch('/api/api/newsletter/count');
-        if (response.ok) {
-          const contentType = response.headers.get("content-type");
-          if (contentType && contentType.indexOf("application/json") !== -1) {
-            const data = await response.json();
-            if (data.success) {
-              const currentTotal = 423 + (data.count || 0);
-              setSlotsTaken(currentTotal);
-              localStorage.setItem('waitlist_slots_taken_display', currentTotal.toString());
-            }
-          }
+        const response = await axiosInstance.get('/newsletter/count');
+        if (response.data.success) {
+          const currentTotal = 423 + (response.data.count || 0);
+          setSlotsTaken(currentTotal);
+          localStorage.setItem('waitlist_slots_taken_display', currentTotal.toString());
         }
       } catch (error) {
         console.error('Failed to fetch newsletter count:', error);
@@ -75,27 +70,14 @@ const WaitlistPopup: React.FC<WaitlistPopupProps> = ({ isOpen, onClose, onSubscr
     setLoading(true);
 
     try {
-      const response = await fetch('/api/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, role }),
+      analytics.trackClick('waitlist_submit', { role });
+      const response = await axiosInstance.post('/newsletter/subscribe', {
+        email, 
+        role 
       });
 
-      // Check if response is JSON before parsing
-      const contentType = response.headers.get("content-type");
-      let data;
-      if (contentType && contentType.indexOf("application/json") !== -1) {
-        data = await response.json();
-      }
-
-      if (!response.ok) {
-        throw new Error(data?.message || `Server Error (${response.status})`);
-      }
-
       setSuccess(true);
-      toast.success(data?.message || 'Successfully joined the waitlist!');
+      toast.success(response.data?.message || 'Successfully joined the waitlist!');
       
       // Update slots live
       const newSlots = slotsTaken + 1;
@@ -114,7 +96,8 @@ const WaitlistPopup: React.FC<WaitlistPopupProps> = ({ isOpen, onClose, onSubscr
       }, 3000);
     } catch (error: any) {
       console.error('Waitlist subscription error:', error);
-      toast.error(error.message || 'Failed to join waitlist. Please try again.');
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to join waitlist. Please try again.';
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }

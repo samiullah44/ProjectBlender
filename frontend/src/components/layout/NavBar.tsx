@@ -199,6 +199,14 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
         bgColor: 'bg-cyan-500/10',
         roles: ['admin']
       })
+      baseLinks.push({
+        label: 'Analytics',
+        href: '/admin/analytics',
+        icon: <BarChart3 className="w-4 h-4" />,
+        color: 'text-indigo-400',
+        bgColor: 'bg-indigo-500/10',
+        roles: ['admin']
+      })
     }
 
     const moduleLinks = baseLinks.filter(link => {

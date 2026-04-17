@@ -32,6 +32,8 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
 import SEO from '../../components/SEO'
+import { analytics } from '@/services/analytics'
+import { useScrollTracking } from '@/hooks/useAnalytics'
 
 import IncomeCalculator from '@/components/ui/IncomeCalculator'
 
@@ -282,6 +284,15 @@ const DualCTASection: React.FC = () => {
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          {/* 
+            TEMPORARY ACCESS CONTROL:
+            The handlers below intercept navigation to restricted dashboards and instead 
+            trigger the site-wide WaitlistPopup. 
+            
+            TO REVERT TO LIVE ACCESS:
+            Search for 'handleRestrictedCTA' and remove e.preventDefault() logic.
+          */}
+          
           {/* Client Path */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -299,7 +310,17 @@ const DualCTASection: React.FC = () => {
                 Connect to thousands of GPUs instantly. Upload your Blender projects and get high-quality frames rendered in a fraction of the time.
               </p>
               <div className="mt-auto pt-4 w-full">
-                <Link to="/client/dashboard" className="w-full">
+                <Link
+                  to="/client/dashboard"
+                  className="w-full"
+                  onClick={(e) => {
+                    // Start of Temporary Restriction
+                    e.preventDefault(); 
+                    analytics.trackClick('home_cta_client');
+                    window.dispatchEvent(new CustomEvent('open-waitlist'));
+                    // End of Temporary Restriction
+                  }}
+                >
                   <Button className="w-full bg-white/5 hover:bg-emerald-600 text-white border border-white/10 hover:border-emerald-500 transition-all duration-300 py-6">
                     Access Rendering Dashboard <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                   </Button>
@@ -326,7 +347,17 @@ const DualCTASection: React.FC = () => {
                 Turn your high-end GPU into a passive income stream. Join the network securely, contribute computing power, and earn credits for every frame rendered.
               </p>
               <div className="mt-auto pt-4 w-full">
-                <Link to="/apply-node-provider" className="w-full">
+                <Link
+                  to="/apply-node-provider"
+                  className="w-full"
+                  onClick={(e) => {
+                    // Start of Temporary Restriction
+                    e.preventDefault();
+                    analytics.trackClick('home_cta_provider');
+                    window.dispatchEvent(new CustomEvent('open-waitlist'));
+                    // End of Temporary Restriction
+                  }}
+                >
                   <Button className="w-full bg-white/5 hover:bg-purple-600 text-white border border-white/10 hover:border-purple-500 transition-all duration-300 py-6">
                     Become a Node Provider <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                   </Button>
@@ -476,6 +507,8 @@ const EarningsSection: React.FC = () => {
 
 // --- Main Component ---
 const HomePage: React.FC = () => {
+  useScrollTracking();
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-black text-white">
       <SEO

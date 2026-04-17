@@ -1,11 +1,11 @@
-// App.tsx
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'react-hot-toast'
-
 import { Loader2 } from 'lucide-react'
+import { analytics } from '@/services/analytics'
+import { useAnalytics } from '@/hooks/useAnalytics'
 
 // Layouts and Core Components (Keep static)
 import Navbar from '@/components/layout/NavBar'
@@ -21,31 +21,18 @@ const FeaturesPage = React.lazy(() => import('@/pages/public/Features'))
 const FeaturesGPUPage = React.lazy(() => import('@/pages/public/FeaturesGPU'))
 const FeaturesNetworkPage = React.lazy(() => import('@/pages/public/FeaturesNetwork'))
 const FeaturesAnalyticsPage = React.lazy(() => import('@/pages/public/FeaturesAnalytics'))
-// const FeaturesCostPage = React.lazy(() => import('@/pages/public/FeaturesCost'))
 const HowItWorksPage = React.lazy(() => import('@/pages/public/HowItWorks'))
-const LoginPage = React.lazy(() => import('@/pages/public/Login'))
-const RegisterPage = React.lazy(() => import('@/pages/public/Register'))
-const OAuthCallback = React.lazy(() => import('@/pages/public/OAuthCallback'))
-const VerifyEmailPage = React.lazy(() => import('@/pages/public/VerifyEmail'))
-const NotificationsPage = React.lazy(() => import('@/pages/public/Notifications'))
-
-// Lazy loaded Client Pages
-const ClientDashboard = React.lazy(() => import('@/pages/client/Dashboard'))
-const CreateJob = React.lazy(() => import('@/pages/client/CreateJob'))
-const JobDetails = React.lazy(() => import('@/pages/client/JobDetails'))
-const ApplyNodeProvider = React.lazy(() => import('@/pages/client/ApplyNodeProvider'))
-
-// Lazy loaded Node Pages
-const NodeDashboard = React.lazy(() => import('@/pages/node/Dashboard'))
-const NodeDetails = React.lazy(() => import('@/pages/node/NodeDetails'))
-const NodeSetupGuide = React.lazy(() => import('@/pages/node/NodeSetupGuide'))
 
 // Lazy loaded Admin Pages
+const AdminLogin = React.lazy(() => import('@/pages/admin/AdminLogin'))
 const AdminDashboard = React.lazy(() => import('@/pages/admin/Dashboard'))
 const AdminJobs = React.lazy(() => import('@/pages/admin/Jobs'))
 const AdminJobDetails = React.lazy(() => import('@/pages/admin/JobDetails'))
 const AdminApplications = React.lazy(() => import('@/pages/admin/Applications'))
 const AdminNodes = React.lazy(() => import('@/pages/admin/Nodes'))
+const AdminAnalytics = React.lazy(() => import('@/pages/admin/Analytics'))
+const AdminUserAnalyticsDetail = React.lazy(() => import('@/pages/admin/UserAnalyticsDetail'))
+const NodeDetails = React.lazy(() => import('@/pages/node/NodeDetails'))
 
 import { useAuthStore } from '@/stores/authStore'
 
@@ -64,7 +51,11 @@ const queryClient = new QueryClient({
 })
 
 const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { getProfile } = useAuthStore()
+  const { getProfile, user } = useAuthStore()
+
+  useEffect(() => {
+    analytics.init()
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -74,6 +65,14 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
       })
     }
   }, [getProfile])
+
+  // Sync user identity once profile is loaded
+  useEffect(() => {
+    if (user) {
+      analytics.setRole(user.role)
+      analytics.identify(user.email, user.name, user.id)
+    }
+  }, [user])
 
   return <>{children}</>
 }
@@ -205,86 +204,47 @@ const AuthLayout = () => {
   )
 }
 
+// Component that lives INSIDE <Router> so it can use useLocation
+const AnalyticsTracker = () => {
+  useAnalytics()
+  return null
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthInitializer>
         <Router>
           <ScrollToTop />
+          <AnalyticsTracker />
           <Routes>
-            {/* Auth Routes (without Navbar) */}
+            {/* Hidden Admin Login — not linked anywhere publicly */}
             <Route element={<AuthLayout />}>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/auth/callback" element={<OAuthCallback />} />
-              <Route path="/verify-email" element={<VerifyEmailPage />} />
-              {/* <Route path="/forgot-password" element={<ForgotPasswordPage />} /> */}
-              {/* <Route path="/reset-password" element={<ResetPasswordPage />} /> */}
+              <Route path="/admin/login" element={<AdminLogin />} />
+              {/* Disabled auth routes → redirect home */}
+              <Route path="/login" element={<Navigate to="/" replace />} />
+              <Route path="/register" element={<Navigate to="/" replace />} />
+              <Route path="/auth/callback" element={<Navigate to="/" replace />} />
+              <Route path="/verify-email" element={<Navigate to="/" replace />} />
             </Route>
-            {/* Public Routes with Navbar */}
+
+            {/* Public Marketing Routes with Navbar */}
             <Route element={<MainLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/features" element={<FeaturesPage />} />
               <Route path="/features/gpu" element={<FeaturesGPUPage />} />
               <Route path="/features/network" element={<FeaturesNetworkPage />} />
               <Route path="/features/analytics" element={<FeaturesAnalyticsPage />} />
-              {/* <Route path="/features/pricing" element={<FeaturesCostPage />} /> */}
               <Route path="/how-it-works" element={<HowItWorksPage />} />
-              <Route path="/apply-node-provider" element={
-                <ProtectedRoute allowedRoles={['client', 'admin']}>
-                  <ApplyNodeProvider />
-                </ProtectedRoute>
-              } />
-              <Route path="/notifications" element={
-                <ProtectedRoute allowedRoles={['client', 'admin', 'node_provider']}>
-                  <NotificationsPage />
-                </ProtectedRoute>
-              } />
-              {/* <Route path="/login" element={<LoginPage />} /> */}
-              {/* <Route path="/register" element={<RegisterPage />} /> */}
 
-              {/* Dashboard Route */}
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute allowedRoles={['client', 'admin', 'node_provider']}>
-                    <ClientDashboard />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Disabled user-facing routes → redirect home */}
+              <Route path="/dashboard" element={<Navigate to="/" replace />} />
+              <Route path="/apply-node-provider" element={<Navigate to="/" replace />} />
+              <Route path="/notifications" element={<Navigate to="/" replace />} />
+              <Route path="/client/*" element={<Navigate to="/" replace />} />
+              <Route path="/node/*" element={<Navigate to="/" replace />} />
 
-              {/* Client Routes */}
-              <Route
-                path="/client/*"
-                element={
-                  <ProtectedRoute allowedRoles={['client', 'admin']}>
-                    <Routes>
-                      <Route path="/dashboard" element={<ClientDashboard />} />
-                      <Route path="/create-job" element={<CreateJob />} />
-                      <Route path="/jobs/:jobId" element={<JobDetails />} /> {/* Add this route */}
-                      {/* <Route path="/jobs" element={<ClientJobs />} /> */}
-                      {/* <Route path="/settings" element={<ClientSettings />} /> */}
-                      {/* <Route path="/billing" element={<Billing />} /> */}
-                    </Routes>
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* Node Provider Routes */}
-              <Route
-                path="/node/*"
-                element={
-                  <ProtectedRoute allowedRoles={['node_provider', 'admin']}>
-                    <Routes>
-                      <Route path="/dashboard" element={<NodeDashboard />} />
-                      <Route path="/nodes/:nodeId" element={<NodeDetails />} />
-                      <Route path="/setup-guide" element={<NodeSetupGuide />} />
-                    </Routes>
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* Admin Routes */}
+              {/* Admin Routes — accessible only to admins */}
               <Route
                 path="/admin/*"
                 element={
@@ -296,13 +256,16 @@ function App() {
                       <Route path="/applications" element={<AdminApplications />} />
                       <Route path="/nodes" element={<AdminNodes />} />
                       <Route path="/nodes/:nodeId" element={<NodeDetails />} />
+                      <Route path="/analytics" element={<AdminAnalytics />} />
+                      <Route path="/analytics/users/:userId" element={<AdminUserAnalyticsDetail />} />
+                      <Route path="/analytics/user/:userId" element={<AdminUserAnalyticsDetail />} />
                     </Routes>
                   </ProtectedRoute>
                 }
               />
             </Route>
 
-            {/* Fallback Route */}
+            {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calculator, Zap, ArrowRight, DollarSign, Cpu, Loader2, Sparkles } from 'lucide-react';
 import { Button } from './Button';
 import { toast } from 'react-hot-toast';
+import { analytics } from '@/services/analytics';
 
 const GPU_DATA = [
   { model: 'Ultra-High End (4090/3090)', score: 'Maximum', power: '100', tier: 'Tier 1 Alpha', color: 'from-emerald-400 to-cyan-400' },
@@ -24,6 +25,7 @@ const IncomeCalculator: React.FC = () => {
   };
 
   const handleUnlockReport = () => {
+    analytics.trackClick('income_calculator_unlock_report', { gpu: selectedGpu.model, count: gpuCount });
     toast.success('Monetization reports are coming soon for Priority Beta members!', {
       icon: '🚀',
       duration: 4000

@@ -27,10 +27,9 @@ export default defineConfig({
     port: 5173,
     allowedHosts: ['www.renderonnodes.com', 'localhost'], // allow your domain and local
     proxy: {
-      '/api/api': {
-        target: 'http://127.0.0.1:5001',
+      '/api': {
+        target: 'http://127.0.0.1:3000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/api/, '/api'),
       },
     },
   }

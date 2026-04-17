@@ -4,6 +4,7 @@ import {
   UploadCloud, Scissors, Network, Play, Download, ArrowRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { analytics } from '@/services/analytics';
 
 const HowItWorks = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -155,7 +156,12 @@ const HowItWorks = () => {
             Get early access to our exclusive beta. Experience the fastest rendering timeline you've ever seen, entirely powered by our secure distributed architecture.
           </p>
           <Button
-            onClick={() => !isSubscribed && window.dispatchEvent(new Event('open-waitlist'))}
+            onClick={() => {
+              if (!isSubscribed) {
+                analytics.trackClick('get_early_access_waitlist');
+                window.dispatchEvent(new Event('open-waitlist'));
+              }
+            }}
             disabled={isSubscribed}
             className={`text-lg px-8 py-6 rounded-2xl font-bold transition-all ${isSubscribed
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 cursor-not-allowed'
