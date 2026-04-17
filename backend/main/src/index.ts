@@ -144,11 +144,22 @@ const HOST = process.env.HOST || '0.0.0.0';
 // Check Redis connection ping utility
 async function checkRedisConnection() {
   try {
-    const client = new Redis({
-      host: process.env.REDIS_HOST || '127.0.0.1',
-      port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT) : 6379,
-      password: process.env.REDIS_PASSWORD || undefined,
-      lazyConnect: true // Prevent immediate crash if down
+    const redisUrl = process.env.REDIS_URL;
+    const client = redisUrl 
+      ? new Redis(redisUrl, { 
+          lazyConnect: true,
+          tls: redisUrl.startsWith('rediss://') ? {} : undefined 
+        })
+      : new Redis({
+          host: process.env.REDIS_HOST || '127.0.0.1',
+          port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT) : 6379,
+          password: process.env.REDIS_PASSWORD || undefined,
+          lazyConnect: true
+        });
+
+    // Add error listener to prevent "Unhandled error event" from crashing the process
+    client.on('error', (err) => {
+      console.error('⚠️ Redis Client Error:', err.message);
     });
 
     await client.connect();
@@ -158,7 +169,7 @@ async function checkRedisConnection() {
     console.log('✅ Redis connected successfully');
     return true;
   } catch (err) {
-    console.error('❌ Redis connection failed. Is the server running?');
+    console.error('❌ Redis connection test failed:', err instanceof Error ? err.message : err);
     return false;
   }
 }

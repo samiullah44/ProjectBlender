@@ -19,14 +19,24 @@ const SWEEP_COOLDOWN_MS = 10000;
 
 // ── Connection config ─────────────────────────────────────────────────────────
 
-export const redisConnectionOptions: ConnectionOptions = {
-    host: process.env.REDIS_HOST || '127.0.0.1',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD || undefined,
-    db: parseInt(process.env.REDIS_DB || '0', 10),
-    enableReadyCheck: false,
-    maxRetriesPerRequest: null, // REQUIRED by BullMQ — do not remove
-};
+export const redisConnectionOptions: any = process.env.REDIS_URL
+    ? {
+        port: parseInt(new URL(process.env.REDIS_URL).port),
+        host: new URL(process.env.REDIS_URL).hostname,
+        password: decodeURIComponent(new URL(process.env.REDIS_URL).password),
+        username: new URL(process.env.REDIS_URL).username || 'default',
+        tls: process.env.REDIS_URL.startsWith('rediss://') ? {} : undefined,
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+    }
+    : {
+        host: process.env.REDIS_HOST || '127.0.0.1',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        password: process.env.REDIS_PASSWORD || undefined,
+        db: parseInt(process.env.REDIS_DB || '0', 10),
+        enableReadyCheck: false,
+        maxRetriesPerRequest: null, // REQUIRED by BullMQ — do not remove
+    };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
