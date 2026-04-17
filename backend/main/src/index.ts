@@ -133,10 +133,15 @@
 
 
 // backend/src/index.ts
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { server } from './app';
 import { connectDatabase } from './config/database';
-import { closeQueue } from './services/FrameQueueService';
-import Redis from 'ioredis';
+import { closeQueue, redis } from './services/FrameQueueService';
+
+console.log('🚀 Booting system...');
+console.log('📡 Redis URL detected:', process.env.REDIS_URL ? 'YES' : 'NO (Using localhost)');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -144,28 +149,10 @@ const HOST = process.env.HOST || '0.0.0.0';
 // Check Redis connection ping utility
 async function checkRedisConnection() {
   try {
-    const redisUrl = process.env.REDIS_URL;
-    const client = redisUrl 
-      ? new Redis(redisUrl, { 
-          lazyConnect: true,
-          tls: redisUrl.startsWith('rediss://') ? {} : undefined 
-        })
-      : new Redis({
-          host: process.env.REDIS_HOST || '127.0.0.1',
-          port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT) : 6379,
-          password: process.env.REDIS_PASSWORD || undefined,
-          lazyConnect: true
-        });
-
-    // Add error listener to prevent "Unhandled error event" from crashing the process
-    client.on('error', (err) => {
-      console.error('⚠️ Redis Client Error:', err.message);
-    });
-
-    await client.connect();
-    await client.ping();
-    await client.quit();
-
+    // Shared redis instance already handles connection and error events
+    if (redis.status === 'ready') return true;
+    
+    await redis.ping();
     console.log('✅ Redis connected successfully');
     return true;
   } catch (err) {

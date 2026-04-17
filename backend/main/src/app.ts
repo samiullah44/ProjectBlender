@@ -3,6 +3,8 @@
 import express from 'express';
 import http from 'http';
 import dotenv from 'dotenv';
+dotenv.config();
+
 import MongoStore from 'connect-mongo';
 import session from 'express-session';
 import { WebSocketService } from './services/WebSocketService';
