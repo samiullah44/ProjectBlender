@@ -7,7 +7,7 @@ dotenv.config();
 export const createCorsOptions = (): CorsOptions => ({
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     const allowedOrigins = [
-      'http://localhost:3000',
+      `http://localhost:${env.port}`,
       'http://localhost:5173',
       'http://localhost:8080',
       'https://main.d1zbjn2d2gkpde.amplifyapp.com',

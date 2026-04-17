@@ -5,10 +5,12 @@ dotenv.config();
 
 export const env = {
   // Server
-  port: parseInt(process.env.PORT || '3000', 10),
+  port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
-  backendUrl: process.env.BACKEND_URL || 'http://localhost:3000',
+  backendUrl: process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 8080}`,
+
+
 
   // Database
   mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/blendfarm',
