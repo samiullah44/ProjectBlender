@@ -108,7 +108,7 @@ const UserAnalyticsDetail: React.FC = () => {
             <div className="space-y-4">
               <div className="flex justify-between items-center py-2 border-b border-[#1e293b]">
                 <span className="text-sm text-gray-500 flex items-center gap-2"><Globe size={14} /> Location</span>
-                <span className="text-sm text-white font-medium">{user.geo?.city || 'Unknown'}, {user.geo?.country || 'Local'}</span>
+                <span className="text-sm text-white font-medium">{user.geo?.city && user.geo?.country ? `${user.geo.city}, ${user.geo.country}` : user.geo?.country || user.geo?.city || 'Location unavailable'}</span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-[#1e293b]">
                 <span className="text-sm text-gray-500 flex items-center gap-2"><Monitor size={14} /> Device</span>

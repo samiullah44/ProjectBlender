@@ -249,7 +249,7 @@ const timeAgo = (iso: string) => {
 const Analytics: React.FC = () => {
   const navigate = useNavigate();
   const [activeReport, setActiveReport] = useState<'snapshot' | 'realtime' | 'engagement' | 'demographics' | 'tech' | 'retention' | 'users' | 'flow' | 'events' | 'funnels' | 'sessions'>('snapshot');
-  const [filters, setFilters] = useState({ range: '7d' as Range, country: '', os: '', device: '', browser: '', dimension: 'Country', userId: '' });
+  const [filters, setFilters] = useState({ range: '7d' as Range, country: '', excludeCountry: '', os: '', device: '', browser: '', dimension: 'Country', userId: '' });
   const [data, setData] = useState<DashboardData | null>(null);
   const [reportData, setReportData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -293,14 +293,14 @@ const Analytics: React.FC = () => {
   const fetchUsers = useCallback(async (page: number = 1, search: string = '') => {
     try {
       setLoading(true);
-      const res = await axiosInstance.get(`/analytics/users?range=${filters.range}&country=${filters.country}&page=${page}&search=${search}`);
+      const res = await axiosInstance.get(`/analytics/users?range=${filters.range}&country=${filters.country}&excludeCountry=${filters.excludeCountry}&page=${page}&search=${search}`);
       setUsersData(res.data);
     } catch {
       setError('Failed to load users');
     } finally {
       setLoading(false);
     }
-  }, [filters.range, filters.country]);
+  }, [filters.range, filters.country, filters.excludeCountry]);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
   
@@ -397,13 +397,46 @@ const Analytics: React.FC = () => {
 
                 {/* Geography - Shown for most reports */}
                 {!['tech', 'retention'].includes(activeReport) && (
-                  <select className="an-select" value={filters.country} onChange={e => updateFilter('country', e.target.value)}>
-                    <option value="">All Countries</option>
-                    <option value="Pakistan">Pakistan</option>
-                    <option value="United States">United States</option>
-                    <option value="United Kingdom">United Kingdom</option>
-                    <option value="India">India</option>
-                  </select>
+                  <>
+                    <select className="an-select" value={filters.country} onChange={e => updateFilter('country', e.target.value)}>
+                      <option value="">All Countries</option>
+                      <optgroup label="── Include Only ──">
+                        <option value="Pakistan">Pakistan</option>
+                        <option value="India">India</option>
+                        <option value="United States">United States</option>
+                        <option value="United Kingdom">United Kingdom</option>
+                        <option value="Canada">Canada</option>
+                        <option value="Australia">Australia</option>
+                        <option value="Germany">Germany</option>
+                        <option value="France">France</option>
+                        <option value="Netherlands">Netherlands</option>
+                        <option value="Brazil">Brazil</option>
+                        <option value="Turkey">Turkey</option>
+                        <option value="Saudi Arabia">Saudi Arabia</option>
+                        <option value="UAE">UAE</option>
+                        <option value="Bangladesh">Bangladesh</option>
+                        <option value="Indonesia">Indonesia</option>
+                      </optgroup>
+                    </select>
+                    <select className="an-select" value={filters.excludeCountry} onChange={e => updateFilter('excludeCountry', e.target.value)}>
+                      <option value="">Exclude Country</option>
+                      <option value="Pakistan">Exclude Pakistan</option>
+                      <option value="India">Exclude India</option>
+                      <option value="United States">Exclude United States</option>
+                      <option value="United Kingdom">Exclude United Kingdom</option>
+                      <option value="Canada">Exclude Canada</option>
+                      <option value="Australia">Exclude Australia</option>
+                      <option value="Germany">Exclude Germany</option>
+                      <option value="France">Exclude France</option>
+                      <option value="Netherlands">Exclude Netherlands</option>
+                      <option value="Brazil">Exclude Brazil</option>
+                      <option value="Turkey">Exclude Turkey</option>
+                      <option value="Saudi Arabia">Exclude Saudi Arabia</option>
+                      <option value="UAE">Exclude UAE</option>
+                      <option value="Bangladesh">Exclude Bangladesh</option>
+                      <option value="Indonesia">Exclude Indonesia</option>
+                    </select>
+                  </>
                 )}
 
                 {/* Tech Dimensions - Specific to Tech report */}
@@ -839,7 +872,7 @@ const Analytics: React.FC = () => {
                                   >
                                     {u.userId}
                                   </td>
-                                  <td className="text-xs">{u.geo?.country}, {u.geo?.city || 'Local'}</td>
+                                  <td className="text-xs">{u.geo?.country || '—'}{u.geo?.city ? `, ${u.geo.city}` : ''}</td>
                                   <td className="font-bold">{u.totalSessions}</td>
                                   <td>{u.totalPageViews}</td>
                                   <td className="flex gap-2">

@@ -60,6 +60,15 @@ const buildFilters = (query: Record<string, any>) => {
     filter['geo.country'] = country;
     userFilter['geo.country'] = country;
   }
+  // Exclude specific countries (comma-separated list, prefixed with "!")
+  const excludeCountry = query.excludeCountry;
+  if (excludeCountry) {
+    const excluded = String(excludeCountry).split(',').map((c: string) => c.trim()).filter(Boolean);
+    if (excluded.length > 0) {
+      filter['geo.country'] = { $nin: excluded };
+      userFilter['geo.country'] = { $nin: excluded };
+    }
+  }
   if (city) {
     filter['geo.city'] = city;
     userFilter['geo.city'] = city;
@@ -123,7 +132,7 @@ export const trackBatch = async (req: Request, res: Response): Promise<void> => 
 
       // ── upsert AnalyticsUser ──────────────────────────────────
       const userUpdate: any = {
-        $set: { lastSeen: ts, ipAddress: ip, geo, device },
+        $set: { lastSeen: ts, ipAddress: ip, device },
         $setOnInsert: {
           firstSeen: ts,
           referrer: metadata?.referrer || '',
@@ -136,6 +145,9 @@ export const trackBatch = async (req: Request, res: Response): Promise<void> => 
           },
         },
       };
+
+      // Only update geo when we have a real resolved value — never overwrite with null
+      if (geo) userUpdate.$set.geo = geo;
 
       // Capture identity if sent
       if (metadata?.email) userUpdate.$set.email = metadata.email;
@@ -164,7 +176,7 @@ export const trackBatch = async (req: Request, res: Response): Promise<void> => 
           $set: { lastActive: ts },
           $setOnInsert: {
             userId, sessionId, startTime: ts, isActive: true,
-            entryPage: page, geo: { country: geo?.country, city: geo?.city },
+            entryPage: page, geo: { country: geo?.country ?? null, city: geo?.city ?? null },
             device: { type: device?.type, browser: device?.browser, os: device?.os },
             referrer: metadata?.referrer || '',
             utm: {
