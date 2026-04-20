@@ -25,11 +25,11 @@ const isPrivateIp = (ip: string): boolean => {
   );
 };
 
-const fetchWithTimeout = async (url: string, ms: number): Promise<Response> => {
+const fetchWithTimeout = async (url: string, ms: number, options: any = {}): Promise<Response> => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ms);
   try {
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, { ...options, signal: controller.signal });
     return res;
   } finally {
     clearTimeout(timeout);
@@ -40,13 +40,28 @@ export const resolveGeoFromIp = async (ip: string): Promise<GeoData | null> => {
   // Strip IPv4-mapped IPv6 prefix (e.g. "::ffff:1.2.3.4" → "1.2.3.4")
   const cleanIp = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
 
-  if (isPrivateIp(cleanIp)) return null;
+  if (isPrivateIp(cleanIp)) {
+    return {
+      country:     'Development Env',
+      countryCode: 'DEV',
+      region:      'Local',
+      city:        'localhost',
+      timezone:    'UTC',
+      isp:         'Local Network'
+    };
+  }
+
+  const headers = {
+    'User-Agent': 'RenderOnNodes-Analytics-Engine/1.0',
+    'Accept': 'application/json'
+  };
 
   // ── Primary: ip-api.com (HTTP, free, fast) ──────────────────
   try {
     const res = await fetchWithTimeout(
       `http://ip-api.com/json/${cleanIp}?fields=status,country,countryCode,region,city,lat,lon,timezone,isp`,
-      4000
+      4000,
+      { headers }
     );
     const data = await res.json() as any;
     if (data.status === 'success') {
@@ -61,7 +76,7 @@ export const resolveGeoFromIp = async (ip: string): Promise<GeoData | null> => {
         isp:         data.isp,
       };
     }
-    console.warn(`[GeoIP] ip-api.com status: ${data.status} for IP: ${cleanIp}`);
+    console.warn(`[GeoIP] ip-api.com status: ${data.status} for IP: ${cleanIp}`, data.message || '');
   } catch (err: any) {
     console.error(`[GeoIP] ip-api.com failed: ${err.message} for IP: ${cleanIp}`);
   }
@@ -70,7 +85,8 @@ export const resolveGeoFromIp = async (ip: string): Promise<GeoData | null> => {
   try {
     const res = await fetchWithTimeout(
       `https://ipapi.co/${cleanIp}/json/`,
-      4000
+      4000,
+      { headers }
     );
     const data = await res.json() as any;
     if (data && data.country_name && !data.error) {
@@ -85,7 +101,7 @@ export const resolveGeoFromIp = async (ip: string): Promise<GeoData | null> => {
         isp:         data.org,
       };
     }
-    console.warn(`[GeoIP] ipapi.co error: ${data.error || 'No country data'} for IP: ${cleanIp}`);
+    console.warn(`[GeoIP] ipapi.co error: ${data.error || data.reason || 'No country data'} for IP: ${cleanIp}`);
   } catch (err: any) {
     console.error(`[GeoIP] ipapi.co failed: ${err.message} for IP: ${cleanIp}`);
   }

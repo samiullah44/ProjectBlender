@@ -9,26 +9,30 @@ import { detectDevice } from '../utils/deviceDetect';
 // Priority: cf-connecting-ip (Cloudflare) → x-real-ip (nginx) → x-forwarded-for → req.ip
 // ─────────────────────────────────────────────
 const getIp = (req: Request): string => {
-  // Cloudflare passes the real visitor IP in this header
-  const cfIp = req.headers['cf-connecting-ip'];
+  const headers = req.headers;
+  
+  // 1. Cloudflare
+  const cfIp = headers['cf-connecting-ip'];
   if (typeof cfIp === 'string' && cfIp.trim()) return cfIp.trim();
 
-  // nginx proxy_pass with proxy_set_header X-Real-IP
-  const realIp = req.headers['x-real-ip'];
+  // 2. Nginx
+  const realIp = headers['x-real-ip'];
   if (typeof realIp === 'string' && realIp.trim()) return realIp.trim();
 
-  // Standard forwarded-for chain — take the first (original client) IP
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    const first = forwarded.split(',')[0].trim();
-    if (first) return first;
+  // 3. X-Forwarded-For (can be string or array)
+  const forwarded = headers['x-forwarded-for'];
+  if (forwarded) {
+    const forwardStr = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+    if (typeof forwardStr === 'string' && forwardStr.trim()) {
+      const parts = forwardStr.split(',');
+      const first = parts[0]?.trim();
+      if (first) return first;
+    }
   }
 
-  // Fallback to Express req.ip (populated correctly when trust proxy is set)
-  // or socket remote address
-  const expressIp = req.ip || req.socket.remoteAddress;
+  // 4. Fallback to Express req.ip (trust proxy is set in app.ts)
+  const expressIp = req.ip || (req as any).socket?.remoteAddress;
   if (typeof expressIp === 'string' && expressIp.trim()) {
-    // Clean IPv6 mapped IPv4
     return expressIp.startsWith('::ffff:') ? expressIp.slice(7) : expressIp;
   }
 
@@ -125,6 +129,16 @@ export const trackBatch = async (req: Request, res: Response): Promise<void> => 
     const geo = await resolveGeoFromIp(ip);
 
     console.log(`[Analytics] Track IP: ${ip} | Geo: ${geo ? `${geo.city || '?'}, ${geo.country}` : 'UNAVAILABLE'}`);
+
+    // Diagnostic log helper for production IP issues
+    if (ip === '127.0.0.1' || ip === '::1' || ip === '0.0.0.0') {
+      console.log('[Analytics] Local/Private IP detected. Headers for debugging:', {
+        'cf-connecting-ip': req.headers['cf-connecting-ip'],
+        'x-real-ip': req.headers['x-real-ip'],
+        'x-forwarded-for': req.headers['x-forwarded-for'],
+        'remoteAddress': req.socket.remoteAddress
+      });
+    }
 
     const device = detectDevice(ua);
 
