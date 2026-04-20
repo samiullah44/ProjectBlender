@@ -3,42 +3,50 @@
 
 interface DeviceInfo {
   type: 'desktop' | 'mobile' | 'tablet' | 'unknown';
-  os?: string;
-  browser?: string;
+  os: string;
+  browser: string;
   userAgent?: string;
   language?: string;
 }
 
 export const detectDevice = (ua: string): DeviceInfo => {
-  const info: DeviceInfo = { type: 'unknown', userAgent: ua };
-
-  if (!ua) return info;
-
-  // Device type
-  if (/tablet|ipad|playbook|silk/i.test(ua)) {
-    info.type = 'tablet';
-  } else if (/mobi|android|touch|mini|blackberry|iphone|ipod|opera mini|webos/i.test(ua)) {
-    info.type = 'mobile';
-  } else {
-    info.type = 'desktop';
+  if (!ua) {
+    return { type: 'unknown', os: 'Unknown', browser: 'Unknown', userAgent: ua };
   }
 
-  // OS
-  if (/windows/i.test(ua))          info.os = 'Windows';
-  else if (/macintosh|mac os/i.test(ua)) info.os = 'macOS';
-  else if (/linux/i.test(ua))       info.os = 'Linux';
-  else if (/android/i.test(ua))     info.os = 'Android';
-  else if (/ios|iphone|ipad/i.test(ua)) info.os = 'iOS';
-  else { info.os = 'Other'; }
+  // ── Device Type ──────────────────────────────────────────────
+  let type: DeviceInfo['type'] = 'desktop';
+  if (/tablet|ipad|playbook|silk|(android(?!.*mobile))/i.test(ua)) {
+    type = 'tablet';
+  } else if (/mobi|android|touch|mini|blackberry|iphone|ipod|opera mini|webos|windows phone/i.test(ua)) {
+    type = 'mobile';
+  }
 
-  // Browser
-  if (/edg\//i.test(ua))            info.browser = 'Edge';
-  else if (/chrome/i.test(ua))      info.browser = 'Chrome';
-  else if (/firefox/i.test(ua))     info.browser = 'Firefox';
-  else if (/safari/i.test(ua))      info.browser = 'Safari';
-  else if (/opera|opr\//i.test(ua)) info.browser = 'Opera';
-  else if (/msie|trident/i.test(ua)) info.browser = 'IE';
-  else { info.browser = 'Other'; }
+  // ── OS Detection ─────────────────────────────────────────────
+  // Order matters: more specific must come before generic
+  let os = 'Unknown';
+  if (/windows phone/i.test(ua))              os = 'Windows Phone';
+  else if (/windows/i.test(ua))              os = 'Windows';
+  else if (/cros/i.test(ua))                 os = 'ChromeOS';
+  else if (/iphone/i.test(ua))               os = 'iOS';
+  else if (/ipad/i.test(ua))                 os = 'iPadOS';
+  else if (/macintosh|mac os/i.test(ua))     os = 'macOS';
+  else if (/android/i.test(ua))              os = 'Android';
+  else if (/linux/i.test(ua))                os = 'Linux';
+  else if (/blackberry/i.test(ua))           os = 'BlackBerry';
 
-  return info;
+  // ── Browser Detection ────────────────────────────────────────
+  // Order matters: Edge/Brave/Samsung must be checked before Chrome/Safari
+  let browser = 'Unknown';
+  if (/edg\//i.test(ua))                     browser = 'Edge';
+  else if (/brave/i.test(ua))                browser = 'Brave';
+  else if (/samsungbrowser/i.test(ua))       browser = 'Samsung Browser';
+  else if (/opr\/|opera/i.test(ua))          browser = 'Opera';
+  else if (/msie|trident/i.test(ua))         browser = 'Internet Explorer';
+  else if (/firefox|fxios/i.test(ua))        browser = 'Firefox';
+  else if (/chrome|crios/i.test(ua))         browser = 'Chrome';
+  else if (/safari/i.test(ua))               browser = 'Safari';
+  else if (/curl|wget|postman|insomnia/i.test(ua)) browser = 'Bot/Tool';
+
+  return { type, os, browser, userAgent: ua };
 };

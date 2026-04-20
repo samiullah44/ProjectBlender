@@ -210,7 +210,9 @@ interface DashboardData {
     totalUsers: number;
     newUsers: number;
     activeUsers: number;
-    avgEngagementTime: number;
+    bounceRate: number;
+    waitlistConversions: number;
+    waitlistConversionRate: number;
     sessions: number;
     viewsPerUser: number;
   };
@@ -520,24 +522,24 @@ const Analytics: React.FC = () => {
                          </div>
                       </div>
                       <div className="an-ga-card">
-                         <div className="an-ga-header">Conversion Rate</div>
-                         <div className="an-ga-sub">Waitlist / Signups vs Visitors</div>
-                         <div className="an-ga-val text-emerald-400">
-                           {data.kpi.totalUsers > 0 ? ((data.reports?.geo?.[0]?.count /* temporary stat hook until converted */ || 10) / data.kpi.totalUsers * 100).toFixed(1) : 0}%
-                         </div>
-                         <div className="an-ga-foot">Funnel conversion</div>
+                         <div className="an-ga-header">Waitlist Signups</div>
+                         <div className="an-ga-sub">Completed form submissions</div>
+                         <div className="an-ga-val text-emerald-400">{data.kpi.waitlistConversions ?? 0}</div>
+                         <div className="an-ga-foot">{data.kpi.waitlistConversionRate ?? 0}% of visitors signed up</div>
                       </div>
                       <div className="an-ga-card">
                          <div className="an-ga-header">New Users</div>
                          <div className="an-ga-sub">Visitors in {filters.range}</div>
                          <div className="an-ga-val">{data.kpi.newUsers}</div>
-                         <div className="an-ga-foot">GA-style aggregation</div>
+                         <div className="an-ga-foot">First-time visitors</div>
                       </div>
                       <div className="an-ga-card">
-                         <div className="an-ga-header">Avg. Engagement</div>
-                         <div className="an-ga-sub">Time per session</div>
-                         <div className="an-ga-val">{data.kpi.avgEngagementTime >= 60 ? `${Math.floor(data.kpi.avgEngagementTime / 60)}m ${data.kpi.avgEngagementTime % 60}s` : `${data.kpi.avgEngagementTime}s`}</div>
-                         <div className="an-ga-foot">Heartbeat driven</div>
+                         <div className="an-ga-header">Engagement Score</div>
+                         <div className="an-ga-sub">Sessions exploring multiple pages</div>
+                         <div className={`an-ga-val ${(100 - (data.kpi.bounceRate ?? 0)) >= 70 ? 'text-emerald-400' : (100 - (data.kpi.bounceRate ?? 0)) >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
+                           {100 - (data.kpi.bounceRate ?? 0)}%
+                         </div>
+                         <div className="an-ga-foot">{(100 - (data.kpi.bounceRate ?? 0)) >= 70 ? 'Strong — visitors are exploring' : (100 - (data.kpi.bounceRate ?? 0)) >= 40 ? 'Average engagement' : 'Low — most visitors leaving quickly'}</div>
                       </div>
                       <div className="an-ga-card">
                          <div className="an-ga-header">Views per User</div>

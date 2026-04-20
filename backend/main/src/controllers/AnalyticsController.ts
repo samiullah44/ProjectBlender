@@ -366,16 +366,21 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
       { $sort: { users: -1 } },
     ]);
 
-    // ── 9. Avg session duration ───────────────────────────────────
-    const sessionMetrics = await AnalyticsSession.aggregate([
-      { $match: { ...filter, duration: { $exists: true, $gt: 0 } } },
-      { $group: {
-          _id: null,
-          avgDuration:       { $avg: '$duration' },
-          avgPagesPerSession: { $avg: '$pageViews' },
-        },
-      },
+    // ── 9. Bounce rate — sessions with only 1 page view ──────────
+    const [totalSessionsForBounce, bouncedSessions] = await Promise.all([
+      AnalyticsSession.countDocuments(since ? { startTime: { $gte: since } } : {}),
+      AnalyticsSession.countDocuments({
+        ...(since ? { startTime: { $gte: since } } : {}),
+        $or: [
+          { pageViews: { $lte: 1 } },
+          { pageViews: { $exists: false } },
+          { pageViews: 0 },
+        ],
+      }),
     ]);
+    const bounceRate = totalSessionsForBounce > 0
+      ? Math.round((bouncedSessions / totalSessionsForBounce) * 100)
+      : 0;
 
     // ── 10. Live active users (last 5 min) ─────────────────────────
     const liveUsers = await AnalyticsSession.find({
@@ -391,13 +396,28 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
       { $group: { _id: '$metadata.button', count: { $sum: 1 } } }
     ]);
 
+    // ── 11. Waitlist conversion rate ──────────────────────────────
+    // Use only timestamp filter — not page filter — since button clicks can be on any page
+    const waitlistFilter: any = {};
+    if (since) waitlistFilter.timestamp = { $gte: since };
+    const waitlistConversions = await AnalyticsEvent.countDocuments({
+      ...waitlistFilter,
+      eventType: 'BUTTON_CLICK',
+      'metadata.button': { $in: ['waitlist_submit'] },
+    });
+    const waitlistConversionRate = totalUsers > 0
+      ? parseFloat(((waitlistConversions / totalUsers) * 100).toFixed(1))
+      : 0;
+
     res.json({
       conversions: conversions.reduce((acc: any, c: any) => ({ ...acc, [c._id]: c.count }), {}),
       kpi: {
         totalUsers,
         newUsers,
         activeUsers,
-        avgEngagementTime: Math.round(sessionMetrics[0]?.avgDuration || 0),
+        bounceRate,
+        waitlistConversions,
+        waitlistConversionRate,
         sessions: totalSessions,
         viewsPerUser: totalUsers > 0 ? parseFloat((totalPageViews / totalUsers).toFixed(1)) : 0,
       },
@@ -704,15 +724,15 @@ export const getReportData = async (req: Request, res: Response): Promise<void> 
       const [os, device, browser] = await Promise.all([
         AnalyticsUser.aggregate([
           { $match: userFilter },
-          { $group: { _id: '$device.os', count: { $sum: 1 } } }
+          { $group: { _id: { $ifNull: ['$device.os', 'Unknown'] }, count: { $sum: 1 } } }
         ]),
         AnalyticsUser.aggregate([
           { $match: userFilter },
-          { $group: { _id: '$device.type', count: { $sum: 1 } } }
+          { $group: { _id: { $ifNull: ['$device.type', 'Unknown'] }, count: { $sum: 1 } } }
         ]),
         AnalyticsUser.aggregate([
           { $match: userFilter },
-          { $group: { _id: '$device.browser', count: { $sum: 1 } } }
+          { $group: { _id: { $ifNull: ['$device.browser', 'Unknown'] }, count: { $sum: 1 } } }
         ])
       ]);
       report = { os, device, browser };
