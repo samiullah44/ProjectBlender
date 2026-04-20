@@ -34,7 +34,7 @@ async function backfillGeo() {
 
   // Find users that have an IP but missing/bad geo
   const query = {
-    ipAddress: { $exists: true, $ne: null, $ne: '' },
+    ipAddress: { $exists: true, $nin: [null, ''] },
     $or: [
       { 'geo.country': { $exists: false } },
       { 'geo.country': null },
@@ -103,7 +103,10 @@ async function backfillGeo() {
       await sleep(DELAY_MS);
     }
 
-    lastId = batch[batch.length - 1]._id as mongoose.Types.ObjectId;
+    const lastItem = batch[batch.length - 1];
+    if (lastItem) {
+      lastId = lastItem._id as mongoose.Types.ObjectId;
+    }
 
     console.log(`\n--- Batch done. Progress: ${processed}/${total} ---\n`);
   }
