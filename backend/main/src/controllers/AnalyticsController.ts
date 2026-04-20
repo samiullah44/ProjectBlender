@@ -25,7 +25,7 @@ const getIp = (req: Request): string => {
     const forwardStr = Array.isArray(forwarded) ? forwarded[0] : forwarded;
     if (typeof forwardStr === 'string' && forwardStr.trim()) {
       const parts = forwardStr.split(',');
-      const first = parts[0]?.trim();
+      const first = (parts[0] || '').trim();
       if (first) return first;
     }
   }
@@ -560,6 +560,21 @@ export const getPageFlow = async (req: Request, res: Response): Promise<void> =>
     console.error('[Analytics] getPageFlow error:', err);
     res.status(500).json({ error: 'Failed to get page flow' });
   }
+};
+
+// ─────────────────────────────────────────────
+// GET /api/analytics/debug-ip
+// Returns what the server sees for debugging IP headers
+// ─────────────────────────────────────────────
+export const debugIp = async (req: Request, res: Response): Promise<void> => {
+  const ip = getIp(req);
+  res.json({
+    detectedIp: ip,
+    headers: req.headers,
+    trustProxy: req.app.get('trust proxy'),
+    remoteAddress: req.socket.remoteAddress,
+    isLocal: ip === '127.0.0.1' || ip === '::1'
+  });
 };
 // ─────────────────────────────────────────────
 // GET /api/analytics/reports

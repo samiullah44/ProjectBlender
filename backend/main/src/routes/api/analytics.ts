@@ -8,6 +8,7 @@ import {
   getRealtime,
   getPageFlow,
   getReportData,
+  debugIp,
 } from '../../controllers/AnalyticsController';
 
 const router = Router();
@@ -37,5 +38,8 @@ router.get('/users', getUsers);
 
 // GET /api/analytics/users/:userId/activity?range=30d
 router.get('/users/:userId/activity', getUserActivity);
+
+// GET /api/analytics/debug-ip
+router.get('/debug-ip', debugIp);
 
 export default router;
