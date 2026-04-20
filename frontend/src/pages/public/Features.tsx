@@ -5,6 +5,7 @@ import {
   Cpu, Globe, Layers, Lock, MonitorPlay, Box, FileImage
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { analytics } from '@/services/analytics';
 
 const Features = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -32,6 +33,7 @@ const Features = () => {
   };
 
   const handleJoinWaitlist = () => {
+    analytics.trackClick('join_waitlist_button');
     window.dispatchEvent(new Event('open-waitlist'));
   };
 

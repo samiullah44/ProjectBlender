@@ -32,6 +32,10 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+// Trust proxy — required when deployed behind nginx/Cloudflare/load balancers
+// so req.ip and X-Forwarded-For headers contain the real client IP
+app.set('trust proxy', true);
+
 // Use your CORS middleware
 app.use(corsMiddleware);
 

@@ -16,8 +16,16 @@ interface GeoData {
 const localIps = new Set(['127.0.0.1', '::1', '0.0.0.0', 'localhost']);
 
 export const resolveGeoFromIp = async (ip: string): Promise<GeoData | null> => {
-  if (localIps.has(ip) || ip.startsWith('192.168.') || ip.startsWith('10.')) {
-    return { country: 'Development Env', countryCode: 'DEV', city: 'Localhost' };
+  // Strip IPv4-mapped IPv6 prefix (e.g. "::ffff:192.168.1.1" → "192.168.1.1")
+  const cleanIp = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+
+  if (
+    localIps.has(cleanIp) ||
+    cleanIp.startsWith('192.168.') ||
+    cleanIp.startsWith('10.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(cleanIp)  // 172.16.0.0 – 172.31.255.255
+  ) {
+    return null;
   }
 
   try {
@@ -25,7 +33,7 @@ export const resolveGeoFromIp = async (ip: string): Promise<GeoData | null> => {
     const timeout = setTimeout(() => controller.abort(), 2000);
     
     const response = await fetch(
-      `http://ip-api.com/json/${ip}?fields=status,country,countryCode,region,city,lat,lon,timezone,isp`,
+      `http://ip-api.com/json/${cleanIp}?fields=status,country,countryCode,region,city,lat,lon,timezone,isp`,
       { signal: controller.signal }
     );
     clearTimeout(timeout);

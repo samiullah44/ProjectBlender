@@ -29,6 +29,7 @@ export const detectDevice = (ua: string): DeviceInfo => {
   else if (/linux/i.test(ua))       info.os = 'Linux';
   else if (/android/i.test(ua))     info.os = 'Android';
   else if (/ios|iphone|ipad/i.test(ua)) info.os = 'iOS';
+  else { info.os = 'Other'; }
 
   // Browser
   if (/edg\//i.test(ua))            info.browser = 'Edge';
@@ -37,6 +38,7 @@ export const detectDevice = (ua: string): DeviceInfo => {
   else if (/safari/i.test(ua))      info.browser = 'Safari';
   else if (/opera|opr\//i.test(ua)) info.browser = 'Opera';
   else if (/msie|trident/i.test(ua)) info.browser = 'IE';
+  else { info.browser = 'Other'; }
 
   return info;
 };

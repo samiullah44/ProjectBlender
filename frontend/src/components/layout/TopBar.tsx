@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Sparkles } from 'lucide-react';
+import { analytics } from '@/services/analytics';
 
 interface TopBarProps {
   isVisible: boolean;
@@ -23,7 +24,7 @@ const TopBar: React.FC<TopBarProps> = ({ isVisible, onReopen }) => {
               We're building a high-performance render network.
             </span>
             <button
-              onClick={onReopen}
+              onClick={() => { analytics.trackClick('join_waitlist_topbar'); onReopen(); }}
               className="text-white text-sm font-bold bg-white/10 hover:bg-white/20 transition-colors px-3 py-1 rounded-full flex items-center gap-1.5 whitespace-nowrap"
             >
               Join the Waitlist

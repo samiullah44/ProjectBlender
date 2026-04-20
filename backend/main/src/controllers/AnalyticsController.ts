@@ -6,14 +6,26 @@ import { detectDevice } from '../utils/deviceDetect';
 
 // ─────────────────────────────────────────────
 // Helper: get IP from request (handles proxies)
+// Priority: cf-connecting-ip (Cloudflare) → x-real-ip (nginx) → x-forwarded-for → req.ip
 // ─────────────────────────────────────────────
 const getIp = (req: Request): string => {
+  // Cloudflare passes the real visitor IP in this header
+  const cfIp = req.headers['cf-connecting-ip'];
+  if (typeof cfIp === 'string' && cfIp.trim()) return cfIp.trim();
+
+  // nginx proxy_pass with proxy_set_header X-Real-IP
+  const realIp = req.headers['x-real-ip'];
+  if (typeof realIp === 'string' && realIp.trim()) return realIp.trim();
+
+  // Standard forwarded-for chain — take the first (original client) IP
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string') {
     const first = forwarded.split(',')[0];
-    return first ? first.trim() : '0.0.0.0';
+    if (first && first.trim()) return first.trim();
   }
-  return req.socket.remoteAddress || '0.0.0.0';
+
+  // Express req.ip (populated correctly when trust proxy is set)
+  return req.ip || req.socket.remoteAddress || '0.0.0.0';
 };
 
 // ─────────────────────────────────────────────
@@ -337,9 +349,9 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
     }).select('userId entryPage startTime geo device').limit(50).lean();
 
     // ── 11. Conversion Clicks ──────────────────────────────────────
-    const conversionKeys = ['waitlist_submit', 'get_early_access_waitlist', 'home_cta_client', 'home_cta_provider', 'register_submit'];
+    const conversionKeys = ['waitlist_submit', 'get_early_access_waitlist', 'home_cta_client', 'home_cta_provider', 'register_submit', 'join_waitlist_button', 'join_waitlist_topbar'];
     const conversions = await AnalyticsEvent.aggregate([
-      { $match: { ...filter, type: 'BUTTON_CLICK', 'metadata.button': { $in: conversionKeys } } },
+      { $match: { ...filter, eventType: 'BUTTON_CLICK', 'metadata.button': { $in: conversionKeys } } },
       { $group: { _id: '$metadata.button', count: { $sum: 1 } } }
     ]);
 
@@ -609,6 +621,7 @@ export const getReportData = async (req: Request, res: Response): Promise<void> 
       }
 
       const advancedGeoAggregation = (field: any): any[] => [
+        { $match: { 'geo.country': { $exists: true, $nin: [null, 'Development Env', 'DEV'] } } },
         { $match: userFilter },
         { $group: { 
             _id: field, 

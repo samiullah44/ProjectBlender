@@ -227,6 +227,9 @@ interface DashboardData {
     home_cta_client?: number;
     home_cta_provider?: number;
     register_submit?: number;
+    waitlist_submit?: number;
+    join_waitlist_button?: number;
+    join_waitlist_topbar?: number;
   };
 }
 
@@ -303,10 +306,13 @@ const Analytics: React.FC = () => {
   
   useEffect(() => { 
     if (activeReport !== 'snapshot' && activeReport !== 'realtime' && activeReport !== 'users') {
-      // Map frontend state 'pages' -> backend 'engagement', 'funnels' -> 'funnel'
+      // Map frontend state to backend report types
       let reqType: string = activeReport;
       if (activeReport === 'funnels') reqType = 'funnel';
-      if (activeReport === 'engagement') reqType = 'engagement'; // we might rename this to "pages" later
+      if (activeReport === 'engagement') reqType = 'engagement';
+      if (activeReport === 'tech') reqType = 'dimensions';
+      if (activeReport === 'events') reqType = 'engagement';
+      if (activeReport === 'flow') reqType = 'flow';
       fetchReport(reqType);
     } else if (activeReport === 'users') {
       fetchUsers();
@@ -321,13 +327,6 @@ const Analytics: React.FC = () => {
 
   const updateFilter = (key: string, val: string) => {
     setFilters(prev => ({ ...prev, [key]: val }));
-    if (activeReport === 'users') {
-      fetchUsers(1);
-    } else if (activeReport !== 'snapshot' && activeReport !== 'realtime') {
-      let reqType: string = activeReport;
-      if (activeReport === 'funnels') reqType = 'funnel';
-      fetchReport(reqType);
-    }
   };
 
   const drillToUserSessions = (uId: string) => {
@@ -375,13 +374,13 @@ const Analytics: React.FC = () => {
           <div className={`an-side-item ${activeReport === 'users' ? 'active' : ''}`} onClick={() => setActiveReport('users')}><Users size={18} /> Users</div>
           <div className={`an-side-item ${activeReport === 'sessions' ? 'active' : ''}`} onClick={() => setActiveReport('sessions')}><Clock size={18} /> Sessions</div>
           <div className={`an-side-item ${activeReport === 'demographics' ? 'active' : ''}`} onClick={() => setActiveReport('demographics')}><Globe size={18} /> Demographics</div>
-          <div className={`an-side-item ${activeReport === 'tech' ? 'active' : ''}`} onClick={() => { setActiveReport('tech'); fetchReport('dimensions'); }}><Smartphone size={18} /> Technology</div>
+          <div className={`an-side-item ${activeReport === 'tech' ? 'active' : ''}`} onClick={() => setActiveReport('tech')}><Smartphone size={18} /> Technology</div>
 
           <div className="an-side-group">Behavior</div>
           <div className={`an-side-item ${activeReport === 'engagement' ? 'active' : ''}`} onClick={() => setActiveReport('engagement')}><BarChart2 size={18} /> Pages</div>
-          <div className={`an-side-item ${activeReport === 'events' ? 'active' : ''}`} onClick={() => { setActiveReport('events'); fetchReport('engagement'); }}><MousePointer size={18} /> Events</div>
+          <div className={`an-side-item ${activeReport === 'events' ? 'active' : ''}`} onClick={() => setActiveReport('events')}><MousePointer size={18} /> Events</div>
           <div className={`an-side-item ${activeReport === 'funnels' ? 'active' : ''}`} onClick={() => setActiveReport('funnels')}><Filter size={18} /> Funnels</div>
-          <div className={`an-side-item ${activeReport === 'flow' ? 'active' : ''}`} onClick={() => { setActiveReport('flow'); fetchReport('flow'); }}><TrendingUp size={18} /> Flow</div>
+          <div className={`an-side-item ${activeReport === 'flow' ? 'active' : ''}`} onClick={() => setActiveReport('flow')}><TrendingUp size={18} /> Flow</div>
           <div className={`an-side-item ${activeReport === 'retention' ? 'active' : ''}`} onClick={() => setActiveReport('retention')}><RefreshCw size={18} /> Retention</div>
         </div>
 
