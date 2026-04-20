@@ -19,13 +19,20 @@ const getIp = (req: Request): string => {
 
   // Standard forwarded-for chain — take the first (original client) IP
   const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') {
-    const first = forwarded.split(',')[0];
-    if (first && first.trim()) return first.trim();
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    const first = forwarded.split(',')[0].trim();
+    if (first) return first;
   }
 
-  // Express req.ip (populated correctly when trust proxy is set)
-  return req.ip || req.socket.remoteAddress || '0.0.0.0';
+  // Fallback to Express req.ip (populated correctly when trust proxy is set)
+  // or socket remote address
+  const expressIp = req.ip || req.socket.remoteAddress;
+  if (typeof expressIp === 'string' && expressIp.trim()) {
+    // Clean IPv6 mapped IPv4
+    return expressIp.startsWith('::ffff:') ? expressIp.slice(7) : expressIp;
+  }
+
+  return '0.0.0.0';
 };
 
 // ─────────────────────────────────────────────
@@ -116,6 +123,9 @@ export const trackBatch = async (req: Request, res: Response): Promise<void> => 
     const ip = getIp(req);
     const ua = req.headers['user-agent'] || '';
     const geo = await resolveGeoFromIp(ip);
+
+    console.log(`[Analytics] Track IP: ${ip} | Geo: ${geo ? `${geo.city || '?'}, ${geo.country}` : 'UNAVAILABLE'}`);
+
     const device = detectDevice(ua);
 
     for (const ev of events) {

@@ -61,8 +61,9 @@ export const resolveGeoFromIp = async (ip: string): Promise<GeoData | null> => {
         isp:         data.isp,
       };
     }
-  } catch {
-    // Primary failed — try fallback
+    console.warn(`[GeoIP] ip-api.com status: ${data.status} for IP: ${cleanIp}`);
+  } catch (err: any) {
+    console.error(`[GeoIP] ip-api.com failed: ${err.message} for IP: ${cleanIp}`);
   }
 
   // ── Fallback: ipapi.co (HTTPS, free tier 1000/day) ──────────
@@ -84,8 +85,9 @@ export const resolveGeoFromIp = async (ip: string): Promise<GeoData | null> => {
         isp:         data.org,
       };
     }
-  } catch {
-    // Both failed
+    console.warn(`[GeoIP] ipapi.co error: ${data.error || 'No country data'} for IP: ${cleanIp}`);
+  } catch (err: any) {
+    console.error(`[GeoIP] ipapi.co failed: ${err.message} for IP: ${cleanIp}`);
   }
 
   return null;
