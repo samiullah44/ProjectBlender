@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast'
 import { Loader2 } from 'lucide-react'
 import { analytics } from '@/services/analytics'
 import { useAnalytics } from '@/hooks/useAnalytics'
+import SplashScreen from '@/components/ui/SplashScreen'
 
 // Layouts and Core Components (Keep static)
 import Navbar from '@/components/layout/NavBar'
@@ -211,9 +212,20 @@ const AnalyticsTracker = () => {
 }
 
 function App() {
+  const [showSplash, setShowSplash] = useState(() => {
+    // Show splash only once per session
+    return !sessionStorage.getItem('splash_shown');
+  });
+
+  const handleSplashComplete = () => {
+    sessionStorage.setItem('splash_shown', 'true');
+    setShowSplash(false);
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthInitializer>
+        {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
         <Router>
           <ScrollToTop />
           <AnalyticsTracker />
