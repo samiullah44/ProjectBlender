@@ -37,9 +37,9 @@ import { useScrollTracking } from '@/hooks/useAnalytics'
 import IncomeCalculator from '@/components/ui/IncomeCalculator'
 
 // --- Data Constants ---
-const HERO_IMAGES = ["/hero.jpg", "/hero2.png", "/hero1.jpg", "/hero3.png"]
-const FEATURE_IMAGE_1 = "/gpu.png"
-const NETWORK_IMAGE = "/network.png"
+const HERO_IMAGES = ["/hero.webp", "/hero2.webp", "/hero1.webp", "/hero3.webp"]
+const FEATURE_IMAGE_1 = "/gpu.webp"
+const NETWORK_IMAGE = "/network.webp"
 
 const performanceFeatures = [
   { icon: Zap, title: "OptiX & CUDA Supported", description: "Native hardware acceleration" },
@@ -56,7 +56,7 @@ const networkFeatures = [
 
 // --- Custom Blender SVG Icons ---
 const BlenderIcon = ({ className }: { className?: string }) => (
-  <img src="/blender-icon.svg" alt="Blender Logo" className={className} />
+  <img src="/blender-icon.svg" alt="Blender Logo" className={className} width="24" height="24" />
 )
 
 // --- Section Components ---
@@ -118,6 +118,8 @@ const HeroSection: React.FC = () => {
               className="w-full h-full object-cover"
               fetchPriority={currentImageIndex === 0 ? "high" : "auto"}
               loading={currentImageIndex === 0 ? "eager" : "lazy"}
+              width="1200"
+              height="1200"
             />
           </motion.div>
         </AnimatePresence>
@@ -440,7 +442,7 @@ const FeaturesSection: React.FC = () => {
 
           <motion.div initial={{ opacity: 0, x: 50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="relative">
             <div className="relative rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
-              <img src={FEATURE_IMAGE_1} alt="GPU Rendering" className="w-full h-auto" />
+              <img src={FEATURE_IMAGE_1} alt="GPU Rendering" className="w-full h-auto" width="800" height="600" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent" />
             </div>
 
@@ -461,7 +463,7 @@ const FeaturesSection: React.FC = () => {
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="relative order-2 lg:order-1">
             <div className="relative rounded-2xl overflow-hidden border border-white/10">
-              <img src={NETWORK_IMAGE} alt="Global Network Nodes" className="w-full h-auto" />
+              <img src={NETWORK_IMAGE} alt="Global Network Nodes" className="w-full h-auto" width="800" height="600" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
             </div>
           </motion.div>

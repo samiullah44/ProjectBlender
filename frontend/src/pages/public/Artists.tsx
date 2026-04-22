@@ -80,9 +80,13 @@ const ArtistsPage: React.FC = () => {
             <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} className="relative flex justify-center lg:justify-end">
               <div className="relative rounded-3xl overflow-hidden border border-white/10 shadow-2xl group max-w-lg">
                 <img 
-                  src="/assets/renders/artists-hero.png" 
+                  src="/assets/renders/artists-hero.webp" 
+                  srcSet="/assets/renders/artists-hero.webp 1x"
                   alt="Cinematic 3D Render" 
                   className="w-full h-auto object-cover transform transition-transform duration-700 group-hover:scale-105"
+                  loading="lazy"
+                  width="800"
+                  height="600"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="absolute bottom-6 left-6 right-6 opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0">

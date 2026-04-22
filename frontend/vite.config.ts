@@ -23,17 +23,61 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src')
     }
   },
-
+  optimizeDeps: {
+    exclude: ['es-toolkit'],
+  },
   build: {
+    // Disable source maps in production for smaller output
+    sourcemap: false,
+    // Enable CSS code splitting
+    cssCodeSplit: true,
+    // Warn on chunks larger than 500KB
+    chunkSizeWarningLimit: 500,
+    // Minification with esbuild (fast, built-in)
+    minify: 'esbuild',
+    target: 'es2020',
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['lucide-react', 'framer-motion', '@tanstack/react-query', 'axios'],
-        }
-      }
+        // Optimized file naming with content hashes for long-term caching
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
+        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+        manualChunks: (id) => {
+          // Web3 / Solana — largest chunk, only loaded when wallet is used
+          if (
+            id.includes('@solana/') ||
+            id.includes('@coral-xyz/') ||
+            id.includes('wallet-adapter')
+          ) {
+            return 'web3'
+          }
+          // Framer Motion — deferred animation library
+          if (id.includes('framer-motion')) {
+            return 'motion'
+          }
+          // Recharts — only used in dashboard/analytics pages
+          if (id.includes('recharts') || id.includes('d3-')) {
+            return 'charts'
+          }
+          // React core
+          if (id.includes('react-dom') || id.includes('react-router')) {
+            return 'react-vendor'
+          }
+          // Lucide icons
+          if (id.includes('lucide-react')) {
+            return 'icons'
+          }
+          // Data fetching
+          if (id.includes('@tanstack/react-query') || id.includes('axios')) {
+            return 'query'
+          }
+          // Radix UI components
+          if (id.includes('@radix-ui/')) {
+            return 'radix'
+          }
+        },
+      },
     },
-    chunkSizeWarningLimit: 1000,
   },
   server: {
     host: true, // allow network access
@@ -45,5 +89,5 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
-  }
+  },
 })

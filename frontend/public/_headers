@@ -1,0 +1,26 @@
+# Cache headers for static assets
+# Vite outputs content-hashed filenames, so assets can be cached indefinitely
+
+# Hashed JS/CSS bundles — immutable, cache forever
+/assets/js/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/css/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/ext/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Images — cache for 1 year
+/*.webp
+  Cache-Control: public, max-age=31536000
+/assets/renders/*.webp
+  Cache-Control: public, max-age=31536000
+
+# HTML — always revalidate so users get the latest app shell
+/*.html
+  Cache-Control: no-cache, must-revalidate
+
+# Manifest and service worker
+/manifest.json
+  Cache-Control: public, max-age=86400

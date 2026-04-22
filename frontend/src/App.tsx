@@ -1,25 +1,27 @@
 // App.tsx
-import React, { useEffect, useState, Suspense } from 'react'
+import React, { useEffect, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'react-hot-toast'
 import { ImpersonationBanner } from './components/admin/ImpersonationBanner'
 
-import { Loader2 } from 'lucide-react'
 import { analytics } from '@/services/analytics'
 import { useAnalytics } from '@/hooks/useAnalytics'
 import SplashScreen from '@/components/ui/SplashScreen'
+import { PageSkeleton } from '@/components/ui/PageSkeleton'
 
 // Layouts and Core Components (Keep static)
 import Navbar from '@/components/layout/NavBar'
 import TopBar from '@/components/layout/TopBar'
 import Footer from '@/components/layout/Footer'
-import WaitlistPopup from '@/components/ui/WaitlistPopup'
 import ScrollToTop from '@/components/layout/ScrollToTop'
 import { ProtectedRoute } from '@/components/layout/ProtectedLayout'
-import { DepositModal } from '@/components/ui/DepositModal'
-import { WithdrawModal } from '@/components/ui/WithdrawModal'
+
+// Lazy loaded Global Modals
+const WaitlistPopup = React.lazy(() => import('@/components/ui/WaitlistPopup'))
+const DepositModal = React.lazy(() => import('@/components/ui/DepositModal').then(m => ({ default: m.DepositModal })))
+const WithdrawModal = React.lazy(() => import('@/components/ui/WithdrawModal').then(m => ({ default: m.WithdrawModal })))
 
 // Lazy loaded Public Pages
 const HomePage = React.lazy(() => import('@/pages/public/Home'))
@@ -123,13 +125,6 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
   return <>{children}</>
 }
 
-// Loading Fallback Component
-const PageLoader = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-  </div>
-)
-
 // Main Layout component with Navbar, Footer, and Popup
 const MainLayout = () => {
   const [isWaitlistOpen, setIsWaitlistOpen] = useState(false)
@@ -224,16 +219,18 @@ const MainLayout = () => {
       <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
       <Navbar hideWaitlist={showTopBar} />
       <main className="mx-auto flex-1 w-full overflow-x-hidden">
-        <React.Suspense fallback={<PageLoader />}>
+        <React.Suspense fallback={<PageSkeleton />}>
           <Outlet />
         </React.Suspense>
       </main>
       <Footer />
-      <WaitlistPopup
-        isOpen={isWaitlistOpen}
-        onClose={handleCloseWaitlist}
-        onSubscribe={handleSubscribe}
-      />
+      <React.Suspense fallback={null}>
+        <WaitlistPopup
+          isOpen={isWaitlistOpen}
+          onClose={handleCloseWaitlist}
+          onSubscribe={handleSubscribe}
+        />
+      </React.Suspense>
     </div>
   )
 }
@@ -243,7 +240,7 @@ const AuthLayout = () => {
   return (
     <div className="min-h-screen bg-gray-950">
       <ImpersonationBanner />
-      <React.Suspense fallback={<PageLoader />}>
+      <React.Suspense fallback={<PageSkeleton />}>
         <Outlet />
       </React.Suspense>
     </div>
@@ -406,8 +403,10 @@ function App() {
           </Routes>
 
           {/* Global Modals must be inside Router for Link to work */}
-          <DepositModal />
-          <WithdrawModal />
+          <React.Suspense fallback={null}>
+            <DepositModal />
+            <WithdrawModal />
+          </React.Suspense>
         </Router>
       </AuthInitializer>
 

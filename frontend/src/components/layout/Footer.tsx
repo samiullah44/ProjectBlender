@@ -4,7 +4,7 @@ import { Twitter, Github, Linkedin, Cpu } from 'lucide-react';
 
 const Footer: React.FC = () => {
   return (
-    <footer className="bg-[#0B0F19] border-t border-white/5 pt-16 pb-8">
+    <footer className="bg-[#0B0F19] border-t border-white/5 pt-16 pb-8 min-h-[350px]">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
 
@@ -20,10 +20,10 @@ const Footer: React.FC = () => {
               We are building the world's most accessible, high-performance distributed rendering network. Harness the power of idle GPUs globally.
             </p>
             <div className="flex items-center gap-4">
-              <a href="https://x.com/RenderOnNodes" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+              <a href="https://x.com/RenderOnNodes" aria-label="Twitter" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
                 <Twitter className="w-4 h-4" />
               </a>
-              <a href="https://www.linkedin.com/company/rebderonnodes/" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+              <a href="https://www.linkedin.com/company/rebderonnodes/" aria-label="LinkedIn" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
                 <Linkedin className="w-4 h-4" />
               </a>
             </div>

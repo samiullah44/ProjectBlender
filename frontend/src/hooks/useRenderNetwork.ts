@@ -31,14 +31,21 @@ export function useRenderNetwork() {
   
   // Initialize Anchor Provider and Program with read-only fallback
   const program = useMemo(() => {
+    // Don't initialize if connection isn't ready
+    if (!connection) return null
+
     const activeWallet = wallet || {
       publicKey: PublicKey.default,
       signTransaction: async () => { throw new Error('Wallet not connected for signing'); },
       signAllTransactions: async () => { throw new Error('Wallet not connected for signing'); }
     };
     
-    const provider = new AnchorProvider(connection, activeWallet as any, AnchorProvider.defaultOptions());
-    return new Program(idl as Idl, provider);
+    try {
+      const provider = new AnchorProvider(connection, activeWallet as any, AnchorProvider.defaultOptions());
+      return new Program(idl as Idl, provider);
+    } catch {
+      return null;
+    }
   }, [connection, wallet]);
 
   const pdaAddress = useMemo(() => {

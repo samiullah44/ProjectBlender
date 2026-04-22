@@ -14,7 +14,7 @@ const SEO: React.FC<SEOProps> = ({
   title,
   description,
   canonical,
-  ogImage = 'https://www.renderonnodes.com/og-image.jpg',
+  ogImage = 'https://www.renderonnodes.com/og-image.webp',
   ogType = 'website',
   noIndex = false,
 }) => {

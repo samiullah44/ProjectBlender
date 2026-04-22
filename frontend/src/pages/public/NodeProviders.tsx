@@ -36,9 +36,13 @@ const NodeProvidersPage: React.FC = () => {
             <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} className="relative group order-2 lg:order-1 flex justify-start">
               <div className="relative rounded-[2rem] overflow-hidden border border-white/10 shadow-xl max-w-md">
                 <img 
-                  src="/assets/renders/gpu-node.png" 
+                  src="/assets/renders/gpu-node.webp" 
+                  srcSet="/assets/renders/gpu-node.webp 1x"
                   alt="High-Performance GPU Node" 
                   className="w-full h-auto object-cover transform transition-transform duration-700 group-hover:scale-105"
+                  loading="lazy"
+                  width="800"
+                  height="600"
                 />
                 <div className="absolute inset-0 bg-gradient-to-tr from-purple-500/20 via-transparent to-transparent opacity-60" />
                 <div className="absolute top-8 right-8">

@@ -54,9 +54,13 @@ const ComputeClientsPage: React.FC = () => {
           <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="relative group max-w-3xl mx-auto">
             <div className="relative rounded-[2rem] overflow-hidden border border-white/10 shadow-[0_0_30px_rgba(0,186,255,0.05)]">
               <img 
-                src="/assets/renders/data-center.png" 
+                src="/assets/renders/data-center.webp" 
+                srcSet="/assets/renders/data-center.webp 1x"
                 alt="Enterprise Infrastructure" 
                 className="w-full h-auto object-cover transform transition-transform duration-1000 group-hover:scale-105"
+                loading="lazy"
+                width="800"
+                height="600"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
               <div className="absolute bottom-10 left-10 right-10">
