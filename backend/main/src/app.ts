@@ -3,6 +3,8 @@
 import express from 'express';
 import http from 'http';
 import dotenv from 'dotenv';
+dotenv.config();
+
 import MongoStore from 'connect-mongo';
 import session from 'express-session';
 import { WebSocketService } from './services/WebSocketService';
@@ -20,6 +22,8 @@ import nodeRoutes from './routes/api/nodes';
 import authRoutes from './routes/api/auth';
 import notificationRoutes from './routes/api/notification';
 import adminRoutes from './routes/api/admin';
+import analyticsRoutes from './routes/api/analytics';
+import newsletterRoutes from './routes/api/newsletter';
 
 // Import your CORS middleware
 import { corsMiddleware } from './config/cors';
@@ -28,6 +32,10 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
+// Trust proxy — required when deployed behind nginx/Cloudflare/load balancers
+// so req.ip and X-Forwarded-For headers contain the real client IP
+app.set('trust proxy', true);
 
 // Use your CORS middleware
 app.use(corsMiddleware);
@@ -63,6 +71,8 @@ app.use('/api/nodes', nodeRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/newsletter', newsletterRoutes);
 
 // WebSocket endpoint
 app.get('/ws', (req, res) => {

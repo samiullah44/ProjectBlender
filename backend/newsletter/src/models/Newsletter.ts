@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface INewsletter extends Document {
   email: string;
+  role?: 'artist' | 'provider';
   status: 'subscribed' | 'unsubscribed';
   subscribedAt: Date;
 }
@@ -14,6 +15,11 @@ const NewsletterSchema: Schema = new Schema({
     trim: true,
     lowercase: true,
     match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please fill a valid email address']
+  },
+  role: {
+    type: String,
+    enum: ['artist', 'provider'],
+    required: false
   },
   status: { 
     type: String, 

@@ -7,6 +7,9 @@ import { Toaster } from 'react-hot-toast'
 import { ImpersonationBanner } from './components/admin/ImpersonationBanner'
 
 import { Loader2 } from 'lucide-react'
+import { analytics } from '@/services/analytics'
+import { useAnalytics } from '@/hooks/useAnalytics'
+import SplashScreen from '@/components/ui/SplashScreen'
 
 // Layouts and Core Components (Keep static)
 import Navbar from '@/components/layout/NavBar'
@@ -24,7 +27,6 @@ const FeaturesPage = React.lazy(() => import('@/pages/public/Features'))
 const FeaturesGPUPage = React.lazy(() => import('@/pages/public/FeaturesGPU'))
 const FeaturesNetworkPage = React.lazy(() => import('@/pages/public/FeaturesNetwork'))
 const FeaturesAnalyticsPage = React.lazy(() => import('@/pages/public/FeaturesAnalytics'))
-// const FeaturesCostPage = React.lazy(() => import('@/pages/public/FeaturesCost'))
 const HowItWorksPage = React.lazy(() => import('@/pages/public/HowItWorks'))
 const LoginPage = React.lazy(() => import('@/pages/public/Login'))
 const RegisterPage = React.lazy(() => import('@/pages/public/Register'))
@@ -66,14 +68,16 @@ const NodeSetupGuide = React.lazy(() => import('@/pages/node/NodeSetupGuide'))
 const NodeEarnings = React.lazy(() => import('@/pages/node/Earnings'))
 
 // Lazy loaded Admin Pages
+const AdminLogin = React.lazy(() => import('@/pages/admin/AdminLogin'))
 const AdminDashboard = React.lazy(() => import('@/pages/admin/Dashboard'))
-const AdminAnalytics = React.lazy(() => import('@/pages/admin/Analytics'))
 const AdminJobs = React.lazy(() => import('@/pages/admin/Jobs'))
 const AdminJobDetails = React.lazy(() => import('@/pages/admin/JobDetails'))
 const AdminApplications = React.lazy(() => import('@/pages/admin/Applications'))
 const AdminNodes = React.lazy(() => import('@/pages/admin/Nodes'))
 const AdminUsers = React.lazy(() => import('@/pages/admin/Users'))
 const AdminAudit = React.lazy(() => import('@/pages/admin/AuditLogs'))
+const AdminAnalytics = React.lazy(() => import('@/pages/admin/Analytics'))
+const AdminUserAnalyticsDetail = React.lazy(() => import('@/pages/admin/UserAnalyticsDetail'))
 
 import { useAuthStore } from '@/stores/authStore'
 
@@ -92,7 +96,11 @@ const queryClient = new QueryClient({
 })
 
 const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { getProfile } = useAuthStore()
+  const { getProfile, user } = useAuthStore()
+
+  useEffect(() => {
+    analytics.init()
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -102,6 +110,14 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
       })
     }
   }, [getProfile])
+
+  // Sync user identity once profile is loaded
+  useEffect(() => {
+    if (user) {
+      analytics.setRole(user.role)
+      analytics.identify(user.email, user.name, user.id)
+    }
+  }, [user])
 
   return <>{children}</>
 }
@@ -122,7 +138,10 @@ const MainLayout = () => {
     const status = localStorage.getItem('waitlist_status')
     const dismissedAt = localStorage.getItem('waitlist_dismissed_at')
 
-    if (status === 'subscribed') return;
+    if (status === 'subscribed') {
+      setShowTopBar(true);
+      return;
+    }
 
     if (status === 'dismissed') {
       if (dismissedAt) {
@@ -188,13 +207,13 @@ const MainLayout = () => {
     if (status !== 'subscribed') {
       localStorage.setItem('waitlist_status', 'dismissed');
       localStorage.setItem('waitlist_dismissed_at', Date.now().toString());
-      setShowTopBar(true);
     }
+    setShowTopBar(true);
   };
 
   const handleSubscribe = () => {
     localStorage.setItem('waitlist_status', 'subscribed');
-    setShowTopBar(false);
+    setShowTopBar(true);
     setIsWaitlistOpen(false);
   };
 
@@ -230,14 +249,32 @@ const AuthLayout = () => {
   )
 }
 
+// Component that lives INSIDE <Router> so it can use useLocation
+const AnalyticsTracker = () => {
+  useAnalytics()
+  return null
+}
+
 function App() {
+  const [showSplash, setShowSplash] = useState(() => {
+    // Show splash only once per session
+    return !sessionStorage.getItem('splash_shown');
+  });
+
+  const handleSplashComplete = () => {
+    sessionStorage.setItem('splash_shown', 'true');
+    setShowSplash(false);
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthInitializer>
+        {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
         <Router>
           <ScrollToTop />
+          <AnalyticsTracker />
           <Routes>
-            {/* Auth Routes (without Navbar) */}
+            {/* Hidden Admin Login — not linked anywhere publicly */}
             <Route element={<AuthLayout />}>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
@@ -245,15 +282,16 @@ function App() {
               <Route path="/verify-email" element={<VerifyEmailPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/admin/login" element={<AdminLogin />} />
             </Route>
-            {/* Public Routes with Navbar */}
+
+            {/* Public Marketing Routes with Navbar */}
             <Route element={<MainLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/features" element={<FeaturesPage />} />
               <Route path="/features/gpu" element={<FeaturesGPUPage />} />
               <Route path="/features/network" element={<FeaturesNetworkPage />} />
               <Route path="/features/analytics" element={<FeaturesAnalyticsPage />} />
-              {/* <Route path="/features/pricing" element={<FeaturesCostPage />} /> */}
               <Route path="/how-it-works" element={<HowItWorksPage />} />
               <Route path="/faq" element={<FAQPage />} />
 
@@ -297,15 +335,12 @@ function App() {
               {/* <Route path="/login" element={<LoginPage />} /> */}
               {/* <Route path="/register" element={<RegisterPage />} /> */}
 
-              {/* Dashboard Route */}
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute allowedRoles={['client', 'admin', 'node_provider']}>
-                    <ClientDashboard />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Disabled user-facing routes → redirect home */}
+              <Route path="/dashboard" element={<Navigate to="/" replace />} />
+              <Route path="/apply-node-provider" element={<Navigate to="/" replace />} />
+              <Route path="/notifications" element={<Navigate to="/" replace />} />
+              <Route path="/client/*" element={<Navigate to="/" replace />} />
+              <Route path="/node/*" element={<Navigate to="/" replace />} />
 
               {/* Client Routes */}
               <Route
@@ -340,6 +375,7 @@ function App() {
               />
 
               {/* Admin Routes */}
+              {/* Admin Routes — accessible only to admins */}
               <Route
                 path="/admin/*"
                 element={
@@ -354,13 +390,16 @@ function App() {
                       <Route path="/nodes/:nodeId" element={<NodeDetails />} />
                       <Route path="/users" element={<AdminUsers />} />
                       <Route path="/audit" element={<AdminAudit />} />
+                      <Route path="/analytics" element={<AdminAnalytics />} />
+                      <Route path="/analytics/users/:userId" element={<AdminUserAnalyticsDetail />} />
+                      <Route path="/analytics/user/:userId" element={<AdminUserAnalyticsDetail />} />
                     </Routes>
                   </ProtectedRoute>
                 }
               />
             </Route>
 
-            {/* Fallback Route */}
+            {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
 

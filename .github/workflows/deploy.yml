@@ -1,4 +1,4 @@
-name: Auto Deploy Frontend & Newsletter to EC2 (Zero Downtime)
+name: Auto Deploy Frontend & Backend to EC2 (Zero Downtime)
 
 on:
   push:
@@ -31,22 +31,22 @@ jobs:
             fi
 
             # -------------------------
-            # Backend Newsletter
+            # Backend (Main)
             # -------------------------
-            echo "Installing newsletter dependencies..."
-            cd backend/newsletter
+            echo "Installing backend dependencies..."
+            cd backend/main
             npm install
 
-            echo "Building newsletter..."
+            echo "Building backend..."
             if npm run | grep -q "build"; then
               npm run build
             fi
 
-            echo "Reloading newsletter PM2 (zero downtime)..."
-            if pm2 describe render-newsletter-server > /dev/null 2>&1; then
-              pm2 reload render-newsletter-server
+            echo "Reloading backend PM2 (zero downtime)..."
+            if pm2 describe render-main-server > /dev/null 2>&1; then
+              pm2 reload render-main-server
             else
-              pm2 start npm --name render-newsletter-server -- start
+              pm2 start npm --name render-main-server -- start
             fi
             pm2 save
 
@@ -72,4 +72,4 @@ jobs:
             fi
             pm2 save
 
-            echo "✅ Deployment of Frontend & Newsletter complete (Zero Downtime)"
+            echo "✅ Deployment of Frontend & Backend complete (Zero Downtime)"

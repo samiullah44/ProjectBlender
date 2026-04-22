@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+Allow: /features
+Allow: /features/gpu
+Allow: /features/network
+Allow: /features/analytics
+Allow: /how-it-works
+
+Disallow: /admin/
+Disallow: /client/
+Disallow: /node/
+Disallow: /dashboard
+Disallow: /login
+Disallow: /register
+Disallow: /verify-email
+Disallow: /auth/
+Disallow: /notifications
+Disallow: /apply-node-provider
+
+Sitemap: https://www.renderonnodes.com/sitemap.xml

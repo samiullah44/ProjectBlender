@@ -28,6 +28,13 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/authStore'
+import { toast } from 'react-hot-toast'
+import SEO from '../../components/SEO'
+import { analytics } from '@/services/analytics'
+import { useScrollTracking } from '@/hooks/useAnalytics'
+
+import IncomeCalculator from '@/components/ui/IncomeCalculator'
 
 // --- Data Constants ---
 const HERO_IMAGES = ["/hero.jpg", "/hero2.png", "/hero1.jpg", "/hero3.png"]
@@ -306,6 +313,15 @@ const DualCTASection: React.FC = () => {
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          {/* 
+            TEMPORARY ACCESS CONTROL:
+            The handlers below intercept navigation to restricted dashboards and instead 
+            trigger the site-wide WaitlistPopup. 
+            
+            TO REVERT TO LIVE ACCESS:
+            Search for 'handleRestrictedCTA' and remove e.preventDefault() logic.
+          */}
+          
           {/* Client Path */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -323,9 +339,19 @@ const DualCTASection: React.FC = () => {
                 Connect to thousands of GPUs instantly. Upload your Blender projects and get high-quality frames rendered in a fraction of the time with native support.
               </p>
               <div className="mt-auto pt-4 w-full">
-                <Link to="/client/dashboard" className="w-full">
-                  <Button className="w-full bg-white/5 hover:bg-orange-600 text-white border border-white/10 hover:border-orange-500 transition-all duration-300 py-6 font-bold text-lg">
-                    Access Rendering Dashboard <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                <Link
+                  to="/client/dashboard"
+                  className="w-full"
+                  onClick={(e) => {
+                    // Start of Temporary Restriction
+                    e.preventDefault(); 
+                    analytics.trackClick('home_cta_client');
+                    window.dispatchEvent(new CustomEvent('open-waitlist'));
+                    // End of Temporary Restriction
+                  }}
+                >
+                  <Button className="w-full bg-white/5 hover:bg-emerald-600 text-white border border-white/10 hover:border-emerald-500 transition-all duration-300 py-6">
+                    Access Rendering Dashboard <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
               </div>
@@ -350,9 +376,19 @@ const DualCTASection: React.FC = () => {
                 Turn your high-end GPU or workstation into a passive income stream. Join the network securely, crunch blender frames, and earn credits automatically.
               </p>
               <div className="mt-auto pt-4 w-full">
-                <Link to="/apply-node-provider" className="w-full">
-                  <Button className="w-full bg-white/5 hover:bg-blue-600 text-white border border-white/10 hover:border-blue-500 transition-all duration-300 py-6 font-bold text-lg">
-                    Become a Render Node <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                <Link
+                  to="/apply-node-provider"
+                  className="w-full"
+                  onClick={(e) => {
+                    // Start of Temporary Restriction
+                    e.preventDefault();
+                    analytics.trackClick('home_cta_provider');
+                    window.dispatchEvent(new CustomEvent('open-waitlist'));
+                    // End of Temporary Restriction
+                  }}
+                >
+                  <Button className="w-full bg-white/5 hover:bg-purple-600 text-white border border-white/10 hover:border-purple-500 transition-all duration-300 py-6">
+                    Become a Node Provider <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
               </div>
@@ -462,15 +498,59 @@ const FeaturesSection: React.FC = () => {
   )
 }
 
+const EarningsSection: React.FC = () => {
+  return (
+    <section className="py-24 relative overflow-hidden bg-black/40">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(99,102,241,0.05),transparent)] pointer-events-none" />
+      <div className="container mx-auto px-6 relative z-10">
+        <div className="text-center mb-16">
+          <Badge variant="outline" className="text-emerald-400 border-emerald-500/30 mb-4 px-4 py-1">Node Operators</Badge>
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
+            Turn Your Hardware into <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-400">Passive Income</span>
+          </h2>
+          <p className="text-gray-400 max-w-2xl mx-auto text-lg">
+            Discover your rig's monetization score and unlock your hardware's full earning capacity in the RenderOnNodes distributed ecosystem.
+          </p>
+        </div>
+        
+        <IncomeCalculator />
+        
+          <div className="mt-16 flex flex-wrap justify-center gap-12 text-center opacity-60 grayscale hover:grayscale-0 transition-all duration-700">
+            <div className="flex flex-col items-center">
+              <div className="text-2xl font-bold text-white">Any GPU</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500">Supported</div>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="text-2xl font-bold text-white">Global</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500">Mesh Access</div>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="text-2xl font-bold text-white">Instant</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500">Connectivity</div>
+            </div>
+          </div>
+      </div>
+    </section>
+  )
+}
+
 // --- Main Component ---
 const HomePage: React.FC = () => {
+  useScrollTracking();
+
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
+    <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-black text-white">
+      <SEO
+        title="Distributed GPU Render Farm"
+        description="Join RenderOnNodes to contribute GPU power to the decentralized render network. Earn rewards as a node operator or submit rendering jobs at scale."
+        canonical="/"
+      />
       {/* Navigation - No changes here */}
 
       <HeroSection />
       <ProjectConceptSection />
       <WorkflowSection />
+      <EarningsSection />
       <DualCTASection />
       <FeaturesSection />
     </div>
