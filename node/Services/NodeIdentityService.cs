@@ -16,6 +16,10 @@ namespace BlendFarm.Node.Services
     [JsonSerializable(typeof(NodeIdentityService.RegistrationResponse))]
     [JsonSerializable(typeof(NodeIdentityService.ErrorResponse))]
     [JsonSerializable(typeof(System.Collections.Generic.Dictionary<string, object>))]
+    [JsonSerializable(typeof(int))]
+    [JsonSerializable(typeof(long))]
+    [JsonSerializable(typeof(double))]
+    [JsonSerializable(typeof(bool))]
     public partial class NodeIdentitySerializerContext : JsonSerializerContext
     {
     }

@@ -4,8 +4,10 @@ import { User } from '../models/User';
 import { S3Service } from './S3Service';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizeBlenderVersion } from '../utils/blenderVersionMapper';
-import { enqueueJobFrames } from './FrameQueueService';
 import { wsService } from '../app';
+import { solanaService } from './SolanaService';
+import { AppError } from '../middleware/error';
+import { enqueueJobFrames } from './FrameQueueService';
 
 export class UploadService {
   private s3Service: S3Service;
@@ -23,6 +25,7 @@ export class UploadService {
     parts,
     jobSettings,
     userId,
+    isAdminJob,
     projectId,
     type,
     inputType,
@@ -36,6 +39,7 @@ export class UploadService {
     parts: Array<{ PartNumber: number; ETag: string }>;
     jobSettings: any;
     userId: string;
+    isAdminJob?: boolean;
     projectId: string;
     type: 'image' | 'animation';
     inputType: 'blend' | 'archive';
@@ -62,6 +66,38 @@ export class UploadService {
         totalFrames = 1;
         selectedFrames = [selectedFrame];
       }
+      
+      // --- SOLANA ZERO-PROMPT LOCKING ---
+      const user = await User.findById(userId);
+      if (!user) throw new AppError('User not found', 404);
+
+      // Simple frame-based estimate for the lock (Matching JobService)
+      const creditsPerFrame = jobSettings?.creditsPerFrame || 1;
+      const complexityFactor = (jobSettings?.samples || 128) / 128;
+      const resolutionFactor = ((jobSettings?.resolutionX || 1920) * (jobSettings?.resolutionY || 1080)) / (1920 * 1080);
+      let estimatedCredits = totalFrames * creditsPerFrame * complexityFactor * resolutionFactor;
+      if (jobSettings?.engine === 'CYCLES') estimatedCredits *= 1.2;
+      if (jobSettings?.device === 'GPU') estimatedCredits *= 0.8;
+      const roundedCredits = Math.ceil(estimatedCredits);
+
+      let lockTxSignature = '';
+      const onchainJobId = Date.now();
+
+      if (!isAdminJob && user.role !== 'admin' && user.solanaSeed) {
+        try {
+          console.log(`[UploadService] Initiating on-chain lock for user ${userId}, amount: ${roundedCredits}`);
+          lockTxSignature = await solanaService.lockPayment(
+            user.solanaSeed,
+            onchainJobId,
+            roundedCredits
+          );
+          console.log(`[UploadService] ✅ Solana Lock Successful: ${lockTxSignature}`);
+        } catch (solanaErr: any) {
+          console.error('[UploadService] ❌ Solana Lock Failed:', solanaErr);
+          throw new AppError(`On-chain payment reservation failed: ${solanaErr.message}`, 402);
+        }
+      }
+      // ----------------------------------
 
       const jobId = `job-${Date.now()}-${uuidv4().substr(0, 8)}`;
 
@@ -78,10 +114,12 @@ export class UploadService {
         blendFileName: filename,
         type,
         inputType,
+        isAdminJob: !!isAdminJob,
         settings: {
           ...jobSettings,
           engine,
           device,
+          creditsPerFrame: isAdminJob ? 0 : ((roundedCredits / totalFrames) || 1), // DERIVED: Ensure node payout perfectly matches escrow
           blenderVersion: normalizeBlenderVersion(jobSettings?.blenderVersion || '4.5.0')
         },
         frames: {
@@ -95,28 +133,36 @@ export class UploadService {
           pending: selectedFrames
         },
         assignedNodes: new Map(),
-        status: 'pending',
+        status: 'pending', // Now that payment is locked, it's ready.
         progress: 0,
         outputUrls: [],
+        estimatedCost: isAdminJob ? 0 : roundedCredits,
+        escrow: {
+          onchainJobId,
+          txSignature: lockTxSignature,
+          status: isAdminJob ? 'none' : (lockTxSignature ? 'locked' : 'none'),
+          lockedAmount: isAdminJob ? 0 : roundedCredits,
+          lockedAt: lockTxSignature ? new Date() : undefined
+        },
         createdAt: new Date(),
         updatedAt: new Date()
       });
 
       await job.save();
 
+      // Enqueue frames for nodes (Matching JobService)
+      try {
+        await enqueueJobFrames(jobId, selectedFrames, job.settings.engine, job.settings.device);
+      } catch (queueErr) {
+        console.error(`⚠️  Failed to enqueue frames for job ${jobId} into BullMQ:`, queueErr);
+      }
+
       // Update user stats
       await User.findByIdAndUpdate(userId, {
         $inc: { 'stats.jobsCreated': 1 }
       });
 
-      // Enqueue frames to BullMQ for atomic distribution
-      try {
-        await enqueueJobFrames(jobId, selectedFrames, engine, device);
-      } catch (queueErr) {
-        console.error(`⚠️  Failed to enqueue multipart frames for job ${jobId} into BullMQ:`, queueErr);
-      }
-
-      // Proactively notify nodes
+      // Broadcast job creation (nodes won't start because BullMQ frames are enqueued only after lock_payment)
       if (wsService) {
         wsService.broadcastSystemUpdate({
           type: 'job_created',
@@ -124,10 +170,10 @@ export class UploadService {
             jobId: job.jobId,
             userId: job.userId,
             type: job.type,
-            totalFrames: job.frames.total
+            totalFrames: job.frames.total,
+            status: job.status
           }
         });
-        wsService.notifyNodesToCheckJobs();
       }
 
       console.log(`🎬 New ${type} job created via multipart upload: ${jobId}`);

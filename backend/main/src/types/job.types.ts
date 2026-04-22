@@ -75,6 +75,36 @@ export interface IUploadMetadata {
     checksum?: string;
 }
 
+export interface IJobEscrow {
+    /** Solana transaction signature of the lockPayment instruction */
+    txSignature: string;
+    /** On-chain Escrow PDA public key (base58) */
+    escrowAddress: string;
+    /** The u64 job_id used on-chain, stored as string to avoid precision loss */
+    escrowJobId: string;
+    /** Numeric on-chain job ID for Solana program */
+    onchainJobId?: number;
+    /** Amount locked in tokens (human-readable, 6 decimals already applied) */
+    lockedAmount: number;
+    /** Current on-chain escrow lifecycle state */
+    status: 'none' | 'locked' | 'released' | 'refunded';
+    lockedAt: Date;
+
+    // ── Settlement tracking (Phase 4) ──────────────────────────────
+    /** Payment settlement state machine */
+    paymentStatus?: 'unsettled' | 'settling' | 'partial' | 'settled' | 'failed';
+    /** Tokens already released on-chain to providers */
+    releasedAmount?: number;
+    /** Timestamp of last successful settlement */
+    settledAt?: Date;
+    /** TX signatures from batch_release calls (one job may span multiple TXs) */
+    settlementTxSignatures?: string[];
+    /** Reason for settlement failure */
+    failureReason?: string;
+    /** Number of settlement retry attempts */
+    retryCount?: number;
+}
+
 export interface IJob {
     _id?: Types.ObjectId;
     jobId: string;
@@ -94,8 +124,12 @@ export interface IJob {
     assignedNodes: Map<string, number[]> | Record<string, number[]>;
     frameAssignments: IFrameAssignment[];
 
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    /** 'pending_payment' = job created but on-chain escrow not yet locked */
+    status: 'pending_payment' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'cancelling' | 'paused';
     progress: number;
+
+    /** On-chain escrow state — populated after lockPayment succeeds */
+    escrow?: IJobEscrow;
 
     uploadMetadata?: IUploadMetadata;
     outputUrls: IJobOutput[];
@@ -128,6 +162,7 @@ export interface IJob {
     userRerenderCount?: number;
     userRerenderMax?: number;
     rerenderedHistory?: number[];
+    isAdminJob?: boolean;
 }
 
 export interface JobFilterOptions {
@@ -141,6 +176,7 @@ export interface JobFilterOptions {
     endDate?: Date;
     search?: string;
     approved?: boolean;
+    adminView?: boolean;
 }
 
 export interface PaginationOptions {
@@ -193,6 +229,7 @@ export interface CreateJobRequest {
     tags?: string[];
     priority?: 'low' | 'normal' | 'high' | 'urgent';
     requireApproval?: boolean;
+    isAdminJob?: boolean;
 }
 
 export interface CreateJobResponse {

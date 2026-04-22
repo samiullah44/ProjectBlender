@@ -21,6 +21,7 @@ import jobRoutes from './routes/api/jobs';
 import nodeRoutes from './routes/api/nodes';
 import authRoutes from './routes/api/auth';
 import notificationRoutes from './routes/api/notification';
+import adminRoutes from './routes/api/admin';
 import analyticsRoutes from './routes/api/analytics';
 import newsletterRoutes from './routes/api/newsletter';
 
@@ -69,6 +70,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/nodes', nodeRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 

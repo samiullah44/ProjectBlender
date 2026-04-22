@@ -104,6 +104,13 @@ class WebSocketService {
         // Send auth message if user is logged in
         this.authenticateIfPossible()
         break
+      case 'credit_balance_updated':
+        console.log('💳 Credit balance update received, refreshing...')
+        window.dispatchEvent(new Event('refresh_credit_balance'))
+        import('@/stores/authStore').then(({ useAuthStore }) => {
+          useAuthStore.getState().getProfile()
+        })
+        break
       case 'pong':
         // Heartbeat response
         break
@@ -330,6 +337,21 @@ class WebSocketService {
     } else {
       console.error('Max reconnection attempts reached')
       toast.error('Lost connection to real-time updates. Please refresh the page.')
+    }
+  }
+
+  sendCommand(targetNodeId: string, cmd: string, data?: any) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.send({
+        type: 'admin_cmd',
+        targetNodeId,
+        cmd,
+        data
+      })
+      console.log(`📡 Sent admin command ${cmd} to node ${targetNodeId}`)
+      toast.success(`Sent ${cmd} command to node`)
+    } else {
+      toast.error('WebSocket not connected')
     }
   }
 

@@ -262,7 +262,7 @@ class AuthService {
 
     // Get OAuth URLs
     getOAuthUrls(): { google: string; github: string } {
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
         const redirectUrl = encodeURIComponent(window.location.origin + '/auth/callback')
 
         return {

@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { authService } from '../services/AuthService';
+import { AuditService } from '../services/AuditService';
 import { validateEmail, validatePassword } from '../utils/authUtils';
 import { env } from '../config/env';
 
@@ -201,6 +202,10 @@ export class AuthController {
           roles: user.roles,
           primaryRole: user.primaryRole,
           credits: user.credits,
+          tokenBalance: user.tokenBalance,
+          depositTokenAddress: user.depositTokenAddress,
+          solanaSeed: user.solanaSeed,
+          payoutWallet: user.payoutWallet,
           isVerified: user.isVerified,
           provider: user.provider,
           stats: user.stats,
@@ -359,6 +364,16 @@ export class AuthController {
 
       const user = await authService.addCredits(userId, amount);
 
+      // Log the action
+      await AuditService.log({
+        adminId: req.user.userId,
+        action: 'CREDIT_ADD',
+        targetId: userId,
+        targetType: 'User',
+        details: { amount },
+        req
+      });
+
       res.json({
         success: true,
         message: 'Credits added successfully',
@@ -369,6 +384,60 @@ export class AuthController {
       res.status(500).json({
         success: false,
         error: 'Failed to add credits'
+      });
+    }
+  }
+
+  // Sync on-chain deposit
+  static async syncDeposit(req: AuthRequest, res: Response) {
+    try {
+      const { depositTokenAddress, amount } = req.body;
+
+      if (!depositTokenAddress || typeof amount !== 'number' || amount <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Valid token address and properly formatted amount required'
+        });
+      }
+
+      const result = await authService.syncDeposit(req.user.userId, depositTokenAddress, amount);
+
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Sync deposit error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to sync deposit'
+      });
+    }
+  }
+
+  // Update Solana identity seed (solanaSeed)
+  static async updateSolanaSeed(req: AuthRequest, res: Response) {
+    try {
+      const { solanaSeed } = req.body;
+      if (!solanaSeed) {
+        return res.status(400).json({
+          success: false,
+          error: 'Solana seed is required'
+        });
+      }
+
+      const result = await authService.updateSolanaSeed(req.user.userId, solanaSeed);
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Update solana seed error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update solana seed'
       });
     }
   }
@@ -419,6 +488,15 @@ export class AuthController {
         return res.status(400).json(result);
       }
 
+      // Log the action
+      await AuditService.log({
+        adminId: req.user.userId,
+        action: 'APPLICATION_APPROVE',
+        targetId: userId,
+        targetType: 'Application',
+        req
+      });
+
       res.json(result);
     } catch (error: any) {
       console.error('Approve application error:', error);
@@ -454,6 +532,16 @@ export class AuthController {
       if (!result.success) {
         return res.status(400).json(result);
       }
+
+      // Log the action
+      await AuditService.log({
+        adminId: req.user.userId,
+        action: 'APPLICATION_REJECT',
+        targetId: userId,
+        targetType: 'Application',
+        details: { reason },
+        req
+      });
 
       res.json(result);
     } catch (error: any) {
@@ -508,6 +596,68 @@ export class AuthController {
         success: false,
         error: 'Failed to get applications'
       });
+    }
+  }
+
+  // ── Payout Wallet (Provider Earnings Destination) ──────────────────────
+  static async getPayoutWallet(req: AuthRequest, res: Response) {
+    try {
+      const { User } = await import('../models/User');
+      const user = await User.findById(req.user.userId);
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+      res.json({ success: true, payoutWallet: user.payoutWallet || null });
+    } catch (error: any) {
+      console.error('Get payout wallet error:', error);
+      res.status(500).json({ success: false, error: 'Failed to get payout wallet' });
+    }
+  }
+
+  static async updatePayoutWallet(req: AuthRequest, res: Response) {
+    try {
+      const { wallet } = req.body;
+      if (!wallet || typeof wallet !== 'string') {
+        return res.status(400).json({ success: false, error: 'Wallet address is required' });
+      }
+
+      // Validate Solana public key format
+      try {
+        const { PublicKey } = await import('@solana/web3.js');
+        new PublicKey(wallet); // throws if invalid base58 / wrong length
+      } catch {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid Solana wallet address. Must be a valid base58 public key.'
+        });
+      }
+
+      const { User } = await import('../models/User');
+      const user = await User.findById(req.user.userId);
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      if (!user.roles?.includes('node_provider')) {
+        return res.status(403).json({
+          success: false,
+          error: 'Only node providers can set a payout wallet'
+        });
+      }
+
+      user.payoutWallet = wallet;
+      await user.save();
+
+      console.log(`💰 Payout wallet updated for user ${req.user.userId}: ${wallet.substring(0, 8)}...`);
+
+      res.json({
+        success: true,
+        message: 'Payout wallet updated successfully',
+        payoutWallet: wallet
+      });
+    } catch (error: any) {
+      console.error('Update payout wallet error:', error);
+      res.status(500).json({ success: false, error: 'Failed to update payout wallet' });
     }
   }
 }

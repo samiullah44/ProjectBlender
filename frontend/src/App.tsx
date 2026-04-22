@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
+// App.tsx
+import React, { useEffect, useState, Suspense } from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'react-hot-toast'
+import { ImpersonationBanner } from './components/admin/ImpersonationBanner'
+
 import { Loader2 } from 'lucide-react'
 import { analytics } from '@/services/analytics'
 import { useAnalytics } from '@/hooks/useAnalytics'
@@ -15,6 +18,8 @@ import Footer from '@/components/layout/Footer'
 import WaitlistPopup from '@/components/ui/WaitlistPopup'
 import ScrollToTop from '@/components/layout/ScrollToTop'
 import { ProtectedRoute } from '@/components/layout/ProtectedLayout'
+import { DepositModal } from '@/components/ui/DepositModal'
+import { WithdrawModal } from '@/components/ui/WithdrawModal'
 
 // Lazy loaded Public Pages
 const HomePage = React.lazy(() => import('@/pages/public/Home'))
@@ -23,6 +28,44 @@ const FeaturesGPUPage = React.lazy(() => import('@/pages/public/FeaturesGPU'))
 const FeaturesNetworkPage = React.lazy(() => import('@/pages/public/FeaturesNetwork'))
 const FeaturesAnalyticsPage = React.lazy(() => import('@/pages/public/FeaturesAnalytics'))
 const HowItWorksPage = React.lazy(() => import('@/pages/public/HowItWorks'))
+const LoginPage = React.lazy(() => import('@/pages/public/Login'))
+const RegisterPage = React.lazy(() => import('@/pages/public/Register'))
+const OAuthCallback = React.lazy(() => import('@/pages/public/OAuthCallback'))
+const VerifyEmailPage = React.lazy(() => import('@/pages/public/VerifyEmail'))
+const NotificationsPage = React.lazy(() => import('@/pages/public/Notifications'))
+const ProfilePage = React.lazy(() => import('@/pages/public/Profile'))
+const SettingsPage = React.lazy(() => import('@/pages/public/Settings'))
+const FAQPage = React.lazy(() => import('@/pages/public/FAQ'))
+
+// New Public Pages
+const AboutUsPage = React.lazy(() => import('@/pages/public/AboutUs'))
+const ContactPage = React.lazy(() => import('@/pages/public/Contact'))
+const BlogPage = React.lazy(() => import('@/pages/public/Blog'))
+const ArtistsPage = React.lazy(() => import('@/pages/public/Artists'))
+const NodeProvidersPage = React.lazy(() => import('@/pages/public/NodeProviders'))
+const ComputeClientsPage = React.lazy(() => import('@/pages/public/ComputeClients'))
+
+// Legal Pages
+const TermsOfService = React.lazy(() => import('@/pages/public/TermsOfService'))
+const PrivacyPolicy = React.lazy(() => import('@/pages/public/PrivacyPolicy'))
+const RiskDisclosure = React.lazy(() => import('@/pages/public/RiskDisclosure'))
+const RefundPolicy = React.lazy(() => import('@/pages/public/RefundPolicy'))
+const AcceptableUse = React.lazy(() => import('@/pages/public/AcceptableUse'))
+
+// Lazy loaded Client Pages
+const ForgotPasswordPage = React.lazy(() => import('@/pages/public/ForgotPassword'))
+const ResetPasswordPage = React.lazy(() => import('@/pages/public/ResetPassword'))
+const ClientDashboard = React.lazy(() => import('@/pages/client/Dashboard'))
+const CreateJob = React.lazy(() => import('@/pages/client/CreateJob'))
+const JobDetails = React.lazy(() => import('@/pages/client/JobDetails'))
+const ApplyNodeProvider = React.lazy(() => import('@/pages/client/ApplyNodeProvider'))
+const ClientBilling = React.lazy(() => import('@/pages/client/Billing'))
+
+// Lazy loaded Node Pages
+const NodeDashboard = React.lazy(() => import('@/pages/node/Dashboard'))
+const NodeDetails = React.lazy(() => import('@/pages/node/NodeDetails'))
+const NodeSetupGuide = React.lazy(() => import('@/pages/node/NodeSetupGuide'))
+const NodeEarnings = React.lazy(() => import('@/pages/node/Earnings'))
 
 // Lazy loaded Admin Pages
 const AdminLogin = React.lazy(() => import('@/pages/admin/AdminLogin'))
@@ -31,9 +74,10 @@ const AdminJobs = React.lazy(() => import('@/pages/admin/Jobs'))
 const AdminJobDetails = React.lazy(() => import('@/pages/admin/JobDetails'))
 const AdminApplications = React.lazy(() => import('@/pages/admin/Applications'))
 const AdminNodes = React.lazy(() => import('@/pages/admin/Nodes'))
+const AdminUsers = React.lazy(() => import('@/pages/admin/Users'))
+const AdminAudit = React.lazy(() => import('@/pages/admin/AuditLogs'))
 const AdminAnalytics = React.lazy(() => import('@/pages/admin/Analytics'))
 const AdminUserAnalyticsDetail = React.lazy(() => import('@/pages/admin/UserAnalyticsDetail'))
-const NodeDetails = React.lazy(() => import('@/pages/node/NodeDetails'))
 
 import { useAuthStore } from '@/stores/authStore'
 
@@ -174,12 +218,11 @@ const MainLayout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
-      <div className="sticky top-0 z-50">
-        <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
-        <Navbar hideWaitlist={showTopBar} />
-      </div>
-      <main className="mx-auto flex-1 w-full">
+    <div className="min-h-screen bg-gray-950 flex flex-col overflow-x-hidden">
+      <ImpersonationBanner />
+      <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
+      <Navbar hideWaitlist={showTopBar} />
+      <main className="mx-auto flex-1 w-full overflow-x-hidden">
         <React.Suspense fallback={<PageLoader />}>
           <Outlet />
         </React.Suspense>
@@ -198,6 +241,7 @@ const MainLayout = () => {
 const AuthLayout = () => {
   return (
     <div className="min-h-screen bg-gray-950">
+      <ImpersonationBanner />
       <React.Suspense fallback={<PageLoader />}>
         <Outlet />
       </React.Suspense>
@@ -232,12 +276,13 @@ function App() {
           <Routes>
             {/* Hidden Admin Login — not linked anywhere publicly */}
             <Route element={<AuthLayout />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/auth/callback" element={<OAuthCallback />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/admin/login" element={<AdminLogin />} />
-              {/* Disabled auth routes → redirect home */}
-              <Route path="/login" element={<Navigate to="/" replace />} />
-              <Route path="/register" element={<Navigate to="/" replace />} />
-              <Route path="/auth/callback" element={<Navigate to="/" replace />} />
-              <Route path="/verify-email" element={<Navigate to="/" replace />} />
             </Route>
 
             {/* Public Marketing Routes with Navbar */}
@@ -248,6 +293,47 @@ function App() {
               <Route path="/features/network" element={<FeaturesNetworkPage />} />
               <Route path="/features/analytics" element={<FeaturesAnalyticsPage />} />
               <Route path="/how-it-works" element={<HowItWorksPage />} />
+              <Route path="/faq" element={<FAQPage />} />
+
+              {/* About Pages */}
+              <Route path="/about" element={<AboutUsPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              <Route path="/blog" element={<BlogPage />} />
+
+              {/* Participant Pages */}
+              <Route path="/participants/artists" element={<ArtistsPage />} />
+              <Route path="/participants/node-providers" element={<NodeProvidersPage />} />
+              <Route path="/participants/compute-clients" element={<ComputeClientsPage />} />
+
+              {/* Legal Routes */}
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/risk" element={<RiskDisclosure />} />
+              <Route path="/refund" element={<RefundPolicy />} />
+              <Route path="/aup" element={<AcceptableUse />} />
+
+              <Route path="/apply-node-provider" element={
+                <ProtectedRoute allowedRoles={['client', 'admin']}>
+                  <ApplyNodeProvider />
+                </ProtectedRoute>
+              } />
+              <Route path="/notifications" element={
+                <ProtectedRoute allowedRoles={['client', 'admin', 'node_provider']}>
+                  <NotificationsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/profile" element={
+                <ProtectedRoute allowedRoles={['client', 'admin', 'node_provider']}>
+                  <ProfilePage />
+                </ProtectedRoute>
+              } />
+              <Route path="/settings" element={
+                <ProtectedRoute allowedRoles={['client', 'admin', 'node_provider']}>
+                  <SettingsPage />
+                </ProtectedRoute>
+              } />
+              {/* <Route path="/login" element={<LoginPage />} /> */}
+              {/* <Route path="/register" element={<RegisterPage />} /> */}
 
               {/* Disabled user-facing routes → redirect home */}
               <Route path="/dashboard" element={<Navigate to="/" replace />} />
@@ -256,6 +342,39 @@ function App() {
               <Route path="/client/*" element={<Navigate to="/" replace />} />
               <Route path="/node/*" element={<Navigate to="/" replace />} />
 
+              {/* Client Routes */}
+              <Route
+                path="/client/*"
+                element={
+                  <ProtectedRoute allowedRoles={['client', 'admin']}>
+                    <Routes>
+                      <Route path="/dashboard" element={<ClientDashboard />} />
+                      <Route path="/create-job" element={<CreateJob />} />
+                      <Route path="/jobs/:jobId" element={<JobDetails />} /> {/* Add this route */}
+                      {/* <Route path="/jobs" element={<ClientJobs />} /> */}
+                      {/* <Route path="/settings" element={<ClientSettings />} /> */}
+                      <Route path="/billing" element={<ClientBilling />} />
+                    </Routes>
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Node Provider Routes */}
+              <Route
+                path="/node/*"
+                element={
+                  <ProtectedRoute allowedRoles={['node_provider', 'admin']}>
+                    <Routes>
+                      <Route path="/dashboard" element={<NodeDashboard />} />
+                      <Route path="/nodes/:nodeId" element={<NodeDetails />} />
+                      <Route path="/setup-guide" element={<NodeSetupGuide />} />
+                      <Route path="/earnings" element={<NodeEarnings />} />
+                    </Routes>
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Admin Routes */}
               {/* Admin Routes — accessible only to admins */}
               <Route
                 path="/admin/*"
@@ -263,11 +382,14 @@ function App() {
                   <ProtectedRoute allowedRoles={['admin']}>
                     <Routes>
                       <Route path="/dashboard" element={<AdminDashboard />} />
+                      <Route path="/analytics" element={<AdminAnalytics />} />
                       <Route path="/jobs" element={<AdminJobs />} />
                       <Route path="/jobs/:jobId" element={<AdminJobDetails />} />
                       <Route path="/applications" element={<AdminApplications />} />
                       <Route path="/nodes" element={<AdminNodes />} />
                       <Route path="/nodes/:nodeId" element={<NodeDetails />} />
+                      <Route path="/users" element={<AdminUsers />} />
+                      <Route path="/audit" element={<AdminAudit />} />
                       <Route path="/analytics" element={<AdminAnalytics />} />
                       <Route path="/analytics/users/:userId" element={<AdminUserAnalyticsDetail />} />
                       <Route path="/analytics/user/:userId" element={<AdminUserAnalyticsDetail />} />
@@ -280,6 +402,10 @@ function App() {
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+
+          {/* Global Modals must be inside Router for Link to work */}
+          <DepositModal />
+          <WithdrawModal />
         </Router>
       </AuthInitializer>
 
@@ -289,8 +415,20 @@ function App() {
         toastOptions={{
           duration: 4000,
           style: {
-            color: 'hsl(var(--foreground))',
-            border: '1px solid hsl(var(--border))',
+            background: '#111827',
+            color: '#f9fafb',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '12px',
+            fontSize: '14px',
+            fontWeight: 500,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(12px)',
+          },
+          success: {
+            iconTheme: { primary: '#10b981', secondary: '#111827' },
+          },
+          error: {
+            iconTheme: { primary: '#ef4444', secondary: '#111827' },
           },
         }}
       />
@@ -299,7 +437,6 @@ function App() {
       {import.meta.env.VITE_NODE_ENV === 'development' && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}
-
     </QueryClientProvider>
   )
 }

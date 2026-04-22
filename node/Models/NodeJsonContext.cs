@@ -26,6 +26,10 @@ namespace BlendFarm.Node.Models
     [JsonSerializable(typeof(FrameCompletionReport))]
     [JsonSerializable(typeof(FrameFailureReport))]
     [JsonSerializable(typeof(RenderConfig[]))]
+    [JsonSerializable(typeof(int))]
+    [JsonSerializable(typeof(long))]
+    [JsonSerializable(typeof(double))]
+    [JsonSerializable(typeof(bool))]
     public partial class NodeJsonContext : JsonSerializerContext
     {
     }

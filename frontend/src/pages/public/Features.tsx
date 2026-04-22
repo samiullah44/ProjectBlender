@@ -38,7 +38,7 @@ const Features = () => {
   };
 
   return (
-    <div className="bg-[#0B0F19] min-h-screen text-white pt-24 pb-20">
+    <div className="bg-[#050505] min-h-screen text-white pt-24 pb-20">
       
       {/* Hero Section */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 text-center mb-32">

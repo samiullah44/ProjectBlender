@@ -32,7 +32,7 @@ export interface Job {
   };
   
   assignedNodes: Map<string, number[]>;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'pending_payment' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
   progress: number;
   
   outputUrls: string[];

@@ -40,7 +40,7 @@ const VerifyEmailPage: React.FC = () => {
         if (result.success) {
             setVerificationSuccess(true)
             setTimeout(() => {
-                navigate('/dashboard')
+                navigate('/')
             }, 2000)
         }
     }
@@ -86,7 +86,7 @@ const VerifyEmailPage: React.FC = () => {
                                     Email Verified!
                                 </h3>
                                 <p className="text-gray-400">
-                                    Redirecting to dashboard...
+                                    Redirecting to home page...
                                 </p>
                             </motion.div>
                         ) : (

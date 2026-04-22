@@ -6,6 +6,9 @@ import { S3Service } from '../services/S3Service';
 import { AppError } from '../middleware/error';
 import { CreateJobRequest, JobFilterOptions, PaginationOptions } from '../types/job.types';
 import archiver from 'archiver';
+import { Job } from '../models/Job';
+import { User } from '../models/User';
+import { enqueueJobFrames } from '../services/FrameQueueService';
 // Removed unused authMiddleware import
 
 export class JobController {
@@ -318,7 +321,8 @@ export class JobController {
         startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
         endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
         search: req.query.search as string,
-        approved: req.query.approved ? req.query.approved === 'true' : undefined
+        approved: req.query.approved ? req.query.approved === 'true' : undefined,
+        adminView: req.query.adminView === 'true'
       };
 
       const pagination: PaginationOptions = {
@@ -486,7 +490,8 @@ export class JobController {
         throw new AppError('Authentication required', 401);
       }
 
-      const stats = await this.jobService.getJobStats(user.userId, user.role);
+      const adminView = req.query.adminView === 'true';
+      const stats = await this.jobService.getJobStats(user.userId, user.role, adminView);
 
       res.json({
         success: true,
@@ -667,6 +672,110 @@ export class JobController {
         error: 'Failed to get job status',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
+    }
+  }
+
+  // USER: After on-chain lock_payment succeeds, mark job as ready and enqueue frames.
+  async lockOnchainPayment(req: Request, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const user = (req as any).user;
+
+      if (!user) {
+        throw new AppError('Authentication required', 401);
+      }
+      const jobIdStr = Array.isArray(jobId) ? jobId[0] : jobId;
+      if (!jobIdStr) {
+        throw new AppError('Job ID is required', 400);
+      }
+
+      const { txSignature, escrowAddress, lockedAmount, escrowJobId } = req.body || {};
+      if (!txSignature || !escrowAddress || typeof lockedAmount !== 'number' || !escrowJobId) {
+        throw new AppError('txSignature, escrowAddress, lockedAmount, and escrowJobId are required', 400);
+      }
+
+      const job = await Job.findOne({ jobId: jobIdStr });
+      if (!job) {
+        throw new AppError('Job not found', 404);
+      }
+
+      // Security: only job owner (or admin) can lock the payment for their job.
+      if (user.role !== 'admin') {
+        if (!job.userId || job.userId.toString() !== user.userId) {
+          throw new AppError('Unauthorized', 403);
+        }
+      }
+
+      // Idempotency: if we already locked and enqueued, return the current state.
+      if (job.escrow?.status === 'locked') {
+        res.json({ success: true, jobId: job.jobId, status: job.status, escrow: job.escrow });
+        return;
+      }
+
+      // Only allow the transition from "waiting for lock" to "ready to run".
+      if (job.status !== 'pending_payment') {
+        throw new AppError(`Job is not ready to be locked (current status: ${job.status})`, 400);
+      }
+
+      // Record escrow details and transition job state.
+      job.escrow = {
+        txSignature,
+        escrowAddress,
+        escrowJobId,
+        lockedAmount,
+        status: 'locked',
+        lockedAt: new Date()
+      } as any;
+
+      job.status = 'pending';
+      await job.save();
+
+      // Deduct from User's DB tokenBalance (Maintain sync with On-chain)
+      // This is crucial to fix the "Balance not updating in DB" issue reported by the user
+      if (job.userId && lockedAmount) {
+        await User.findByIdAndUpdate(job.userId, {
+            $inc: { tokenBalance: -Number(lockedAmount) }
+        });
+        console.log(`Deducted ${lockedAmount} from User ${job.userId} DB balance`);
+      }
+
+      // Enqueue frames now that payment is locked.
+      const selectedFrames: number[] = job.frames?.selected || [];
+      if (!selectedFrames.length) {
+        throw new AppError('No selected frames found for this job', 400);
+      }
+
+      const engine = (job.settings?.engine || 'CYCLES').toString();
+      const device = (job.settings?.device || 'GPU').toString();
+      await enqueueJobFrames(jobIdStr, selectedFrames, engine, device);
+
+      const wsService = this.getWsService(req);
+      if (wsService) {
+        wsService.broadcastJobUpdate(jobIdStr);
+        wsService.notifyNodesToCheckJobs();
+      }
+
+      res.json({
+        success: true,
+        jobId: job.jobId,
+        status: job.status,
+        escrow: job.escrow
+      });
+      return;
+    } catch (error) {
+      console.error('lockOnchainPayment error:', error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
+          error: error.message
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to lock on-chain payment',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     }
   }
 

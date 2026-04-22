@@ -1,4 +1,4 @@
-// components/layout/Navbar.tsx - UPDATED
+// components/layout/Navbar.tsx - FIXED & UPDATED
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -21,7 +21,15 @@ import {
   CreditCard,
   Cpu,
   ArrowLeftRight,
-  HardDrive
+  HardDrive,
+  Info,
+  Image,
+  Mail,
+  BookOpen,
+  Palette,
+  Network,
+  Building2,
+  Layers
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -30,6 +38,11 @@ import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'react-hot-toast'
 import { NotificationBell } from './NotificationBell'
 import { useOnClickOutside } from '@/hooks/useOnClickOutside'
+import { useRenderNetwork } from '@/hooks/useRenderNetwork'
+import { useWallet } from '@solana/wallet-adapter-react'
+
+// We no longer import WalletMultiButton as we are removing it from the header per user request
+// import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 
 interface NavItem {
   label: string
@@ -51,22 +64,40 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
   const [isOpen, setIsOpen] = useState(false)
+  const [expandedItems, setExpandedItems] = useState<string[]>([])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [balanceMenuOpen, setBalanceMenuOpen] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const [isSubscribed, setIsSubscribed] = useState(false)
+  const [isMobileRoleDropdownOpen, setIsMobileRoleDropdownOpen] = useState(false)
+
+  const toggleSubmenu = (label: string) => {
+    setExpandedItems(prev =>
+      prev.includes(label)
+        ? prev.filter(item => item !== label)
+        : [...prev, label]
+    )
+  }
 
   const userMenuRef = useRef<HTMLDivElement>(null)
+  const balanceMenuRef = useRef<HTMLDivElement>(null)
 
   const { user, isAuthenticated, logout, switchRole } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
+  const { publicKey } = useWallet()
+  const { creditedAmount, lockedAmount, isInitialized, isRefreshing, syncSolanaSeed } = useRenderNetwork()
 
   const activeRole = user?.primaryRole || user?.role;
   const isProvider = activeRole === 'node_provider';
 
   useOnClickOutside(userMenuRef, () => {
     if (userMenuOpen) setUserMenuOpen(false)
+  })
+
+  useOnClickOutside(balanceMenuRef, () => {
+    if (balanceMenuOpen) setBalanceMenuOpen(false)
   })
 
   useEffect(() => {
@@ -128,96 +159,94 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
           description: 'Real-time rendering insights',
           icon: <BarChart3 className="w-4 h-4" />
         },
-        // {
-        //   label: 'Cost Calculator',
-        //   href: '/features/pricing',
-        //   description: 'Estimate rendering costs',
-        //   icon: <CreditCard className="w-4 h-4" />
-        // }
+        {
+          label: 'How It Works',
+          href: '/how-it-works',
+          description: 'Step-by-step render pipeline',
+          icon: <Layers className="w-4 h-4" />
+        },
       ]
     },
     {
-      label: 'How It Works',
-      href: '/how-it-works',
-      icon: <Settings className="w-4 h-4" />
-    }
-    // {
-    //   label: 'Pricing',
-    //   href: '/pricing',
-    //   icon: <Wallet className="w-4 h-4" />
-    // },
-    // {
-    //   label: 'Docs',
-    //   href: '/docs',
-    //   icon: <FileText className="w-4 h-4" />
-    // }
+      label: 'About',
+      href: '/about',
+      icon: <Info className="w-4 h-4" />,
+      submenu: [
+        {
+          label: 'About Us',
+          href: '/about',
+          description: 'Our mission & story',
+          icon: <Info className="w-4 h-4" />
+        },
+        {
+          label: 'Contact',
+          href: '/contact',
+          description: 'Get in touch with us',
+          icon: <Mail className="w-4 h-4" />
+        },
+      ]
+    },
+    {
+      label: 'Participants',
+      href: '/participants/artists',
+      icon: <Network className="w-4 h-4" />,
+      submenu: [
+        {
+          label: 'Artists',
+          href: '/participants/artists',
+          description: 'For Blender creators',
+          icon: <Palette className="w-4 h-4" />
+        },
+        {
+          label: 'Node Providers',
+          href: '/participants/node-providers',
+          description: 'Monetize your idle GPU',
+          icon: <Server className="w-4 h-4" />
+        },
+        {
+          label: 'Compute Clients',
+          href: '/participants/compute-clients',
+          description: 'Enterprise rendering power',
+          icon: <Building2 className="w-4 h-4" />
+        },
+      ]
+    },
   ]
 
   const getModuleLinks = () => {
     if (!isAuthenticated || !user) return []
 
-    const baseLinks: any[] = []
-    const hasRole = (role: string) => user.roles?.includes(role as any) || user.role === role;
     const activeRole = user.primaryRole || user.role;
-
-    if (hasRole('client') || hasRole('admin')) {
-      baseLinks.push({
-        label: 'Client Dashboard',
-        href: '/client/dashboard',
-        icon: <User className="w-4 h-4" />,
-        color: 'text-emerald-400',
-        bgColor: 'bg-emerald-500/10',
-        roles: ['client', 'admin']
-      })
+    
+    // Return only the link for the currently active role
+    if (activeRole === 'admin') {
+      return [{
+        label: 'Admin Panel',
+        href: '/admin/dashboard',
+        icon: <Shield className="w-4 h-4" />,
+        color: 'text-amber-400',
+        bgColor: 'bg-amber-500/10'
+      }]
     }
 
-    if (hasRole('node_provider') || hasRole('admin')) {
-      baseLinks.push({
+    if (activeRole === 'node_provider') {
+      return [{
         label: 'Node Dashboard',
         href: '/node/dashboard',
         icon: <Server className="w-4 h-4" />,
         color: 'text-purple-400',
-        bgColor: 'bg-purple-500/10',
-        roles: ['node_provider', 'admin']
-      })
+        bgColor: 'bg-purple-500/10'
+      }]
     }
 
-    if (hasRole('admin')) {
-      baseLinks.push({
-        label: 'Admin Panel',
-        href: '/admin/dashboard',
-        icon: <Shield className="w-4 h-4" />,
-        color: 'text-red-400',
-        bgColor: 'bg-red-500/10',
-        roles: ['admin']
-      })
-      baseLinks.push({
-        label: 'Network Nodes',
-        href: '/admin/nodes',
-        icon: <HardDrive className="w-4 h-4" />,
-        color: 'text-cyan-400',
-        bgColor: 'bg-cyan-500/10',
-        roles: ['admin']
-      })
-      baseLinks.push({
-        label: 'Analytics',
-        href: '/admin/analytics',
-        icon: <BarChart3 className="w-4 h-4" />,
-        color: 'text-indigo-400',
-        bgColor: 'bg-indigo-500/10',
-        roles: ['admin']
-      })
-    }
-
-    const moduleLinks = baseLinks.filter(link => {
-      // Admins see all their related dashboards in the Navbar for easy access
-      if (hasRole('admin')) return true;
-
-      if (!link.roles) return true;
-      return link.roles.includes(activeRole as any);
-    });
-
-    return moduleLinks;
+    // Default to client
+    return [{
+      label: 'Client Dashboard',
+      href: '/client/dashboard',
+      icon: <User className="w-4 h-4" />,
+      color: 'text-emerald-400',
+      bgColor: 'bg-emerald-500/10'
+    }]
   }
 
   const userMenuItems = [
@@ -232,18 +261,13 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
       icon: <Settings className="w-4 h-4" />
     },
     {
-      label: 'Credits',
-      href: '/credits',
-      icon: <CreditCard className="w-4 h-4" />
-    },
-    {
       label: 'Notifications',
       href: '/notifications',
       icon: <Bell className="w-4 h-4" />
     },
     {
-      label: 'Billing',
-      href: '/billing',
+      label: activeRole === 'node_provider' ? 'Earnings' : 'Billing',
+      href: activeRole === 'node_provider' ? '/node/earnings' : '/client/billing',
       icon: <Wallet className="w-4 h-4" />
     }
   ]
@@ -257,7 +281,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
         animate={{ y: 0 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
         className={cn(
-          'relative w-full transition-all duration-300 backdrop-blur-xl border-b',
+          'sticky top-0 w-full z-[100] transition-all duration-300 backdrop-blur-xl border-b',
           isProvider
             ? scrolled
               ? 'bg-[#0A0A0B]/95 border-purple-500/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)]'
@@ -329,7 +353,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute left-0 mt-2 w-64 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden"
+                        className="absolute left-0 mt-2 w-72 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden"
                       >
                         <div className="py-2">
                           {item.submenu.map((subItem) => (
@@ -366,43 +390,10 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
 
             {/* Right Side - Modules & Auth */}
             <div className="hidden lg:flex items-center gap-4">
-              {/* Search
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="search"
-                  placeholder="Search..."
-                  className="pl-10 pr-4 py-2 w-40 rounded-lg bg-white/5 border border-white/10 text-sm placeholder-gray-400 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 text-white"
-                />
-              </div> */}
-
-
-
               {isAuthenticated && user ? (
                 <>
                   {/* Notifications */}
                   <NotificationBell />
-
-                  {/* Credits Display */}
-                  <div className={cn(
-                    "px-3 py-1.5 rounded-lg border transition-all duration-300",
-                    isProvider
-                      ? "bg-purple-500/10 border-purple-500/20"
-                      : "bg-emerald-500/10 border-emerald-500/20"
-                  )}>
-                    <div className="flex items-center gap-2">
-                      <CreditCard className={cn(
-                        "w-4 h-4",
-                        isProvider ? "text-purple-400" : "text-emerald-400"
-                      )} />
-                      <span className={cn(
-                        "text-sm font-medium",
-                        isProvider ? "text-purple-400" : "text-emerald-400"
-                      )}>
-                        {user.credits?.toLocaleString()} credits
-                      </span>
-                    </div>
-                  </div>
 
                   {/* Role Switcher */}
                   {user.roles && user.roles.length > 1 && (
@@ -485,96 +476,219 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                     </div>
                   )}
 
-                  {/* User Profile */}
-                  <div className="relative" ref={userMenuRef}>
-                    <button
-                      onClick={() => setUserMenuOpen(!userMenuOpen)}
-                      className="flex items-center gap-3 p-1 rounded-lg hover:bg-white/5 transition-colors"
-                    >
-                      <div className="text-right hidden sm:block">
-                        <div className="text-sm font-medium text-white">
-                          {user.name}
-                        </div>
-                        <div className="text-xs text-gray-400 capitalize">
-                          {user.role?.replace('_', ' ') || user.role}
-                        </div>
-                      </div>
-                      <div className={cn(
-                        "w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold transition-all duration-500",
-                        isProvider
-                          ? "bg-gradient-to-br from-purple-600 to-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
-                          : "bg-gradient-to-br from-emerald-500 to-cyan-500"
-                      )}>
-                        {user.name.charAt(0).toUpperCase()}
-                      </div>
-                      <ChevronDown className={cn(
-                        "w-4 h-4 text-gray-400 transition-transform duration-200",
-                        userMenuOpen && "rotate-180"
-                      )} />
-                    </button>
+                  {/* Combined Balance & User Profile Widget */}
+                  <div className={cn(
+                    "flex items-center rounded-full transition-all relative backdrop-blur-sm",
+                    isProvider
+                      ? "bg-purple-500/10 hover:bg-purple-500/15 border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
+                      : "bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                  )}>
 
-                    {/* User Dropdown */}
-                    <AnimatePresence>
-                      {userMenuOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="absolute right-0 mt-2 w-64 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden"
-                          onClick={() => setUserMenuOpen(false)}
-                        >
-                          <div className="p-4 border-b border-white/10">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-semibold text-lg">
-                                {user.name.charAt(0).toUpperCase()}
-                              </div>
-                              <div>
-                                <div className="font-medium text-white">
-                                  {user.name}
+                    {/* Balance Menu */}
+                    <div className="relative" ref={balanceMenuRef}>
+                      <button
+                        onClick={() => {
+                          setBalanceMenuOpen(!balanceMenuOpen);
+                          setUserMenuOpen(false);
+                        }}
+                        className="flex items-center gap-2 pl-4 pr-3 py-1.5 transition-colors group"
+                      >
+                        <span className={cn(
+                          "text-sm font-bold tracking-wide transition-colors",
+                          isProvider
+                            ? "text-purple-400 group-hover:text-purple-300"
+                            : "text-emerald-400 group-hover:text-emerald-300"
+                        )}>
+                          RNDR {isRefreshing ? '...' : (creditedAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+                        </span>
+                      </button>
+
+                      {/* Balance Dropdown */}
+                      <AnimatePresence>
+                        {balanceMenuOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute right-0 mt-3 w-56 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden z-50"
+                          >
+                            <div className="p-3 border-b border-white/10 bg-gray-800/50">
+                              <div className="text-xs text-gray-400 font-semibold mb-1 uppercase tracking-wider">Available Balance</div>
+                              <div className="text-lg font-bold text-white tracking-tight">{(creditedAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} <span className="text-sm text-amber-500 font-semibold">mRNDR</span></div>
+                              {lockedAmount > 0 && (
+                                <div className="text-xs text-amber-500/80 font-medium mt-1">
+                                  {lockedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} Locked
                                 </div>
-                                <div className="text-sm text-gray-400">
-                                  {user.email}
+                              )}
+                            </div>
+                            <div className="p-2 space-y-1">
+                              <button
+                                onClick={() => {
+                                  window.dispatchEvent(new Event('open-deposit-modal'));
+                                  setBalanceMenuOpen(false);
+                                }}
+                                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-emerald-500/10 text-emerald-400 font-semibold text-sm transition-colors group"
+                              >
+                                <div className="p-1.5 bg-emerald-500/20 rounded-md group-hover:scale-110 transition-transform">
+                                  <CreditCard className="w-3.5 h-3.5" />
                                 </div>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <CreditCard className="w-3 h-3 text-emerald-400" />
-                                  <span className="text-xs text-emerald-400 font-medium">
-                                    {user.credits?.toLocaleString()} credits
-                                  </span>
+                                Deposit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  window.dispatchEvent(new Event('open-withdraw-modal'));
+                                  setBalanceMenuOpen(false);
+                                }}
+                                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-red-500/10 text-red-400 font-semibold text-sm transition-colors group"
+                              >
+                                <div className="p-1.5 bg-red-500/20 rounded-md group-hover:scale-110 transition-transform">
+                                  <CreditCard className="w-3.5 h-3.5" />
+                                </div>
+                                Withdraw
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Divider */}
+                    <div className={cn(
+                      "w-[1px] h-5",
+                      isProvider ? "bg-purple-500/30" : "bg-emerald-500/30"
+                    )}></div>
+
+                    {/* User Profile Menu */}
+                    <div className="relative" ref={userMenuRef}>
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(!userMenuOpen);
+                          setBalanceMenuOpen(false);
+                        }}
+                        className="flex items-center justify-center p-1 mr-1"
+                      >
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs uppercase shadow-lg transform transition-transform hover:scale-105",
+                          isProvider
+                            ? "bg-gradient-to-br from-purple-600 to-purple-500 shadow-purple-600/30"
+                            : "bg-gradient-to-br from-emerald-500 to-cyan-500 shadow-emerald-500/30"
+                        )}>
+                          {user.name.substring(0, 2)}
+                        </div>
+                      </button>
+
+                      {/* User Dropdown */}
+                      <AnimatePresence>
+                        {userMenuOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute right-0 mt-3 w-64 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden z-50"
+                          >
+                            <div className="p-4 border-b border-white/10 bg-gray-800/30">
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  "w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg uppercase",
+                                  isProvider
+                                    ? "bg-gradient-to-br from-purple-600 to-purple-500"
+                                    : "bg-gradient-to-br from-emerald-500 to-cyan-500"
+                                )}>
+                                  {user.name.substring(0, 2)}
+                                </div>
+                                <div>
+                                  <div className="font-medium text-white">
+                                    {user.name}
+                                  </div>
+                                  <div className="text-sm text-gray-400">
+                                    {user.email}
+                                  </div>
+                                  <div className={cn(
+                                    "text-xs font-semibold mt-1 capitalize",
+                                    isProvider ? "text-purple-400" : "text-emerald-400"
+                                  )}>
+                                    {activeRole?.replace('_', ' ') || activeRole}
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
+                            <div className="py-2">
+                              {userMenuItems.map((item) => (
+                                <Link
+                                  key={item.label}
+                                  to={item.href}
+                                  onClick={() => setUserMenuOpen(false)}
+                                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors group"
+                                >
+                                  <div className="text-gray-400 group-hover:text-white transition-colors">
+                                    {item.icon}
+                                  </div>
+                                  <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">{item.label}</span>
+                                </Link>
+                              ))}
 
-                          <div className="py-2">
-                            {userMenuItems.map((item) => (
-                              <Link
-                                key={item.label}
-                                to={item.href}
-                                className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                              <div className="h-[1px] w-full bg-white/10 my-2"></div>
+
+                              {user?.solanaSeed && publicKey && publicKey.toBase58() !== user.solanaSeed && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    syncSolanaSeed();
+                                    setUserMenuOpen(false);
+                                  }}
+                                  className="flex items-center gap-3 w-full px-4 py-3 bg-amber-500/10 hover:bg-amber-500/20 transition-colors text-left group border-b border-white/5 mb-2"
+                                >
+                                  <div className="p-1.5 bg-amber-500/20 rounded-md group-hover:scale-110 transition-transform">
+                                    <ArrowLeftRight className="w-4 h-4 text-amber-400" />
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-amber-400">Sync Identity</span>
+                                    <span className="text-[10px] text-amber-500/70">Connect this wallet to account</span>
+                                  </div>
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => {
+                                  handleLogout()
+                                  setUserMenuOpen(false)
+                                }}
+                                className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-red-500/10 group transition-colors"
                               >
-                                {item.icon}
-                                <span className="text-sm text-gray-300">{item.label}</span>
-                              </Link>
-                            ))}
-
-                            <button
-                              onClick={handleLogout}
-                              className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-500/10 text-red-400 transition-colors"
-                            >
-                              <LogOut className="w-4 h-4" />
-                              <span className="text-sm">Logout</span>
-                            </button>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                                <div className="text-red-400 transition-colors">
+                                  <LogOut className="w-4 h-4" />
+                                </div>
+                                <span className="text-sm font-medium text-red-400">Logout</span>
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </>
               ) : (
-                /* Auth Buttons for non-authenticated users */
                 <div className="flex items-center gap-3">
-
+                  <Link to="/login">
+                    <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white">
+                      Sign In
+                    </Button>
+                  </Link>
+                  <Link to="/register">
+                    <Button className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700">
+                      Get Started
+                    </Button>
+                  </Link>
+                  {!hideWaitlist && !isSubscribed && (
+                    <Button
+                      onClick={() => window.dispatchEvent(new Event('open-waitlist'))}
+                      className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 font-semibold shadow-lg shadow-emerald-500/20 ml-2"
+                    >
+                      Join Waitlist
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -593,162 +707,340 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
             </button>
           </div>
         </div>
+      </motion.nav>
 
-        {/* Mobile Menu */}
-        <AnimatePresence>
-          {isOpen && (
+      {/* Mobile Menu - Side Drawer */}
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Backdrop */}
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="lg:hidden bg-gray-900/95 backdrop-blur-xl border-b border-white/5 overflow-hidden"
-            >
-              <div className="container mx-auto px-4 py-6">
-                {/* Mobile Navigation */}
-                <div className="space-y-2">
-                  {navItems.map((item) => (
-                    <div key={item.label}>
-                      <Link
-                        to={item.href}
-                        className="flex items-center justify-between px-4 py-3 rounded-lg hover:bg-white/5 transition-colors"
-                        onClick={() => setIsOpen(false)}
-                      >
-                        <div className="flex items-center gap-3">
-                          {item.icon}
-                          <span className="font-medium text-gray-300">
-                            {item.label}
-                          </span>
-                        </div>
-                        {item.submenu && (
-                          <ChevronDown className="w-4 h-4 text-gray-400" />
-                        )}
-                      </Link>
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] lg:hidden"
+            />
 
-                      {/* Mobile Submenu */}
-                      {item.submenu && (
-                        <div className="ml-8 mt-1 space-y-1">
-                          {item.submenu.map((subItem) => (
-                            <Link
-                              key={subItem.label}
-                              to={subItem.href}
-                              className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-white/5 transition-colors"
-                              onClick={() => setIsOpen(false)}
-                            >
-                              {subItem.icon}
-                              <div>
-                                <div className="text-sm text-gray-300">
-                                  {subItem.label}
-                                </div>
-                                {subItem.description && (
-                                  <div className="text-xs text-gray-500">
-                                    {subItem.description}
-                                  </div>
-                                )}
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed top-0 right-0 h-full w-[85%] max-w-[320px] bg-gray-950/95 backdrop-blur-2xl border-l border-white/10 z-[70] lg:hidden shadow-2xl flex flex-col"
+            >
+              <div className="flex items-center justify-between p-4 border-b border-white/5">
+                <div className="flex flex-col">
+                  <span className="font-bold text-lg tracking-tight">
+                    <span className={cn(
+                      "bg-gradient-to-r bg-clip-text text-transparent",
+                      isProvider ? "bg-purple-500" : "from-emerald-400 to-cyan-400"
+                    )}>
+                      Render
+                    </span>
+                    <span className="text-white">OnNodes</span>
+                  </span>
+                </div>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+                {/* User Profile Summary (If Logged In) */}
+                {isAuthenticated && user && (
+                  <div className="mb-8 p-4 rounded-xl bg-white/5 border border-white/5">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className={cn(
+                        "w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg",
+                        isProvider ? "bg-purple-600" : "bg-emerald-500"
+                      )}>
+                        {user.name.substring(0, 1)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-white truncate">{user.name}</div>
+                        <div className="text-xs text-gray-400 truncate capitalize">{activeRole?.replace('_', ' ')}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-black/40 border border-white/5">
+                      <span className="text-gray-400 font-medium">Balance</span>
+                      <span className={cn("font-bold", isProvider ? "text-purple-400" : "text-emerald-400")}>
+                        {isRefreshing ? '...' : (creditedAmount ?? 0).toFixed(2)} mRNDR
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 px-2">Navigation</div>
+                  {navItems.map((item) => (
+                    <div key={item.label} className="space-y-1">
+                      {item.submenu ? (
+                        <>
+                          <button
+                            onClick={() => toggleSubmenu(item.label)}
+                            className="flex items-center justify-between w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-all text-gray-300 group"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-white/5 text-gray-400 group-hover:text-white transition-colors">
+                                {item.icon}
                               </div>
-                            </Link>
-                          ))}
-                        </div>
+                              <span className="font-medium">{item.label}</span>
+                            </div>
+                            <ChevronDown className={cn(
+                              "w-4 h-4 text-gray-500 transition-transform duration-200",
+                              expandedItems.includes(item.label) && "rotate-180"
+                            )} />
+                          </button>
+                          <AnimatePresence>
+                            {expandedItems.includes(item.label) && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden ml-4 pl-4 border-l border-white/5 space-y-1"
+                              >
+                                {item.submenu.map((subItem) => (
+                                  <Link
+                                    key={subItem.label}
+                                    to={subItem.href}
+                                    onClick={() => setIsOpen(false)}
+                                    className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                  >
+                                    {subItem.icon}
+                                    {subItem.label}
+                                  </Link>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </>
+                      ) : (
+                        <Link
+                          to={item.href}
+                          onClick={() => setIsOpen(false)}
+                          className={cn(
+                            "flex items-center gap-3 px-4 py-3 rounded-xl transition-all group",
+                            location.pathname === item.href ? "bg-white/10 text-white" : "text-gray-300 hover:bg-white/5"
+                          )}
+                        >
+                          <div className={cn(
+                            "p-2 rounded-lg transition-colors",
+                            location.pathname === item.href ? "bg-white/10" : "bg-white/5 text-gray-400 group-hover:text-white"
+                          )}>
+                            {item.icon}
+                          </div>
+                          <span className="font-medium">{item.label}</span>
+                        </Link>
                       )}
                     </div>
                   ))}
                 </div>
 
-                {/* Mobile Auth & Modules */}
-                <div className="mt-8 pt-6 border-t border-white/10">
-                  {isAuthenticated && user ? (
-                    <>
-                      <div className="mb-6">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className={cn(
-                            "w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold transition-all duration-500",
-                            isProvider
-                              ? "bg-gradient-to-br from-purple-500 to-emerald-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
-                              : "bg-gradient-to-br from-emerald-500 to-cyan-500"
-                          )}>
-                            {user.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="font-medium text-white">
-                              {user.name}
-                            </div>
-                            <div className="text-sm text-gray-400 capitalize">
-                              {user.role?.replace('_', ' ') || user.role}
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <CreditCard className={cn(
-                                "w-3 h-3",
-                                isProvider ? "text-purple-400" : "text-emerald-400"
-                              )} />
-                              <span className={cn(
-                                "text-xs font-medium",
-                                isProvider ? "text-purple-400" : "text-emerald-400"
+                {isAuthenticated && user && (
+                  <div className="mt-8 space-y-1">
+                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 px-2">Account & Actions</div>
+
+                    {moduleLinks.map((link) => (
+                      <Link
+                        key={link.label}
+                        to={link.href}
+                        onClick={() => setIsOpen(false)}
+                        className={cn(
+                          "flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
+                          link.bgColor,
+                          link.color
+                        )}
+                      >
+                        <div className="p-2 rounded-lg bg-black/20">
+                          {link.icon}
+                        </div>
+                        <span className="font-bold">{link.label}</span>
+                      </Link>
+                    ))}
+
+                    {/* Role Switcher Action Dropdown (Mobile) */}
+                    {user?.roles && user.roles.length > 1 && (
+                      <div className="py-2">
+                        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 px-2">Account View</div>
+                        <div className="relative">
+                          <button
+                            onClick={() => setIsMobileRoleDropdownOpen(!isMobileRoleDropdownOpen)}
+                            className={cn(
+                              "flex items-center justify-between w-full px-4 py-3 rounded-xl transition-all border",
+                              activeRole === 'admin' ? "bg-amber-500/10 border-amber-500/20 text-amber-400" :
+                              activeRole === 'node_provider' ? "bg-purple-500/10 border-purple-500/20 text-purple-400" :
+                              "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "p-2 rounded-lg bg-black/20",
+                                activeRole === 'admin' ? "text-amber-400" :
+                                activeRole === 'node_provider' ? "text-purple-400" :
+                                "text-emerald-400"
                               )}>
-                                {user.credits?.toLocaleString()} credits
+                                {activeRole === 'admin' ? <Shield className="w-4 h-4" /> :
+                                 activeRole === 'node_provider' ? <Server className="w-4 h-4" /> :
+                                 <User className="w-4 h-4" />}
+                              </div>
+                              <span className="font-bold text-sm capitalize">
+                                {activeRole?.replace('_', ' ')} View
                               </span>
                             </div>
-                          </div>
-                        </div>
-
-                        {/* Mobile Module Links */}
-                        {moduleLinks.length > 0 && (
-                          <div className="grid grid-cols-1 gap-2 mb-6">
-                            {moduleLinks.map((link) => (
-                              <Link
-                                key={link.label}
-                                to={link.href}
-                                className={cn(
-                                  "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium",
-                                  link.bgColor,
-                                  link.color
-                                )}
-                                onClick={() => setIsOpen(false)}
-                              >
-                                {link.icon}
-                                {link.label}
-                              </Link>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Mobile User Menu */}
-                        <div className="space-y-1">
-                          {userMenuItems.map((item) => (
-                            <Link
-                              key={item.label}
-                              to={item.href}
-                              className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/5 transition-colors"
-                              onClick={() => setIsOpen(false)}
-                            >
-                              {item.icon}
-                              <span className="text-gray-300">{item.label}</span>
-                            </Link>
-                          ))}
-
-                          <button
-                            onClick={() => {
-                              handleLogout()
-                              setIsOpen(false)
-                            }}
-                            className="flex items-center gap-3 w-full px-4 py-3 rounded-lg hover:bg-red-500/10 text-red-400 transition-colors"
-                          >
-                            <LogOut className="w-4 h-4" />
-                            <span>Logout</span>
+                            <ChevronDown className={cn(
+                              "w-4 h-4 transition-transform duration-200",
+                              isMobileRoleDropdownOpen && "rotate-180"
+                            )} />
                           </button>
+                          
+                          <AnimatePresence>
+                            {isMobileRoleDropdownOpen && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden bg-white/5 rounded-xl mt-2 border border-white/10"
+                              >
+                                {(user?.roles?.includes('admin') || user?.role === 'admin') && activeRole !== 'admin' && (
+                                  <button
+                                    onClick={async () => {
+                                      const result = await switchRole('admin');
+                                      if (result.success) navigate('/admin/dashboard');
+                                      setIsOpen(false);
+                                      setIsMobileRoleDropdownOpen(false);
+                                    }}
+                                    className="flex items-center gap-3 w-full px-4 py-3 hover:bg-white/5 transition-colors text-left"
+                                  >
+                                    <Shield className="w-4 h-4 text-amber-400" />
+                                    <span className="text-amber-400 font-semibold text-sm">Admin View</span>
+                                  </button>
+                                )}
+                                {user?.roles?.includes('client') && activeRole !== 'client' && (
+                                  <button
+                                    onClick={async () => {
+                                      const result = await switchRole('client');
+                                      if (result.success) navigate('/client/dashboard');
+                                      setIsOpen(false);
+                                      setIsMobileRoleDropdownOpen(false);
+                                    }}
+                                    className="flex items-center gap-3 w-full px-4 py-3 hover:bg-white/5 transition-colors text-left"
+                                  >
+                                    <User className="w-4 h-4 text-emerald-400" />
+                                    <span className="text-emerald-400 font-semibold text-sm">Client View</span>
+                                  </button>
+                                )}
+                                {user?.roles?.includes('node_provider') && activeRole !== 'node_provider' && (
+                                  <button
+                                    onClick={async () => {
+                                      const result = await switchRole('node_provider');
+                                      if (result.success) navigate('/node/dashboard');
+                                      setIsOpen(false);
+                                      setIsMobileRoleDropdownOpen(false);
+                                    }}
+                                    className="flex items-center gap-3 w-full px-4 py-3 hover:bg-white/5 transition-colors text-left"
+                                  >
+                                    <Server className="w-4 h-4 text-purple-400" />
+                                    <span className="text-purple-400 font-semibold text-sm">Provider View</span>
+                                  </button>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-col gap-3">
+                    )}
 
+                    {/* Deposit & Withdraw Actions */}
+                    <div className="grid grid-cols-1 gap-2 py-2">
+                      <button
+                        onClick={() => {
+                          window.dispatchEvent(new Event('open-deposit-modal'));
+                          setIsOpen(false);
+                        }}
+                        className="flex items-center gap-3 w-full px-4 py-3 rounded-xl hover:bg-emerald-500/10 bg-emerald-500/5 transition-colors text-left border border-emerald-500/20 group"
+                      >
+                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
+                          <CreditCard className="w-4 h-4" />
+                        </div>
+                        <span className="text-emerald-400 font-bold text-sm">Deposit Tokens</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          window.dispatchEvent(new Event('open-withdraw-modal'));
+                          setIsOpen(false);
+                        }}
+                        className="flex items-center gap-3 w-full px-4 py-3 rounded-xl hover:bg-red-500/10 bg-red-500/5 transition-colors text-left border border-red-500/20 group"
+                      >
+                        <div className="p-2 rounded-lg bg-red-500/10 text-red-400 group-hover:bg-red-500/20 transition-colors">
+                          <CreditCard className="w-4 h-4" />
+                        </div>
+                        <span className="text-red-400 font-bold text-sm">Withdraw Tokens</span>
+                      </button>
                     </div>
-                  )}
-                </div>
+
+                    {userMenuItems.map((item) => (
+                      <Link
+                        key={item.label}
+                        to={item.href}
+                        onClick={() => setIsOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:bg-white/5 transition-colors"
+                      >
+                        <div className="p-2 rounded-lg bg-white/5 text-gray-400">
+                          {item.icon}
+                        </div>
+                        <span className="font-medium text-sm">{item.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+
+                {!isAuthenticated && (
+                  <div className="mt-8 space-y-3">
+                    <Link
+                      to="/login"
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center justify-center w-full py-4 rounded-xl font-bold bg-white/5 text-gray-200 hover:bg-white/10 transition-colors border border-white/5"
+                    >
+                      Sign In
+                    </Link>
+                    <Link
+                      to="/register"
+                      onClick={() => setIsOpen(false)}
+                      className={cn(
+                        "flex items-center justify-center w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all",
+                        isProvider ? "bg-purple-600 shadow-purple-900/40" : "bg-emerald-600 shadow-emerald-900/40"
+                      )}
+                    >
+                      Get Started
+                    </Link>
+                  </div>
+                )}
               </div>
+
+              {isAuthenticated && (
+                <div className="p-4 border-t border-white/5 space-y-3">
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setIsOpen(false);
+                    }}
+                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-red-500/10 text-red-400 font-bold hover:bg-red-500/20 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Logout
+                  </button>
+                </div>
+              )}
             </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.nav>
+          </>
+        )}
+      </AnimatePresence>
     </>
   )
 }

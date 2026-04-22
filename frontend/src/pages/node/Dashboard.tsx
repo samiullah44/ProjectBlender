@@ -15,11 +15,16 @@ import {
     Search,
     Filter,
     MoreVertical,
+    Clock,
     Settings,
     Copy,
     Trash2,
     HardDrive,
-    Loader2
+    Loader2,
+    Wallet,
+    Edit3,
+    Save,
+    AlertTriangle
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -67,6 +72,12 @@ const NodeDashboard: React.FC = () => {
     // Download button state
     const [isDownloading, setIsDownloading] = useState(false)
 
+    // Payout Wallet State
+    const [payoutWallet, setPayoutWallet] = useState<string | null>(null)
+    const [walletInput, setWalletInput] = useState('')
+    const [isEditingWallet, setIsEditingWallet] = useState(false)
+    const [isSavingWallet, setIsSavingWallet] = useState(false)
+
     const navigate = useNavigate()
 
     const fetchData = async () => {
@@ -85,36 +96,40 @@ const NodeDashboard: React.FC = () => {
             if (statsRes.data) {
                 const s = [
                     {
-                        label: 'Total Earnings',
-                        value: statsRes.data.performance?.totalEarnings?.toFixed(2) || '0.00',
-                        unit: 'credits',
-                        icon: <DollarSign className="w-5 h-5 text-purple-400" />,
-                        trend: 'Real-time',
-                        trendUp: true
+                        label: 'Released Credits',
+                        value: statsRes.data.earnings?.released?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) || '0.00',
+                        unit: 'RNDR',
+                        icon: <CheckCircle2 className="w-5 h-5 text-purple-400" />,
+                        trend: 'On-chain',
+                        trendUp: true,
+                        color: 'purple'
                     },
                     {
-                        label: 'Active Nodes',
-                        value: statsRes.data.byStatus?.online?.toString() || '0',
-                        unit: 'online',
-                        icon: <Activity className="w-5 h-5 text-emerald-400" />,
-                        trend: `${statsRes.data.total || 0} total`,
-                        trendUp: true
+                        label: 'Pending Settlement',
+                        value: statsRes.data.earnings?.pending?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) || '0.00',
+                        unit: 'credits',
+                        icon: <Clock className="w-5 h-5 text-cyan-400" />,
+                        trend: 'In Queue',
+                        trendUp: false,
+                        color: 'cyan'
                     },
                     {
                         label: 'Avg Frame Time',
                         value: statsRes.data.performance?.avgFrameTime || '0.00',
                         unit: 's',
                         icon: <Zap className="w-5 h-5 text-amber-400" />,
-                        trend: 'Network avg',
-                        trendUp: true
+                        trend: 'Performance',
+                        trendUp: true,
+                        color: 'amber'
                     },
                     {
                         label: 'Total Rendered',
                         value: statsRes.data.performance?.totalJobsCompleted?.toLocaleString() || '0',
                         unit: 'jobs',
-                        icon: <Cpu className="w-5 h-5 text-purple-400" />,
+                        icon: <Cpu className="w-5 h-5 text-indigo-400" />,
                         trend: 'Historical',
-                        trendUp: true
+                        trendUp: true,
+                        color: 'indigo'
                     }
                 ]
                 setStats(s)
@@ -127,8 +142,39 @@ const NodeDashboard: React.FC = () => {
         }
     }
 
+    const fetchPayoutWallet = async () => {
+        try {
+            const res = await axiosInstance.get('/auth/payout-wallet')
+            if (res.data.success) {
+                setPayoutWallet(res.data.payoutWallet)
+                if (res.data.payoutWallet) setWalletInput(res.data.payoutWallet)
+            }
+        } catch (error) {
+            console.error('Fetch payout wallet error:', error)
+        }
+    }
+
+    const handleSaveWallet = async () => {
+        if (!walletInput.trim()) return
+        setIsSavingWallet(true)
+        try {
+            const res = await axiosInstance.put('/auth/payout-wallet', { wallet: walletInput.trim() })
+            if (res.data.success) {
+                setPayoutWallet(res.data.payoutWallet)
+                setIsEditingWallet(false)
+                toast.success('Payout wallet saved successfully!')
+            }
+        } catch (error: any) {
+            console.error('Save payout wallet error:', error)
+            toast.error(error.response?.data?.error || 'Failed to save wallet address')
+        } finally {
+            setIsSavingWallet(false)
+        }
+    }
+
     useEffect(() => {
         fetchData()
+        fetchPayoutWallet()
 
         // Simple polling for real-time-ish stats updates
         const interval = setInterval(fetchData, 15000)
@@ -337,6 +383,101 @@ const NodeDashboard: React.FC = () => {
                     ))}
                 </div>
             )}
+
+            {/* Payout Wallet Card */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="mb-10"
+            >
+                <Card className="bg-[#0A0A0B]/60 border-gray-800/50 backdrop-blur-md">
+                    <CardHeader className="flex flex-row items-center justify-between pb-3">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                                <Wallet className="w-5 h-5 text-purple-400" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-sm font-semibold text-white">Payout Wallet</CardTitle>
+                                <CardDescription className="text-xs text-gray-500">Your Solana address for receiving render earnings</CardDescription>
+                            </div>
+                        </div>
+                        {payoutWallet && !isEditingWallet && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-gray-800 text-gray-400 hover:text-white hover:bg-gray-800"
+                                onClick={() => { setIsEditingWallet(true); setWalletInput(payoutWallet); }}
+                            >
+                                <Edit3 className="w-3.5 h-3.5 mr-1.5" /> Edit
+                            </Button>
+                        )}
+                    </CardHeader>
+                    <CardContent>
+                        {!payoutWallet && !isEditingWallet ? (
+                            <div>
+                                <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 text-amber-400/90 text-xs p-3 rounded-lg mb-4">
+                                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                                    <p>You must set a payout wallet to receive earnings from rendered jobs. Without this, your earnings cannot be sent to you.</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="text"
+                                        placeholder="Enter your Solana wallet address..."
+                                        className="flex-1 bg-gray-900 border border-gray-800 text-white rounded-lg px-4 py-2.5 text-sm focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/30 outline-none font-mono"
+                                        value={walletInput}
+                                        onChange={(e) => setWalletInput(e.target.value)}
+                                    />
+                                    <Button
+                                        onClick={handleSaveWallet}
+                                        disabled={isSavingWallet || !walletInput.trim()}
+                                        className="bg-purple-600 hover:bg-purple-700 text-white min-w-[100px]"
+                                    >
+                                        {isSavingWallet ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1.5" /> Save</>}
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : isEditingWallet ? (
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="text"
+                                    placeholder="Enter your Solana wallet address..."
+                                    className="flex-1 bg-gray-900 border border-gray-800 text-white rounded-lg px-4 py-2.5 text-sm focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/30 outline-none font-mono"
+                                    value={walletInput}
+                                    onChange={(e) => setWalletInput(e.target.value)}
+                                />
+                                <Button
+                                    onClick={handleSaveWallet}
+                                    disabled={isSavingWallet || !walletInput.trim()}
+                                    className="bg-purple-600 hover:bg-purple-700 text-white min-w-[100px]"
+                                >
+                                    {isSavingWallet ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1.5" /> Save</>}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="border-gray-800 text-gray-400"
+                                    onClick={() => setIsEditingWallet(false)}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-3 bg-gray-900/50 border border-gray-800 rounded-lg px-4 py-3">
+                                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                <code className="text-sm text-emerald-400 font-mono flex-1">
+                                    {payoutWallet!.substring(0, 8)}...{payoutWallet!.substring(payoutWallet!.length - 8)}
+                                </code>
+                                <button
+                                    onClick={() => { navigator.clipboard.writeText(payoutWallet!); toast.success('Wallet address copied') }}
+                                    className="text-gray-500 hover:text-white transition-colors"
+                                >
+                                    <Copy className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </motion.div>
 
             {/* Nodes Section */}
             <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">

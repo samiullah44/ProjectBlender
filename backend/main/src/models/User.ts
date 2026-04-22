@@ -13,6 +13,12 @@ export interface IUser extends Document {
   roles: ('client' | 'node_provider' | 'admin')[];
   role?: 'client' | 'node_provider' | 'admin'; // Kept for backward compatibility
   credits: number;
+  // NEW: Store the specific generated PDA token account
+  depositTokenAddress?: string;
+  tokenBalance: number;
+  solanaSeed?: string;
+  payoutWallet?: string; // NEW: Specific wallet for receiving render earnings
+  isRevoked?: boolean; // NEW: Ban flag
 
   // OAuth fields
   provider?: 'google' | 'github' | 'local';
@@ -123,6 +129,32 @@ const userSchema = new Schema<IUser>(
       type: Number,
       default: 1000
     },
+    depositTokenAddress: {
+      type: String,
+      sparse: true,
+      index: true
+    },
+    tokenBalance: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    solanaSeed: {
+      type: String,
+      sparse: true,
+      index: true
+    },
+    payoutWallet: {
+      type: String,
+      sparse: true,
+      index: true
+    },
+    isRevoked: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+
     provider: {
       type: String,
       enum: ['google', 'github', 'local'],

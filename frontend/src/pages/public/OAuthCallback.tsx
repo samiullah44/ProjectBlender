@@ -14,7 +14,7 @@ const OAuthCallback: React.FC = () => {
         const processCallback = async () => {
             try {
                 await handleOAuthCallback()
-                navigate('/dashboard', { replace: true })
+                navigate('/', { replace: true })
             } catch (error) {
                 console.error('OAuth callback error:', error)
                 toast.error('Authentication failed. Please try again.')

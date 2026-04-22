@@ -83,6 +83,13 @@ router.get('/:jobId',
     jobController.getJob.bind(jobController)
 );
 
+// USER: After on-chain lock_payment succeeds, mark job ready and start rendering (enqueue frames)
+router.post('/:jobId/lock-onchain',
+    authenticate,
+    injectServices,
+    jobController.lockOnchainPayment.bind(jobController)
+);
+
 router.get('/:jobId/frames/zip',
     authenticate,
     jobController.downloadJobFramesZip.bind(jobController)
@@ -139,6 +146,38 @@ router.post('/:jobId/select-frames',
     (req, res) => {
         // Implement select frames logic
         res.json({ success: true, message: 'Frames selected' });
+    }
+);
+
+// ── Admin Settlement Routes ──────────────────────────────────────────────────
+router.post('/admin/force-settlement',
+    authenticate,
+    authorize('admin'),
+    async (_req, res) => {
+        try {
+            const { settlementScheduler } = await import('../../services/SettlementScheduler');
+            const result = await settlementScheduler.forceSettle();
+            res.json({ success: true, ...result });
+        } catch (error: any) {
+            console.error('Force settlement error:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
+);
+
+router.get('/admin/settlement-status',
+    authenticate,
+    authorize('admin'),
+    async (_req, res) => {
+        try {
+            const { settlementScheduler } = await import('../../services/SettlementScheduler');
+            const { paymentService } = await import('../../services/PaymentService');
+            const status = settlementScheduler.getStatus();
+            const unsettledCount = await paymentService.getUnsettledJobCount();
+            res.json({ success: true, ...status, unsettledJobs: unsettledCount });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
     }
 );
 

@@ -9,7 +9,7 @@ const FeaturesNetwork = () => {
   };
 
   return (
-    <div className="bg-[#0B0F19] text-white">
+    <div className="bg-[#050505] min-h-screen text-white pt-24">
       {/* Hero */}
       <section className="relative py-24 lg:py-32 overflow-hidden border-b border-white/5">
         <div className="absolute inset-0 bg-emerald-500/5 blur-[100px] pointer-events-none" />

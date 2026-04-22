@@ -41,7 +41,7 @@ export interface Job {
   blendFileKey: string
   blendFileUrl: string
   type: 'image' | 'animation'
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+  status: 'pending' | 'pending_payment' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'cancelling'
   progress: number
   settings: {
     engine: string
@@ -92,6 +92,16 @@ export interface Job {
   userRerenderCount?: number
   userRerenderMax?: number
   rerenderedHistory?: number[]
+  totalCreditsDistributed?: number
+  escrow?: {
+    txSignature?: string
+    lockedAmount: number
+    releasedAmount: number
+    paymentStatus: string
+    status: string
+    settledAt?: string
+    settlementTxSignatures?: string[]
+  }
 }
 
 interface JobStore {
@@ -118,12 +128,13 @@ interface JobStore {
     projectId?: string;
     status?: string;
     page?: number;
-    limit?: number
+    limit?: number;
+    adminView?: boolean;
   }) => Promise<{ jobs: Job[]; pagination: any }>
   cancelJob: (jobId: string, cleanupS3?: boolean) => Promise<boolean>
   approveJob: (jobId: string) => Promise<boolean>
   selectFrames: (jobId: string, frames: number[]) => Promise<boolean>
-  getDashboardStats: () => Promise<{
+  getDashboardStats: (adminView?: boolean) => Promise<{
     totalJobs: number
     activeJobs: number
     processingJobs: number
@@ -136,6 +147,7 @@ interface JobStore {
     totalFramesRendered: number
     avgRenderTimePerFrame: number
     framesRenderedToday: number
+    cancelledJobs: number
   }>
   createJobMultipart: (
     file: File,
@@ -166,7 +178,7 @@ interface JobStore {
   resetUploadState: () => void
 
   // Utility
-  refreshJobs: () => Promise<void>
+  refreshJobs: (adminView?: boolean) => Promise<void>
   clearError: () => void
   clearCurrentJob: () => void
 }
@@ -327,7 +339,7 @@ const jobStore = create<JobStore>((set, get) => ({
           blendFileKey: result.fileStructure?.blendFile || result.key,
           blendFileUrl: result.blendFileUrl,
           type: result.type || jobData.type,
-          status: 'pending',
+          status: result.status || 'pending',
           progress: 0,
           settings: {
             engine: result.settings?.engine || jobData.settings.engine,
@@ -593,11 +605,13 @@ const jobStore = create<JobStore>((set, get) => ({
     }
   },
 
-  getDashboardStats: async () => {
+  getDashboardStats: async (adminView?: boolean) => {
     try {
       set({ isLoading: true, error: null })
 
-      const response = await axiosInstance.get('/jobs/dashboard/stats')
+      const response = await axiosInstance.get('/jobs/dashboard/stats', {
+        params: adminView ? { adminView: true } : {}
+      })
 
       set({ isLoading: false })
       return response.data.stats
@@ -613,6 +627,7 @@ const jobStore = create<JobStore>((set, get) => ({
         pendingJobs: 0,
         completedJobs: 0,
         failedJobs: 0,
+        cancelledJobs: 0,
         completedToday: 0,
         totalRenderTime: 0,
         totalCreditsUsed: 0,
@@ -689,11 +704,12 @@ const jobStore = create<JobStore>((set, get) => ({
     uploadStage: 'idle'
   }),
 
-  refreshJobs: async () => {
+  refreshJobs: async (adminView?: boolean) => {
     const { pagination } = get()
     await get().listJobs({
       limit: pagination.limit || 15,
-      page: pagination.page || 1
+      page: pagination.page || 1,
+      adminView
     })
   },
 

@@ -23,11 +23,15 @@ import {
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Progress } from '@/components/ui/Progress'
+import { cn } from '@/lib/utils'
 import { useNavigate } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import jobStore from '@/stores/jobStore'
 import { toast } from 'react-hot-toast'
 import { uploadService } from '@/services/uploadService'
+import { axiosInstance } from '@/lib/axios'
+import { useRenderNetwork } from '@/hooks/useRenderNetwork'
+import { useAuthStore } from '@/stores/authStore'
 // REMOVED: import { createJobFormData, validateJobFormData } from '@/utils/jobFormData'
 
 type Step = 'upload' | 'settings' | 'review' | 'processing'
@@ -92,11 +96,17 @@ const CreateJob: React.FC = () => {
     createJobMultipart,
     isUploading,
     uploadProgress,
-    uploadStage
+    uploadStage,
+    cancelJob
   } = jobStore()
+
+  const { creditedAmount, isRefreshing, fetchCreditBalance, lockPayment, cancelJobOnchain } = useRenderNetwork()
+  const { user, getProfile } = useAuthStore()
+  const isAdmin = user?.role === 'admin'
 
   const [currentStep, setCurrentStep] = useState<Step>('upload')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [isLocking, setIsLocking] = useState(false)
 
   // UPDATED: Initialize form data with settings object
   const [formData, setFormData] = useState<JobFormData>({
@@ -224,16 +234,19 @@ const CreateJob: React.FC = () => {
     }
 
     console.log('🚀 Submitting job creation...')
-    console.log('📄 File:', uploadedFile.name, `${(uploadedFile.size / (1024 * 1024)).toFixed(2)}MB`)
-    console.log('⚙️ Form data:', formData)
-
+    
     try {
-      console.log('🔄 Calling createJobMultipart...')
+      // Pre-check on-chain credits
+      const freshBalance = await fetchCreditBalance()
+      if (!isAdmin && freshBalance < estimatedCost) {
+        toast.error(`Insufficient credits: ${freshBalance.toFixed(2)} available, ${estimatedCost} required.`)
+        return
+      }
 
-      // Switch to processing view immediately so the user can see realtime upload progress
+      // Switch to processing view
       setCurrentStep('processing')
 
-      // Use multipart upload method
+      // 1. Backend creation + On-chain reservation (Atomic)
       const result = await createJobMultipart(uploadedFile, {
         name: formData.name,
         description: formData.description,
@@ -245,34 +258,24 @@ const CreateJob: React.FC = () => {
         settings: formData.settings
       })
 
-      console.log('📤 Upload result:', result)
-
       if (result.success) {
-        console.log('✅ Job created successfully')
-
-        // Get jobId from result (check multiple possible locations)
-        const jobId = result.data?.jobId || result.data?.data?.jobId
+        console.log('✅ Job created and locked on-chain by backend');
+        const responseData = (result.data || result) as any;
+        const jobId = responseData.jobId || responseData.data?.jobId;
 
         if (jobId) {
-          console.log('🎯 Navigating to job details:', jobId)
-
-          // Show success message for 2 seconds then navigate
-          setTimeout(() => {
-            navigate(`/client/jobs/${jobId}`)
-          }, 2000)
+          toast.success('Job created and payment reserved!', { id: 'job-creation' });
+          window.dispatchEvent(new Event('refresh_credit_balance')); // Sync all hooks (NavBar, Dashboard, etc)
+          await getProfile(); // Sync database stats
+          navigate(`/client/jobs/${jobId}`);
         } else {
-          console.error('❌ No jobId found in response:', result)
-          // Fallback: navigate to dashboard and show message
-          setTimeout(() => {
-            navigate('/client/dashboard')
-            toast.success('Job created! Check dashboard for details.')
-          }, 2000)
+          toast.success('Job created! Check dashboard for details.');
+          window.dispatchEvent(new Event('refresh_credit_balance'));
+          navigate('/client/dashboard');
         }
       } else {
         console.error('❌ Job creation failed:', result.error)
-
-        // Try fallback to simple upload
-        console.log('🔄 Trying fallback simple upload...')
+        // Fallback to simple upload if multipart fails
         try {
           const simpleResult = await uploadService.simpleUpload(uploadedFile, {
             name: formData.name,
@@ -287,19 +290,12 @@ const CreateJob: React.FC = () => {
 
           if (simpleResult.success) {
             toast.success('Job created with simple upload!')
-            setCurrentStep('processing')
-
-            if (simpleResult.jobId) {
-              setTimeout(() => {
-                navigate(`/client/jobs/${simpleResult.jobId}`)
-              }, 2000)
-            }
+            if (simpleResult.jobId) navigate(`/client/jobs/${simpleResult.jobId}`)
           } else {
             setCurrentStep('review')
             toast.error(simpleResult.error || 'Failed to create job')
           }
         } catch (fallbackError: any) {
-          console.error('Fallback upload failed:', fallbackError)
           setCurrentStep('review')
           toast.error(fallbackError.message || 'All upload methods failed')
         }
@@ -1207,10 +1203,31 @@ const CreateJob: React.FC = () => {
 
                     <div className="mt-8 p-4 rounded-2xl bg-blue-600/10 border border-blue-500/20 text-center">
                       <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Available Credits</p>
-                      <p className="text-xl font-bold text-white tabular-nums">1,250.00</p>
+                      <p className="text-xl font-bold text-white tabular-nums">
+                        {isRefreshing ? '...' : (creditedAmount ?? 0).toFixed(2)}
+                      </p>
                       <div className="mt-2 w-full bg-white/5 h-1 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${Math.max(10, 100 - (estimatedCost / 1250) * 100)}%` }} />
+                        <div 
+                          className={cn(
+                            "h-full transition-all duration-1000",
+                            (isAdmin || (creditedAmount ?? 0) >= estimatedCost) ? "bg-blue-500" : "bg-red-500"
+                          )} 
+                          style={{ width: `${Math.min(100, (isAdmin ? 1 : ((creditedAmount ?? 0) / estimatedCost)) * 100)}%` }} 
+                        />
                       </div>
+                      {!isAdmin && (creditedAmount ?? 0) < estimatedCost && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-[10px] text-red-400 font-medium">Insufficient balance to start job</p>
+                          <Button 
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.dispatchEvent(new Event('open-deposit-modal'))}
+                            className="w-full border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 h-8 text-[10px] font-bold uppercase tracking-wider"
+                          >
+                            Deposit tokens
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1238,20 +1255,23 @@ const CreateJob: React.FC = () => {
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={isUploading}
-                className="relative overflow-hidden group bg-white text-black h-16 px-12 rounded-2xl font-black text-lg transition-all active:scale-95 disabled:opacity-50"
+                disabled={isUploading || isLocking || (!isAdmin && (creditedAmount ?? 0) < estimatedCost && !isRefreshing)}
+                className={cn(
+                  "relative overflow-hidden group h-16 px-12 rounded-2xl font-black text-lg transition-all active:scale-95 disabled:opacity-50",
+                  (!isAdmin && (creditedAmount ?? 0) < estimatedCost && !isRefreshing) ? "bg-gray-800 text-gray-500 cursor-not-allowed" : "bg-white text-black"
+                )}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-cyan-500 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
                 <span className="relative z-10 flex items-center gap-3 group-hover:text-white transition-colors">
-                  {isUploading ? (
+                  {isUploading || isLocking ? (
                     <>
                       <Loader2 className="w-6 h-6 animate-spin" />
-                      Transmitting Manifest...
+                      {isLocking ? 'Locking Payment...' : 'Transmitting Manifest...'}
                     </>
                   ) : (
                     <>
                       <Play className="w-6 h-6 fill-current" />
-                      Start Job
+                      {!isAdmin && (creditedAmount ?? 0) < estimatedCost ? 'Insufficient Credits' : 'Start Job'}
                     </>
                   )}
                 </span>

@@ -111,6 +111,8 @@ export class UploadController {
       const isZip = filename.toLowerCase().endsWith('.zip');
       const inputType = isZip ? 'archive' : 'blend';
 
+      const isAdminJob = user.role === 'admin' || user.roles?.includes('admin');
+
       // Complete upload and create job
       const result = await uploadService.completeUploadAndCreateJob({
         key,
@@ -118,6 +120,7 @@ export class UploadController {
         parts,
         jobSettings: parsedSettings,
         userId,
+        isAdminJob,
         projectId,
         type: type as 'image' | 'animation',
         inputType,

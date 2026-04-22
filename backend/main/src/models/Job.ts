@@ -191,7 +191,7 @@ const JobSchema = new Schema<IJob>({
 
   status: {
     type: String,
-    enum: ['pending', 'processing', 'completed', 'failed', 'cancelled', 'paused'],
+    enum: ['pending', 'pending_payment', 'processing', 'completed', 'failed', 'cancelled', 'cancelling', 'paused'],
     default: 'pending',
     index: true
   },
@@ -209,6 +209,31 @@ const JobSchema = new Schema<IJob>({
 
   renderTime: Number,
   totalCreditsDistributed: Number,
+  // On-chain escrow details (populated after lock_payment succeeds)
+  escrow: {
+    txSignature: { type: String, default: '' },
+    escrowAddress: { type: String, default: '' },
+    escrowJobId: { type: String, default: '' },
+    onchainJobId: { type: Number, index: true }, // Numeric ID for Solana Program
+    lockedAmount: { type: Number, default: 0 },
+    status: {
+      type: String,
+      enum: ['none', 'locked', 'released', 'refunded'],
+      default: 'none'
+    },
+    lockedAt: { type: Date },
+    // ── Settlement tracking (Phase 4) ──────────────────────────────
+    paymentStatus: {
+      type: String,
+      enum: ['unsettled', 'settling', 'partial', 'settled', 'failed'],
+      default: 'unsettled'
+    },
+    releasedAmount: { type: Number, default: 0 },
+    settledAt: { type: Date },
+    settlementTxSignatures: { type: [String], default: [] },
+    failureReason: { type: String },
+    retryCount: { type: Number, default: 0 }
+  },
 
   // Metadata
   estimatedRenderTime: Number,
@@ -216,6 +241,7 @@ const JobSchema = new Schema<IJob>({
   actualCost: Number,
   tags: [String],
   description: String,
+  isAdminJob: { type: Boolean, default: false },
 
   // Timestamps
   cancelledAt: Date,
@@ -350,7 +376,12 @@ JobSchema.statics.getUserStats = async function (userId: string) {
         completedJobs: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
         activeJobs: {
           $sum: {
-            $cond: [{ $in: ['$status', ['pending', 'processing', 'paused']] }, 1, 0]
+            $cond: [{ $in: ['$status', ['pending', 'pending_payment', 'processing', 'paused']] }, 1, 0]
+          }
+        },
+        cancelledJobs: {
+          $sum: {
+            $cond: [{ $in: ['$status', ['cancelled', 'cancelling']] }, 1, 0]
           }
         },
         totalSpent: { $sum: { $ifNull: ['$actualCost', 0] } },
@@ -367,6 +398,7 @@ JobSchema.statics.getUserStats = async function (userId: string) {
     totalJobs: 0,
     completedJobs: 0,
     activeJobs: 0,
+    cancelledJobs: 0,
     totalSpent: 0,
     totalCreditsSpent: 0,
     totalRenderTime: 0,

@@ -32,8 +32,10 @@ export const getAllNodes = async (req: Request, res: Response): Promise<void> =>
     const isAdmin = authReq.user?.role === 'admin' || authReq.user?.roles?.includes('admin');
     const userId = authReq.user?.userId;
 
-    let query = {};
-    if (!isAdmin) {
+    const adminView = req.query.adminView === 'true';
+
+    let query: any = {};
+    if (!isAdmin || !adminView) {
       if (!userId) {
         res.json({
           nodes: [],
@@ -52,6 +54,33 @@ export const getAllNodes = async (req: Request, res: Response): Promise<void> =>
 
     const nodes = await Node.find(query).sort({ createdAt: -1 });
     const now = new Date();
+    const nodeIds = nodes.map(n => n.nodeId);
+
+    // BULK AGGREGATION: Get accurate historical stats for ALL nodes in the list in one query
+    const bulkStatsAgg = await Job.aggregate([
+      { $match: { "frameAssignments.nodeId": { $in: nodeIds }, "frameAssignments.status": "rendered", "isAdminJob": { $ne: true } } },
+      { $unwind: "$frameAssignments" },
+      { $match: { "frameAssignments.nodeId": { $in: nodeIds }, "frameAssignments.status": "rendered" } },
+      {
+        $group: {
+          _id: "$frameAssignments.nodeId",
+          totalEarnings: { $sum: { $ifNull: ["$frameAssignments.creditsEarned", 0] } },
+          totalFrames: { $sum: 1 },
+          uniqueJobIds: { $addToSet: "$jobId" }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          totalEarnings: 1,
+          totalFrames: 1,
+          uniqueJobsCount: { $size: "$uniqueJobIds" }
+        }
+      }
+    ]);
+
+    // Create a map for quick lookup
+    const statsMap = new Map(bulkStatsAgg.map(s => [s._id, s]));
 
     const nodeList = nodes.map(node => {
       const lastHeartbeatAge = now.getTime() - new Date(node.lastHeartbeat).getTime();
@@ -60,17 +89,11 @@ export const getAllNodes = async (req: Request, res: Response): Promise<void> =>
 
       if (!isActuallyOnline && (node.status === 'online' || node.status === 'busy')) {
         computedStatus = 'offline';
-
-        // Update node status if needed
-        Node.updateOne(
-          { nodeId: node.nodeId },
-          {
-            status: 'offline',
-            updatedAt: now,
-            lastStatusChange: now
-          }
-        ).catch(err => console.error('Error updating node status:', err));
+        // (background update logic preserved...)
+        Node.updateOne({ nodeId: node.nodeId }, { status: 'offline', updatedAt: now, lastStatusChange: now }).catch(() => {});
       }
+
+      const hStats = statsMap.get(node.nodeId) || { totalEarnings: 0, totalFrames: 0, uniqueJobsCount: 0 };
 
       return {
         nodeId: node.nodeId,
@@ -80,18 +103,20 @@ export const getAllNodes = async (req: Request, res: Response): Promise<void> =>
         lastHeartbeatAge: `${Math.floor(lastHeartbeatAge / 1000)}s ago`,
         hardware: node.hardware,
         capabilities: node.capabilities,
-        performance: node.performance,
+        performance: {
+          ...node.performance,
+          framesRendered: hStats.totalFrames,
+          earnings: hStats.totalEarnings,
+          totalGrossEarnings: hStats.totalEarnings
+        },
         ipAddress: node.ipAddress,
         currentJob: node.currentJob,
         currentProgress: node.currentProgress,
-        jobsCompleted: node.jobsCompleted,
+        jobsCompleted: hStats.uniqueJobsCount,
         connectionCount: node.connectionCount || 0,
         isRevoked: node.isRevoked || false,
-        revokedReason: node.revokedReason,
-        revokedAt: node.revokedAt,
         createdAt: node.createdAt,
-        updatedAt: node.updatedAt,
-        lastStatusChange: node.lastStatusChange
+        updatedAt: node.updatedAt
       };
     });
 
@@ -165,6 +190,22 @@ export const getNode = async (req: Request, res: Response): Promise<void> => {
     const lastHeartbeatAge = Date.now() - new Date(node.lastHeartbeat).getTime();
     const isActuallyOnline = lastHeartbeatAge <= HEARTBEAT_TIMEOUT_MS;
 
+    // Calculate node-specific historical stats
+    const nodeStatsAgg = await Job.aggregate([
+      { $match: { "frameAssignments.nodeId": nodeId, "frameAssignments.status": "rendered", "isAdminJob": { $ne: true } } },
+      { $unwind: "$frameAssignments" },
+      { $match: { "frameAssignments.nodeId": nodeId, "frameAssignments.status": "rendered" } },
+      {
+        $group: {
+          _id: null,
+          totalEarnings: { $sum: "$frameAssignments.creditsEarned" },
+          totalFrames: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const historicalStats = nodeStatsAgg[0] || { totalEarnings: 0, totalFrames: 0 };
+
     res.json({
       success: true,
       node: {
@@ -173,7 +214,12 @@ export const getNode = async (req: Request, res: Response): Promise<void> => {
         status: isActuallyOnline ? node.status : 'offline',
         hardware: node.hardware,
         capabilities: node.capabilities,
-        performance: node.performance,
+        performance: {
+          ...node.performance,
+          framesRendered: historicalStats.totalFrames, // Use accurate count
+          earnings: historicalStats.totalEarnings, // Match frontend expected field name
+          totalGrossEarnings: historicalStats.totalEarnings // Keep for safety/new UI
+        },
         currentJob: currentJobDetails,
         jobsCompleted: node.jobsCompleted,
         connectionCount: node.connectionCount,
@@ -207,9 +253,10 @@ export const getNodeStatistics = async (req: Request, res: Response): Promise<vo
     const authReq = req as AuthRequest;
     const isAdmin = authReq.user?.role === 'admin' || authReq.user?.roles?.includes('admin');
     const userId = authReq.user?.userId;
+    const adminView = req.query.adminView === 'true';
 
-    let query = {};
-    if (!isAdmin) {
+    let query: any = {};
+    if (!isAdmin || !adminView) {
       if (!userId) {
         res.json({
           total: 0,
@@ -224,19 +271,78 @@ export const getNodeStatistics = async (req: Request, res: Response): Promise<vo
     }
 
     const nodes = await Node.find(query);
+    const nodeIds = nodes.map(n => n.nodeId);
     const now = new Date();
 
-    // Calculate performance statistics
-    const perfNodes = nodes.filter(n => n.performance && n.performance.framesRendered > 0);
-    const avgFrameTime = perfNodes.length > 0
-      ? perfNodes.reduce((sum, n) => sum + (n.performance?.avgFrameTime || 0), 0) / perfNodes.length
-      : 0;
+    // 1. Calculate Earnings (Released vs Pending) and Performance
+    // Optimization: Use aggregation to get totals across all jobs for these nodes
+    const statsAggregation = await Job.aggregate([
+      { 
+        $match: { 
+          "frameAssignments.nodeId": { $in: nodeIds },
+          "status": { $in: ["completed", "failed", "cancelled"] }, // Include cancelled to show historical work
+          "isAdminJob": { $ne: true } // Exclude free admin jobs from node statistics
+        } 
+      },
+      { $unwind: "$frameAssignments" },
+      { 
+        $match: { 
+          "frameAssignments.nodeId": { $in: nodeIds }, 
+          "frameAssignments.status": "rendered" 
+        } 
+      },
+      {
+        $group: {
+          _id: {
+            paymentStatus: "$escrow.paymentStatus" ,
+            jobStatus: "$status"
+          },
+          totalCredits: { $sum: "$frameAssignments.creditsEarned" },
+          totalFrames: { $sum: 1 },
+          totalRenderTime: { $sum: "$frameAssignments.renderTime" },
+          uniqueJobs: { $addToSet: "$jobId" }
+        }
+      }
+    ]);
 
-    // Get job statistics for node contributions (if method exists)
-    const jobStats = (Job as any).getNodeContributions ? await (Job as any).getNodeContributions() : {};
+    let pendingEarnings = 0;
+    let totalEarnedTokens = 0;
+    let totalFramesRendered = 0;
+    let totalRenderTime = 0;
+    const uniqueJobIds = new Set<string>();
+
+    for (const group of statsAggregation) {
+      const isSettled = group._id.paymentStatus === 'settled';
+      const jobStatus = group._id.jobStatus;
+      
+      totalEarnedTokens += group.totalCredits;
+      totalFramesRendered += group.totalFrames;
+      totalRenderTime += group.totalRenderTime;
+      group.uniqueJobs.forEach((id: string) => uniqueJobIds.add(id));
+
+      // ONLY count as pending if the job is eligible for settlement (not cancelled)
+      // and hasn't been settled yet.
+      if (!isSettled && (jobStatus === 'completed' || jobStatus === 'failed')) {
+        pendingEarnings += group.totalCredits;
+      }
+    }
+
+    const user = await User.findById(userId);
+    const releasedEarnings = user?.nodeProvider?.earnings || 0;
+
+    // 2. Node-specific performance
+    const perfNodes = nodes.filter(n => n.performance && n.performance.framesRendered > 0);
+    const avgFrameTimeValue = totalFramesRendered > 0 
+      ? totalRenderTime / totalFramesRendered / 1000 // Convert ms to s
+      : 0;
 
     const statistics = {
       total: nodes.length,
+      earnings: {
+        total: totalEarnedTokens,
+        released: releasedEarnings,
+        pending: pendingEarnings
+      },
       byStatus: {
         online: nodes.filter(n => n.status === 'online').length,
         offline: nodes.filter(n => n.status === 'offline').length,
@@ -247,15 +353,14 @@ export const getNodeStatistics = async (req: Request, res: Response): Promise<vo
         totalCpuCores: nodes.reduce((sum, n) => sum + (n.hardware?.cpuCores || 0), 0),
         totalRamGB: nodes.reduce((sum, n) => sum + (n.hardware?.ramGB || 0), 0),
         totalVRAMGB: nodes.reduce((sum, n) => sum + Math.floor((n.hardware?.gpuVRAM || 0) / 1024), 0),
-        gpuCount: nodes.filter(n => n.hardware?.gpuName !== 'Unknown').length
+        gpuCount: nodes.filter(n => n.hardware?.gpuName && n.hardware.gpuName !== 'Unknown').length
       },
       performance: {
-        totalJobsCompleted: nodes.reduce((sum, n) => sum + (n.jobsCompleted || 0), 0),
-        avgJobsPerNode: nodes.length > 0 ?
-          Math.round(nodes.reduce((sum, n) => sum + (n.jobsCompleted || 0), 0) / nodes.length) : 0,
+        totalJobsCompleted: uniqueJobIds.size, // Use unique jobs instead of node counter
+        avgJobsPerNode: nodes.length > 0 ? Math.round(uniqueJobIds.size / nodes.length) : 0,
         totalConnections: nodes.reduce((sum, n) => sum + (n.connectionCount || 0), 0),
         nodesWithPerformanceData: perfNodes.length,
-        avgFrameTime: avgFrameTime.toFixed(2),
+        avgFrameTime: avgFrameTimeValue.toFixed(2),
         fastestNode: perfNodes.length > 0
           ? perfNodes.sort((a, b) => (a.performance!.avgFrameTime - b.performance!.avgFrameTime))[0]?.nodeId
           : 'N/A',
@@ -263,7 +368,6 @@ export const getNodeStatistics = async (req: Request, res: Response): Promise<vo
           ? perfNodes.sort((a, b) => (b.performance!.avgFrameTime - a.performance!.avgFrameTime))[0]?.nodeId
           : 'N/A'
       },
-      contributions: jobStats,
       onlineStatus: {
         actuallyOnline: nodes.filter(n => {
           const lastHeartbeatAge = now.getTime() - new Date(n.lastHeartbeat).getTime();
@@ -296,7 +400,10 @@ export const getNodeHistory = async (req: Request, res: Response): Promise<void>
     }
 
     // Find all jobs where this node has assigned or rendered frames
-    const jobs = await Job.find({ "frameAssignments.nodeId": nodeId })
+    const jobs = await Job.find({ 
+      "frameAssignments.nodeId": nodeId,
+      "isAdminJob": { $ne: true }
+    })
       .sort({ createdAt: -1 })
       .lean(); // Use lean for faster subsequent processing
 

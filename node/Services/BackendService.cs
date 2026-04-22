@@ -72,7 +72,7 @@ namespace BlendFarm.Node.Services
             _identityService = identityService;
             _speedtestService = speedtestService;
             _nodeId = configuration["NodeSettings:NodeId"] ?? Guid.NewGuid().ToString();
-            _backendUrl = configuration["Backend:Url"] ?? "http://192.168.1.32:3000";
+            _backendUrl = configuration["Backend:Url"] ?? "http://192.168.1.54:3000";
             _frameUploadUrls = new ConcurrentDictionary<int, (string, string)>();
             _blendFileCache = new ConcurrentDictionary<string, (string, DateTime)>();
              _computeScoreService = new ComputeScoreService(logger);

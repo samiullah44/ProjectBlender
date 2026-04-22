@@ -9,7 +9,7 @@ const FeaturesCost = () => {
   };
 
   return (
-    <div className="bg-[#0B0F19] text-white">
+    <div className="bg-[#050505] min-h-screen text-white pt-24">
       {/* Hero */}
       <section className="relative py-24 lg:py-32 overflow-hidden border-b border-white/5">
         <div className="absolute inset-0 bg-purple-500/5 blur-[100px] pointer-events-none" />
@@ -61,18 +61,18 @@ const FeaturesCost = () => {
           <motion.div initial="hidden" whileInView="visible" variants={fadeIn} viewport={{once: true}}>
             <h2 className="text-3xl md:text-5xl font-bold mb-6">Compare the Savings</h2>
             <p className="text-gray-400 text-lg mb-16 max-w-2xl mx-auto leading-relaxed">
-              Here is an estimated pricing breakdown of what rendering a standard 1,000-frame animation on an RTX 4090 class hardware configuration would cost in hours versus out-of-pocket overhead.
+              Decentralized rendering eliminates the massive overhead of centralized data centers, allowing for significantly lower costs for artists and studios.
             </p>
             
             <div className="grid md:grid-cols-2 gap-8 text-left">
                <div className="bg-[#0B0F19] p-8 rounded-2xl border border-white/10 shadow-xl opacity-60 grayscale filter hover:grayscale-0 transition-all duration-300">
-                 <div className="text-gray-500 font-bold uppercase tracking-widest text-sm mb-4">Traditional Cloud Rendering (AWS G5)</div>
-                 <div className="text-5xl font-bold text-white mb-2">~$85.00</div>
-                 <p className="text-gray-500 mb-6">per intensive project</p>
+                 <div className="text-gray-500 font-bold uppercase tracking-widest text-sm mb-4">Traditional Cloud Rendering</div>
+                 <div className="text-4xl font-bold text-white mb-2">High Overhead</div>
+                 <p className="text-gray-500 mb-6">Centralized Infrastructure</p>
                  <ul className="space-y-3">
                    <li className="flex items-center gap-2 text-gray-400"><TrendingDown className="w-4 h-4 text-red-500"/> Paying for instance idle boot time</li>
-                   <li className="flex items-center gap-2 text-gray-400"><TrendingDown className="w-4 h-4 text-red-500"/> Markup margins up to 400%</li>
-                   <li className="flex items-center gap-2 text-gray-400"><TrendingDown className="w-4 h-4 text-red-500"/> Complicated pricing calculators</li>
+                   <li className="flex items-center gap-2 text-gray-400"><TrendingDown className="w-4 h-4 text-red-500"/> Massive markup margins</li>
+                   <li className="flex items-center gap-2 text-gray-400"><TrendingDown className="w-4 h-4 text-red-500"/> Complicated, opaque pricing</li>
                  </ul>
                </div>
                
@@ -81,12 +81,12 @@ const FeaturesCost = () => {
                  <div className="text-purple-400 font-bold uppercase tracking-widest text-sm mb-4 flex items-center gap-2">
                    <CreditCard className="w-4 h-4" /> RenderOnNodes Direct
                  </div>
-                 <div className="text-5xl font-bold text-white mb-2">~$12.00</div>
-                 <p className="text-purple-300 mb-6">per equivalent job</p>
+                 <div className="text-4xl font-bold text-white mb-2">Maximum Efficiency</div>
+                 <p className="text-purple-300 mb-6">Peer-to-Peer Network</p>
                  <ul className="space-y-3">
                    <li className="flex items-center gap-2 text-gray-200"><TrendingDown className="w-4 h-4 text-emerald-400"/> Instant boot, zero idle charges</li>
-                   <li className="flex items-center gap-2 text-gray-200"><TrendingDown className="w-4 h-4 text-emerald-400"/> P2P hardware cuts out middlemen</li>
-                   <li className="flex items-center gap-2 text-gray-200"><TrendingDown className="w-4 h-4 text-emerald-400"/> Exact 1:1 hardware performance</li>
+                   <li className="flex items-center gap-2 text-gray-200"><TrendingDown className="w-4 h-4 text-emerald-400"/> Direct peer-to-peer settlement</li>
+                   <li className="flex items-center gap-2 text-gray-200"><TrendingDown className="w-4 h-4 text-emerald-400"/> Transparent on-chain credits</li>
                  </ul>
                </div>
             </div>

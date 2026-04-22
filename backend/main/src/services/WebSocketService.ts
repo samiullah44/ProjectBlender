@@ -11,6 +11,7 @@ interface Client {
   userId?: string;
   nodeId?: string;
   isNode?: boolean;   // true when this is a C# node client (not a browser)
+  isAdmin?: boolean;
 }
 
 export class WebSocketService {
@@ -109,6 +110,9 @@ export class WebSocketService {
           break;
         case 'ping':
           this.send(client, { type: 'pong', timestamp: Date.now() });
+          break;
+        case 'admin_cmd':
+          await this.handleAdminCommand(client, message);
           break;
         // ── Node-originated messages ──────────────────────────────────────
         case 'node_connect':
@@ -442,6 +446,13 @@ export class WebSocketService {
         }
 
         client.userId = message.userId;
+        
+        // Also check if user is admin
+        const { User } = require('../models/User');
+        const user = await User.findById(message.userId).select('roles role');
+        if (user) {
+          client.isAdmin = (user.roles || [user.role]).includes('admin');
+        }
 
         // Add to new room
         if (!this.userClients.has(message.userId)) {
@@ -465,6 +476,42 @@ export class WebSocketService {
         message: 'Authentication failed'
       });
     }
+  }
+
+  private async handleAdminCommand(client: Client, message: any) {
+    if (!client.isAdmin) {
+      return this.send(client, { type: 'error', message: 'Unauthorized: Admin only' });
+    }
+
+    const { targetNodeId, cmd, data } = message;
+    if (!targetNodeId || !cmd) {
+      return this.send(client, { type: 'error', message: 'Missing targetNodeId or cmd' });
+    }
+
+    const nodeClient = this.nodeClients.get(targetNodeId);
+    if (!nodeClient || nodeClient.ws.readyState !== WebSocket.OPEN) {
+      return this.send(client, { type: 'error', message: `Node ${targetNodeId} is not connected via WebSocket` });
+    }
+
+    // Proxy the command to the node
+    const { auditService } = require('./AuditService');
+    await auditService.log({
+      adminId: client.userId,
+      action: `NODE_${cmd.toUpperCase()}`,
+      targetId: targetNodeId,
+      details: { command: cmd, metadata: data }
+    });
+
+    this.send(nodeClient, {
+      type: 'admin_command',
+      command: cmd,
+      data,
+      adminId: client.userId,
+      timestamp: Date.now()
+    });
+
+    console.log(`📡 Admin ${client.userId} sent command ${cmd} to node ${targetNodeId}`);
+    this.send(client, { type: 'ack', message: `Command ${cmd} sent to node ${targetNodeId}` });
   }
 
   private send(client: Client, data: any) {
@@ -596,7 +643,7 @@ export class WebSocketService {
       if (!job) return null;
 
       // Real-time Sync: If job is stuck in processing but all frames are done, update it
-      if (['pending', 'processing'].includes(job.status)) {
+      if (['pending', 'pending_payment', 'processing'].includes(job.status)) {
         const selectedOrAll = job.frames.selected && job.frames.selected.length > 0
           ? job.frames.selected
           : Array.from({ length: job.frames.total }, (_, i) => job.frames.start + i);

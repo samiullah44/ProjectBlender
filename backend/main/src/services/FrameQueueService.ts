@@ -12,6 +12,7 @@
  */
 
 import { Queue, QueueEvents, Worker, Job as BullJob, ConnectionOptions } from 'bullmq';
+import { Job as MongoJob } from '../models/Job';
 
 // Global cooldown for on-demand sweep to prevent hammering Redis
 let lastSweepTime = 0;
@@ -346,9 +347,12 @@ export async function requeueFramesFromOfflineNode(
 }
 
 /**
- * Forcefully moves ALL current active jobs in BullMQ back to the waiting list.
- * Use as a recovery mechanism if frames get stuck in 'active' state.
- * @param specificQueues Optional list of queue names to sweep. If empty, sweeps all.
+ * Forcefully moves STUCK active jobs in BullMQ back to the waiting list.
+ * STUCK defined as:
+ *  1. Job still exists and is 'processing' or 'pending' in MongoDB
+ *  2. Frame has been active for more than 5 minutes (exceeding typical lock/render time)
+ * 
+ * If Job is 'completed', 'failed', or 'cancelled' in MongoDB, the frame is PURGED.
  */
 export async function forceRequeueActiveJobs(specificQueues?: string[]): Promise<number> {
     const now = Date.now();
@@ -356,11 +360,12 @@ export async function forceRequeueActiveJobs(specificQueues?: string[]): Promise
     lastSweepTime = now;
 
     let count = 0;
+    const RECOVERY_THRESHOLD_MS = 300_000; // 5 minutes
+
     if (queues.size === 0) {
         initializeQueues();
     }
 
-    // Determine which queues to check
     const targets = specificQueues
         ? Array.from(queues.entries()).filter(([name]) => specificQueues.includes(name))
         : Array.from(queues.entries());
@@ -370,39 +375,51 @@ export async function forceRequeueActiveJobs(specificQueues?: string[]): Promise
     for (const [name, q] of targets) {
         try {
             const activeJobs = await q.getJobs(['active']);
-            if (activeJobs.length > 0) {
-                console.log(`Found ${activeJobs.length} active jobs in queue ${name}`);
-            }
-
             for (const job of activeJobs) {
-                console.log(`Recovering stuck job: ${job.id} (state: active)`);
+                const { jobId, frame } = job.data as FrameJobData;
+
+                // 1. Check if the frame is truly "old" enough to be considered stuck
+                const jobProcessedAt = job.processedOn || now;
+                const activeDuration = now - jobProcessedAt;
+
+                if (activeDuration < RECOVERY_THRESHOLD_MS) {
+                    continue; // Still within safe rendering window
+                }
+
+                // 2. Cross-reference with MongoDB
+                const mongoJob = await MongoJob.findOne({ jobId }).select('status frames');
+                
+                if (!mongoJob || ['completed', 'failed', 'cancelled'].includes(mongoJob.status)) {
+                    console.log(`🗑️  Sweep: Removing zombie frame ${jobId}:${frame} (Job status: ${mongoJob?.status || 'deleted'})`);
+                    await job.remove();
+                    count++;
+                    continue;
+                }
+
+                // 3. Check if frame was already rendered globally
+                if (mongoJob.frames.rendered.includes(frame)) {
+                    console.log(`🗑️  Sweep: Removing already-rendered frame ${jobId}:${frame}`);
+                    await job.remove();
+                    count++;
+                    continue;
+                }
+
+                // 4. If we reach here, it's truly stuck. Re-enqueue.
+                console.log(`🔄 Sweep: Recovering stuck frame ${jobId}:${frame} (active for ${Math.round(activeDuration / 1000)}s)`);
                 try {
-                    // Method 1: Try move to wait (requires lock, usually fails if node is dead but lock persists)
-                    await (job as any).moveToWait('force-recovery', true);
+                    const jobName = job.name;
+                    await q.remove(job.id!);
+                    await q.add(jobName, job.data, { jobId: job.id });
                     count++;
                 } catch (e: any) {
-                    console.warn(`⚠️ Failed moveToWait for ${job.id}: ${e.message}. Using aggressive Remove + Re-add.`);
-                    try {
-                        // Method 2: Aggressive - remove the job entirely and re-enqueue it
-                        // Since we use deterministic IDs (${jobId}-${frame}), this is safe and effective.
-                        const { jobId, frame } = job.data as FrameJobData;
-                        const jobName = job.name;
-
-                        await q.remove(job.id!);
-                        await q.add(jobName, job.data, { jobId: job.id });
-
-                        count++;
-                        console.log(`✅ Successfully re-enqueued ${job.id}`);
-                    } catch (e2: any) {
-                        console.error(`❌ Total failure to rescue ${job.id}: ${e2.message}`);
-                    }
+                    console.error(`❌ Sweep: Failed to rescue ${job.id}: ${e.message}`);
                 }
             }
         } catch (err) {
             console.error(`❌ Error in forceRequeueActiveJobs for queue ${name}:`, err);
         }
     }
-    if (count > 0) console.log(`🚀 Force-recovered ${count} stuck active BullMQ jobs`);
+    if (count > 0) console.log(`🚀 Force-recovered/purged ${count} BullMQ frames`);
     return count;
 }
 

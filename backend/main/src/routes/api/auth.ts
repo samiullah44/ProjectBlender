@@ -153,11 +153,17 @@ router.get('/profile', authenticate, AuthController.getProfile);
 router.put('/profile', authenticate, AuthController.updateProfile);
 router.post('/apply-node-provider', authenticate, AuthController.applyAsNodeProvider);
 router.put('/primary-role', authenticate, AuthController.updatePrimaryRole);
+router.post('/sync-deposit', authenticate, AuthController.syncDeposit);
+router.post('/solana-seed', authenticate, AuthController.updateSolanaSeed);
 
 // Admin routes
 router.post('/add-credits', authenticate, authorize('admin'), AuthController.addCredits);
 router.get('/admin/applications', authenticate, authorize('admin'), AuthController.getApplications);
 router.post('/admin/applications/:userId/approve', authenticate, authorize('admin'), AuthController.approveApplication);
 router.post('/admin/applications/:userId/reject', authenticate, authorize('admin'), AuthController.rejectApplication);
+
+// Payout wallet routes (Provider earnings destination)
+router.get('/payout-wallet', authenticate, AuthController.getPayoutWallet);
+router.put('/payout-wallet', authenticate, AuthController.updatePayoutWallet);
 
 export default router;

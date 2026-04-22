@@ -101,7 +101,7 @@ export const NodeDetails: React.FC = () => {
                 <ServerCrash className="w-12 h-12 text-red-500" />
                 <h2 className="text-xl text-white font-semibold">Node Not Found</h2>
                 <p className="text-gray-400">The hardware node you requested does not exist or was permanently revoked.</p>
-                <Button variant="outline" onClick={() => navigate('/node/dashboard')}>
+                <Button variant="outline" onClick={() => navigate(window.location.pathname.startsWith('/admin') ? '/admin/nodes' : '/node/dashboard')}>
                     Return to Dashboard
                 </Button>
             </div>
@@ -131,7 +131,7 @@ export const NodeDetails: React.FC = () => {
                 <div className="flex items-center gap-4">
                     <Button
                         variant="ghost"
-                        onClick={() => navigate('/node/dashboard')}
+                        onClick={() => navigate(window.location.pathname.startsWith('/admin') ? '/admin/nodes' : '/node/dashboard')}
                         className="text-gray-400 hover:text-white hover:bg-gray-800 p-2"
                     >
                         <ArrowLeft className="w-5 h-5" />

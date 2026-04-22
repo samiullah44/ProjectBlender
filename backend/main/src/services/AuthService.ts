@@ -1,6 +1,9 @@
 import * as mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import bs58 from 'bs58';
 import { User, IUser } from '../models/User';
+
 import { Application } from '../models/Application';
 import { OTP } from '../models/OTP';
 import { ResetToken } from '../models/ResetToken';
@@ -70,8 +73,10 @@ export class AuthService {
           framesRendered: 0,
           totalSpent: 0,
           totalEarned: 0
-        }
+        },
+        solanaSeed: bs58.encode(crypto.randomBytes(32))
       });
+
 
       await tempUser.save();
 
@@ -160,8 +165,14 @@ export class AuthService {
           name: user.name,
           role: user.role,
           credits: user.credits,
-          isVerified: user.isVerified
+          tokenBalance: user.tokenBalance || 0,
+          depositTokenAddress: user.depositTokenAddress,
+          solanaSeed: user.solanaSeed,
+          isVerified: user.isVerified,
+          roles: user.roles || [user.role],
+          primaryRole: user.primaryRole
         }
+
       };
 
     } catch (error: any) {
@@ -183,6 +194,14 @@ export class AuthService {
         return {
           success: false,
           error: 'Invalid credentials'
+        };
+      }
+
+      // Check if user is banned
+      if (user.isRevoked) {
+        return {
+          success: false,
+          error: 'Your account has been suspended. Please contact support.'
         };
       }
 
@@ -227,9 +246,15 @@ export class AuthService {
           name: user.name,
           role: user.role,
           credits: user.credits,
+          tokenBalance: user.tokenBalance || 0,
+          depositTokenAddress: user.depositTokenAddress,
+          solanaSeed: user.solanaSeed,
           isVerified: user.isVerified,
-          provider: user.provider
+          provider: user.provider,
+          roles: user.roles || [user.role],
+          primaryRole: user.primaryRole
         }
+
       };
 
     } catch (error: any) {
@@ -420,8 +445,21 @@ export class AuthService {
     if (!user) {
       throw new Error('User not found');
     }
+
+    if (user.isRevoked) {
+      throw new Error('User account is suspended');
+    }
+
+    // Auto-generate solanaSeed for existing users if missing
+    if (!user.solanaSeed) {
+      user.solanaSeed = bs58.encode(crypto.randomBytes(32));
+      await user.save();
+      console.log(`✅ Generated Solana Identity Seed for existing user: ${user.email}`);
+    }
+
     return user;
   }
+
 
   // Update user profile
   async updateProfile(userId: string, updates: any): Promise<AuthResponse> {
@@ -452,7 +490,10 @@ export class AuthService {
           email: user.email,
           username: user.username,
           name: user.name,
-          preferences: user.preferences
+          preferences: user.preferences,
+          role: user.role,
+          roles: user.roles || [user.role],
+          primaryRole: user.primaryRole
         }
       };
 
@@ -522,6 +563,66 @@ export class AuthService {
     }
     await user.deductCredits(amount);
     return user;
+  }
+
+  // Sync crypto deposit to database
+  async syncDeposit(userId: string, depositTokenAddress: string, amount: number): Promise<AuthResponse> {
+    try {
+      const user = await User.findById(userId);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      // Add to database token balance (Real tokens)
+      user.tokenBalance += amount;
+      
+      // Permanently attach their generated PDA Escrow Token Account to their profile
+      if (depositTokenAddress && user.depositTokenAddress !== depositTokenAddress) {
+        user.depositTokenAddress = depositTokenAddress;
+      }
+
+      await user.save();
+
+      return {
+        success: true,
+        message: 'Token deposit synced successfully',
+        user: {
+          tokenBalance: user.tokenBalance,
+          depositTokenAddress: user.depositTokenAddress,
+          solanaSeed: user.solanaSeed
+        }
+
+      };
+    } catch (error: any) {
+      console.error('Sync deposit error:', error);
+      return { success: false, error: 'Failed to sync deposit' };
+    }
+  }
+
+  // Update user's solanaSeed (identity seed)
+  async updateSolanaSeed(userId: string, newSeed: string): Promise<AuthResponse> {
+    try {
+      const user = await User.findById(userId);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      // Custom identity seeds are allowed as long as they are valid strings
+      // parseUserSeed in SolanaService handles both hex and base58.
+      user.solanaSeed = newSeed;
+      await user.save();
+
+      return {
+        success: true,
+        message: 'Solana identity seed updated successfully',
+        user: {
+          solanaSeed: user.solanaSeed
+        }
+      };
+    } catch (error: any) {
+      console.error('Update solana seed error:', error);
+      return { success: false, error: 'Failed to update solana seed' };
+    }
   }
 
   // backend/src/services/authService.ts - AUTOMATED applyForNodeProvider
