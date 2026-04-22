@@ -20,14 +20,23 @@ const SWEEP_COOLDOWN_MS = 10000;
 
 // ── Connection config ─────────────────────────────────────────────────────────
 
-export const redisConnectionOptions: ConnectionOptions = {
-    host: process.env.REDIS_HOST || '127.0.0.1',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD || undefined,
-    db: parseInt(process.env.REDIS_DB || '0', 10),
+import dotenv from 'dotenv';
+dotenv.config();
+import IORedis from 'ioredis';
+
+/**
+ * Shared Redis instance for all BullMQ components.
+ * Automatically handles REDIS_URL (cloud) vs localhost fallback.
+ */
+export const redis = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
+    maxRetriesPerRequest: null,
     enableReadyCheck: false,
-    maxRetriesPerRequest: null, // REQUIRED by BullMQ — do not remove
-};
+});
+
+redis.on('error', (err) => {
+    console.error('⚠️ BullMQ Redis Connection Error:', err.message);
+});
+
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -62,7 +71,7 @@ export function getQueueName(engine: string, device: string): string {
 function getOrCreateQueue(queueName: string): Queue<FrameJobData> {
     if (!queues.has(queueName)) {
         const q = new Queue<FrameJobData>(queueName, {
-            connection: redisConnectionOptions,
+            connection: redis as any,
             defaultJobOptions: {
                 attempts: 3,
                 backoff: { type: 'exponential', delay: 5000 },
@@ -82,7 +91,7 @@ function getOrCreateWorker(queueName: string): Worker<FrameJobData> {
             queueName,
             async () => { /* manual pop only */ },
             {
-                connection: redisConnectionOptions,
+                connection: redis as any,
                 autorun: false,
                 lockDuration: 300_000,
                 stalledInterval: 60_000,
@@ -97,7 +106,7 @@ function getOrCreateWorker(queueName: string): Worker<FrameJobData> {
 
 function getOrCreateQueueEvents(queueName: string): QueueEvents {
     if (!queueEventsMap.has(queueName)) {
-        queueEventsMap.set(queueName, new QueueEvents(queueName, { connection: redisConnectionOptions }));
+        queueEventsMap.set(queueName, new QueueEvents(queueName, { connection: redis as any }));
     }
     return queueEventsMap.get(queueName)!;
 }

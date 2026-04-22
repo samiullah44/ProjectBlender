@@ -8,9 +8,9 @@ export interface INewsletter extends Document {
 }
 
 const NewsletterSchema: Schema = new Schema({
-  email: { 
-    type: String, 
-    required: true, 
+  email: {
+    type: String,
+    required: true,
     unique: true,
     trim: true,
     lowercase: true,
@@ -21,14 +21,14 @@ const NewsletterSchema: Schema = new Schema({
     enum: ['artist', 'provider'],
     required: false
   },
-  status: { 
-    type: String, 
-    enum: ['subscribed', 'unsubscribed'], 
-    default: 'subscribed' 
+  status: {
+    type: String,
+    enum: ['subscribed', 'unsubscribed'],
+    default: 'subscribed'
   },
-  subscribedAt: { 
-    type: Date, 
-    default: Date.now 
+  subscribedAt: {
+    type: Date,
+    default: Date.now
   }
 });
 

@@ -40,6 +40,12 @@ export default defineConfig({
   server: {
     host: true, // allow network access
     port: 5173,
-    allowedHosts: ['www.renderonnodes.com'] // allow your domain
+    allowedHosts: ['www.renderonnodes.com', 'localhost'], // allow your domain and local
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+      },
+    },
   }
 })
