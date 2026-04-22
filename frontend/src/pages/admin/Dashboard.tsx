@@ -147,7 +147,7 @@ const AdminDashboard: React.FC = () => {
                 getDashboardStats(true),
                 refreshJobs(true),
             ])
-            
+
             setDashboardStats(statsRes)
 
             const [feesRes, analyticsRes] = await Promise.all([
@@ -227,32 +227,32 @@ const AdminDashboard: React.FC = () => {
 
     const headerActions = (
         <div className="flex items-center gap-1.5 lg:gap-2">
-            <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => fetchData()} 
-                disabled={refreshing} 
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchData()}
+                disabled={refreshing}
                 className="border-white/10 hover:bg-white/5 text-gray-400 h-8 lg:h-9"
             >
                 <RefreshCw className={cn("w-3.5 h-3.5 sm:mr-1.5", refreshing && "animate-spin")} />
                 <span className="hidden sm:inline">Refresh</span>
             </Button>
-            <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setIsConfigModalOpen(true)} 
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsConfigModalOpen(true)}
                 className="border-blue-500/20 text-blue-400 hover:bg-blue-500/10 h-8 lg:h-9"
             >
                 <Settings className="w-3.5 h-3.5 sm:mr-1.5" />
                 <span className="hidden sm:inline">Settings</span>
             </Button>
-            <Button 
-                size="sm" 
-                onClick={() => navigate('/admin/analytics')} 
+            <Button
+                size="sm"
+                onClick={() => navigate('/admin/user-analytics')}
                 className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 h-8 lg:h-9"
             >
                 <BarChart3 className="w-3.5 h-3.5 lg:mr-1.5" />
-                <span className="hidden lg:inline">Analytics</span>
+                <span className="hidden lg:inline">User Analytics</span>
             </Button>
         </div>
     )

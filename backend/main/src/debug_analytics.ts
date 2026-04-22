@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
-import { Job } from '../models/Job';
-import { AuditLog } from '../models/AuditLog';
-import { env } from '../config/env';
+import { Job } from './models/Job';
+import { AuditLog } from './models/AuditLog';
+import { env } from './config/env';
 
 async function debugData() {
   try {
@@ -14,7 +14,7 @@ async function debugData() {
 
     const jobsWithCost = await Job.find({ status: 'completed', actualCost: { $gt: 0 } }).limit(5);
     console.log('Jobs with actualCost > 0:', jobsWithCost.length);
-    jobsWithCost.forEach(j => console.log(`Job ${j._id}: cost=${j.actualCost}, date=${j.completedAt}`));
+    jobsWithCost.forEach((j: any) => console.log(`Job ${j._id}: cost=${j.actualCost}, date=${j.completedAt}`));
 
     const auditLogsCount = await AuditLog.countDocuments();
     console.log('Audit Logs Count:', auditLogsCount);

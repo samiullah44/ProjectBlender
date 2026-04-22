@@ -78,6 +78,7 @@ const AdminUsers = React.lazy(() => import('@/pages/admin/Users'))
 const AdminAudit = React.lazy(() => import('@/pages/admin/AuditLogs'))
 const AdminAnalytics = React.lazy(() => import('@/pages/admin/Analytics'))
 const AdminUserAnalyticsDetail = React.lazy(() => import('@/pages/admin/UserAnalyticsDetail'))
+const AdminUserAnalytics = React.lazy(() => import('@/pages/admin/UserAnalyitcs'))
 
 import { useAuthStore } from '@/stores/authStore'
 
@@ -393,6 +394,7 @@ function App() {
                       <Route path="/analytics" element={<AdminAnalytics />} />
                       <Route path="/analytics/users/:userId" element={<AdminUserAnalyticsDetail />} />
                       <Route path="/analytics/user/:userId" element={<AdminUserAnalyticsDetail />} />
+                      <Route path="/user-analytics" element={<AdminUserAnalytics />} />
                     </Routes>
                   </ProtectedRoute>
                 }

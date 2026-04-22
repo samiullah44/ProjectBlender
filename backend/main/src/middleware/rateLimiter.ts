@@ -10,7 +10,8 @@ export const authLimiter = rateLimit({
         error: 'Too many requests, please try again later'
     },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    validate: { trustProxy: false }
 });
 
 // Stricter limiter for login/register
@@ -22,7 +23,8 @@ export const strictAuthLimiter = rateLimit({
         error: 'Too many authentication attempts, please try again later'
     },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    validate: { trustProxy: false }
 });
 
 // OAuth rate limiter
@@ -34,7 +36,8 @@ export const oauthLimiter = rateLimit({
         error: 'Too many OAuth attempts, please try again later'
     },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    validate: { trustProxy: false }
 });
 
 /**
@@ -51,6 +54,7 @@ export const tokenVerifyLimiter = rateLimit({
         error: 'TOO_MANY_REQUESTS',
         message: 'Too many registration attempts from this IP. Locked out for 15 minutes.',
     },
+    validate: { trustProxy: false }
 });
 
 /**
@@ -68,4 +72,5 @@ export const tokenGenerateLimiter = rateLimit({
         error: 'TOO_MANY_REQUESTS',
         message: 'Token generation limit reached (20 per hour).',
     },
+    validate: { trustProxy: false }
 });

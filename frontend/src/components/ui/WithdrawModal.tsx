@@ -20,7 +20,7 @@ export const WithdrawModal = () => {
 
   // Track the 'connected' state to detect a new connection
   const [prevConnected, setPrevConnected] = useState(connected);
-  
+
   useEffect(() => {
     if (connected && !prevConnected && step === 1) {
       const timer = setTimeout(() => {
@@ -46,7 +46,7 @@ export const WithdrawModal = () => {
       toast.error('Please enter a valid amount');
       return;
     }
-    
+
     if (Number(amount) > availableBalance) {
       toast.error(`Insufficient withdrawable balance. Available: ${availableBalance.toFixed(2)} mRNDR`);
       return;
@@ -55,17 +55,17 @@ export const WithdrawModal = () => {
     setIsLoading(true);
     try {
       toast.success('Initiating withdraw transaction...');
-      
+
       const { tx } = await withdrawFromAccount(parseFloat(amount));
-      
+
       toast.success(`Successfully withdrew ${amount} mRNDR!`);
-      
+
       // Delay for propagation
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       await fetchCreditBalance();
       window.dispatchEvent(new Event('refresh_credit_balance'));
-      
+
       setIsOpen(false);
       setAmount('');
     } catch (error: any) {
@@ -87,7 +87,7 @@ export const WithdrawModal = () => {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setIsOpen(false)}
           />
-          
+
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -116,7 +116,7 @@ export const WithdrawModal = () => {
             {/* Body */}
             <div className="p-6 space-y-6 min-h-[250px] flex flex-col justify-center">
               {step === 1 ? (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
@@ -133,7 +133,7 @@ export const WithdrawModal = () => {
                   </div>
                   {connected && (
                     <div className="flex flex-col gap-2 w-full mt-4">
-                      <Button 
+                      <Button
                         onClick={() => setStep(2)}
                         className="w-full bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/30 font-bold"
                       >
@@ -146,7 +146,7 @@ export const WithdrawModal = () => {
                   )}
                 </motion.div>
               ) : (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   className="space-y-4"
@@ -156,7 +156,7 @@ export const WithdrawModal = () => {
                       <p className="text-sm font-semibold text-gray-300">Step 2: Enter Amount</p>
                       <p className="text-xs text-emerald-400 font-medium">Available: {availableBalance.toFixed(2)} mRNDR</p>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setStep(1)}
                       className="text-xs text-gray-500 hover:text-gray-300 underline underline-offset-2 transition-colors self-start"
                     >
@@ -175,7 +175,7 @@ export const WithdrawModal = () => {
                         className="pl-4 pr-16 py-6 text-lg bg-gray-800 border-gray-700 text-white placeholder-gray-500"
                         disabled={isLoading}
                       />
-                      <div 
+                      <div
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-red-400 cursor-pointer hover:text-red-300"
                         onClick={() => setAmount(Math.max(0, availableBalance).toString())}
                       >
@@ -186,7 +186,7 @@ export const WithdrawModal = () => {
 
                   <div className="pt-4 space-y-4">
                     <p className="text-[10px] text-gray-400 text-center leading-relaxed">
-                      Withdrawals are processed as on-chain transactions. By proceeding, you agree to the 
+                      Withdrawals are processed as on-chain transactions. By proceeding, you agree to the
                       <Link to="/terms" className="text-red-400 hover:underline"> Protocol Terms</Link>.
                     </p>
                     <Button

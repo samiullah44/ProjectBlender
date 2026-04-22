@@ -23,9 +23,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src')
     }
   },
-  optimizeDeps: {
-    exclude: ['es-toolkit'],
-  },
+
   build: {
     rollupOptions: {
       output: {
