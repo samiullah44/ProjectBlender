@@ -213,11 +213,11 @@ const MainLayout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-gray-950 flex flex-col overflow-x-hidden animate-page-reveal">
       <ImpersonationBanner />
       <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
       <Navbar hideWaitlist={showTopBar} />
-      <main className="mx-auto flex-1 w-full overflow-x-hidden animate-page-reveal">
+      <main className="mx-auto flex-1 w-full overflow-x-hidden">
         <React.Suspense fallback={<PageSkeleton />}>
           <Outlet />
         </React.Suspense>

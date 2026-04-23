@@ -42,8 +42,8 @@
 }
 
 @keyframes pageReveal {
-  from { opacity: 0; transform: translateY(8px); filter: blur(16px); letter-spacing: 0.05em; }
-  to   { opacity: 1; transform: translateY(0); filter: blur(0); letter-spacing: normal; }
+  from { opacity: 0; transform: translateY(12px) scale(0.98); filter: blur(24px); letter-spacing: 0.1em; }
+  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); letter-spacing: normal; }
 }
 
 @keyframes slideInLeft {
@@ -65,7 +65,7 @@
 }
 
 .animate-page-reveal {
-  animation: pageReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: pageReveal 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .animate-slide-in-left {
