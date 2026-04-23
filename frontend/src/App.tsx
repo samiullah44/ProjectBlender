@@ -254,10 +254,7 @@ const AnalyticsTracker = () => {
 }
 
 function App() {
-  const [showSplash, setShowSplash] = useState(() => {
-    // Show splash only once per session
-    return !sessionStorage.getItem('splash_shown');
-  });
+  const [showSplash, setShowSplash] = useState(false); // Disabled by default for instant landing
 
   const handleSplashComplete = () => {
     sessionStorage.setItem('splash_shown', 'true');

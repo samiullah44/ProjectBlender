@@ -203,6 +203,7 @@ const WaitlistPopup: React.FC<WaitlistPopupProps> = ({ isOpen, onClose, onSubscr
                           className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-base"
                           required
                           disabled={loading}
+                          aria-label="Email address"
                         />
                       </div>
 

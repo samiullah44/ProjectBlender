@@ -87,6 +87,7 @@ const IncomeCalculator: React.FC = () => {
                 value={gpuCount}
                 onChange={(e) => setGpuCount(parseInt(e.target.value))}
                 className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-emerald-500"
+                aria-label="Number of active GPU units"
               />
             </div>
           </div>

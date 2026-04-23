@@ -13,6 +13,8 @@
   "dependencies": {
     "@babel/runtime": "^7.29.2",
     "@coral-xyz/anchor": "^0.32.1",
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/inter": "^5.2.8",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-progress": "^1.1.8",
     "@radix-ui/react-select": "^2.2.6",
