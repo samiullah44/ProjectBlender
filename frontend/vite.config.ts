@@ -60,7 +60,7 @@ export default defineConfig({
             return 'charts'
           }
           // React core
-          if (id.includes('react-dom') || id.includes('react-router')) {
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/react-router')) {
             return 'react-vendor'
           }
           // Lucide icons

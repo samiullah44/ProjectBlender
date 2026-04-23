@@ -100,30 +100,32 @@ const HeroSection: React.FC = () => {
 
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-20 overflow-hidden">
-      <div className="absolute inset-0 z-0">
-        <AnimatePresence mode="wait">
+      <motion.div className="absolute inset-0 z-0" style={{ y: heroY, opacity: heroOpacity }}>
+        {HERO_IMAGES.map((src, index) => (
           <motion.div
-            key={currentImageIndex}
-            initial={isLoaded ? { opacity: 0, scale: 1.1 } : false}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1 }}
+            key={src}
+            initial={false}
+            animate={{ 
+              opacity: currentImageIndex === index ? 1 : 0,
+              scale: currentImageIndex === index ? 1 : 1.1,
+              zIndex: currentImageIndex === index ? 10 : 0
+            }}
             transition={{ duration: 1.2, ease: "easeInOut" }}
-            style={{ y: heroY, opacity: heroOpacity }}
-            className="absolute inset-0"
+            className="absolute inset-0 pointer-events-none"
           >
             <div className="absolute inset-0 bg-gray-950/40" />
             <img
-              src={HERO_IMAGES[currentImageIndex]}
+              src={src}
               alt="3D Rendering"
               className="w-full h-full object-cover"
-              fetchPriority={currentImageIndex === 0 ? "high" : "auto"}
-              loading={currentImageIndex === 0 ? "eager" : "lazy"}
+              fetchPriority={index === 0 ? "high" : "auto"}
+              loading={index === 0 ? "eager" : "lazy"}
               width="1200"
               height="1200"
             />
           </motion.div>
-        </AnimatePresence>
-      </div>
+        ))}
+      </motion.div>
 
       <div className="absolute inset-0 z-30 flex items-center justify-between px-4 md:px-8 opacity-15 pointer-events-none">
         <button onClick={prevImage} className="p-3 rounded-full bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 hover:border-white/20 transition-all hover:scale-110 active:scale-95 pointer-events-auto" aria-label="Previous image">

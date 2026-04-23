@@ -60,16 +60,10 @@ jobs:
             npm install
 
             echo "Building frontend..."
-            if npm run | grep -q "build"; then
-              npm run build
-            fi
+            npm run build
 
-            echo "Reloading frontend PM2 (zero downtime)..."
-            if pm2 describe render-client > /dev/null 2>&1; then
-              pm2 reload render-client
-            else
-              pm2 start npm --name render-client -- run dev -- --host
-            fi
+            echo "Cleaning up outdated PM2 frontend dev servers (one-time fix)..."
+            pm2 delete render-client || true
             pm2 save
 
             echo "✅ Deployment of Frontend & Backend complete (Zero Downtime)"
