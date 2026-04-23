@@ -63,7 +63,7 @@ jobs:
             npm run build
 
             echo "Cleaning up outdated PM2 frontend dev servers (one-time fix)..."
-            pm2 delete render-client || true
+            pm2 delete render-client > /dev/null 2>&1 || true
             pm2 save
 
             echo "✅ Deployment of Frontend & Backend complete (Zero Downtime)"

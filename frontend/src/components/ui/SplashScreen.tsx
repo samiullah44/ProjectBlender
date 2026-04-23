@@ -64,11 +64,11 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
     }));
 
     // ── 2. Phase timeline ──────────────────────────────────────
-    const t1 = setTimeout(() => { phaseRef.current = 'broadcast'; }, 800);
-    const t2 = setTimeout(() => { phaseRef.current = 'distribute'; }, 1500);
+    const t1 = setTimeout(() => { phaseRef.current = 'broadcast'; }, 500);
+    const t2 = setTimeout(() => { phaseRef.current = 'distribute'; }, 1200);
     const t3 = setTimeout(() => { phaseRef.current = 'converge'; setShowText(true); }, 2300);
-    const t4 = setTimeout(() => { phaseRef.current = 'dissolve'; }, 4300); // 2s hold
-    const t5 = setTimeout(() => { phaseRef.current = 'done'; onComplete(); }, 5200);
+    const t4 = setTimeout(() => { phaseRef.current = 'dissolve'; }, 3000);
+    const t5 = setTimeout(() => { phaseRef.current = 'done'; onComplete(); }, 3500);
 
     // ── 3. Render loop ─────────────────────────────────────────
     let broadcastRadius = 0;

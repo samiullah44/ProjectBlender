@@ -128,28 +128,27 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
 // Main Layout component with Navbar, Footer, and Popup
 const MainLayout = () => {
   const [isWaitlistOpen, setIsWaitlistOpen] = useState(false)
-  const [showTopBar, setShowTopBar] = useState(false)
+  const [showTopBar, setShowTopBar] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const status = localStorage.getItem('waitlist_status');
+      const dismissedAt = localStorage.getItem('waitlist_dismissed_at');
+      if (status === 'subscribed') return true;
+      if (status === 'dismissed') {
+        if (!dismissedAt) return true;
+        const daysPassed = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
+        return daysPassed < 2;
+      }
+    }
+    return false;
+  })
 
   useEffect(() => {
     const status = localStorage.getItem('waitlist_status')
     const dismissedAt = localStorage.getItem('waitlist_dismissed_at')
 
-    if (status === 'subscribed') {
-      setShowTopBar(true);
+    if (status === 'subscribed' || (status === 'dismissed' && (!dismissedAt || (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24) < 2))) {
+      // Logic already handled in initializer, but sync just in case
       return;
-    }
-
-    if (status === 'dismissed') {
-      if (dismissedAt) {
-        const daysPassed = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
-        if (daysPassed < 2) {
-          setShowTopBar(true);
-          return;
-        }
-      } else {
-        setShowTopBar(true);
-        return;
-      }
     }
 
     let isTriggered = false;
@@ -218,7 +217,7 @@ const MainLayout = () => {
       <ImpersonationBanner />
       <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
       <Navbar hideWaitlist={showTopBar} />
-      <main className="mx-auto flex-1 w-full overflow-x-hidden">
+      <main className="mx-auto flex-1 w-full overflow-x-hidden animate-page-reveal">
         <React.Suspense fallback={<PageSkeleton />}>
           <Outlet />
         </React.Suspense>
@@ -254,7 +253,11 @@ const AnalyticsTracker = () => {
 }
 
 function App() {
-  const [showSplash, setShowSplash] = useState(false); // Disabled by default for instant landing
+  // const [showSplash, setShowSplash] = useState(() => {
+  //   // Show splash only once per session
+  //   return !sessionStorage.getItem('splash_shown');
+  // });
+  const [showSplash, setShowSplash] = useState(false);
 
   const handleSplashComplete = () => {
     sessionStorage.setItem('splash_shown', 'true');
