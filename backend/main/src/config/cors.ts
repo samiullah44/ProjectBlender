@@ -32,7 +32,7 @@ export const createCorsOptions = (): CorsOptions => ({
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-impersonating-user'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-impersonating-user', 'X-Node-Id', 'X-Node-Secret'],
   credentials: true,
   maxAge: 86400
 });

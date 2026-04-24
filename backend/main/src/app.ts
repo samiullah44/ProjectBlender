@@ -66,13 +66,17 @@ app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ extended: true, limit: '500mb' }));
 
 // Routes
-app.use('/api/jobs', jobRoutes);
-app.use('/api/nodes', nodeRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/newsletter', newsletterRoutes);
+const routePrefixes = ['/api', ''];
+
+routePrefixes.forEach(prefix => {
+  app.use(`${prefix}/jobs`, jobRoutes);
+  app.use(`${prefix}/nodes`, nodeRoutes);
+  app.use(`${prefix}/auth`, authRoutes);
+  app.use(`${prefix}/notifications`, notificationRoutes);
+  app.use(`${prefix}/admin`, adminRoutes);
+  app.use(`${prefix}/analytics`, analyticsRoutes);
+  app.use(`${prefix}/newsletter`, newsletterRoutes);
+});
 
 // WebSocket endpoint
 app.get('/ws', (req, res) => {

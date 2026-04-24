@@ -66,4 +66,7 @@ jobs:
             pm2 delete render-client > /dev/null 2>&1 || true
             pm2 save
 
+            echo "Reloading Nginx to clear stale handles and apply new config..."
+            sudo systemctl reload nginx
+
             echo "✅ Deployment of Frontend & Backend complete (Zero Downtime)"

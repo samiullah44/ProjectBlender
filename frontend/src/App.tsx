@@ -126,96 +126,11 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
 }
 
 // Main Layout component with Navbar, Footer, and Popup
-const MainLayout = () => {
-  const [isWaitlistOpen, setIsWaitlistOpen] = useState(false)
-  const [showTopBar, setShowTopBar] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const status = localStorage.getItem('waitlist_status');
-      const dismissedAt = localStorage.getItem('waitlist_dismissed_at');
-      if (status === 'subscribed') return true;
-      if (status === 'dismissed') {
-        if (!dismissedAt) return true;
-        const daysPassed = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
-        return daysPassed < 2;
-      }
-    }
-    return false;
-  })
-
-  useEffect(() => {
-    const status = localStorage.getItem('waitlist_status')
-    const dismissedAt = localStorage.getItem('waitlist_dismissed_at')
-
-    if (status === 'subscribed' || (status === 'dismissed' && (!dismissedAt || (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24) < 2))) {
-      // Logic already handled in initializer, but sync just in case
-      return;
-    }
-
-    let isTriggered = false;
-
-    // Trigger after 3 seconds if not seen
-    const timer = setTimeout(() => {
-      if (!isTriggered) {
-        setIsWaitlistOpen(true);
-        isTriggered = true;
-      }
-    }, 3000);
-
-    // Track scroll 30%
-    const handleScroll = () => {
-      if (!isTriggered && document.documentElement.scrollTop > document.documentElement.scrollHeight * 0.3) {
-        setIsWaitlistOpen(true);
-        isTriggered = true;
-        window.removeEventListener('scroll', handleScroll);
-      }
-    };
-
-    // Exit intent
-    const handleMouseLeave = (e: MouseEvent) => {
-      if (!isTriggered && e.clientY <= 0) {
-        setIsWaitlistOpen(true);
-        isTriggered = true;
-        document.removeEventListener('mouseleave', handleMouseLeave);
-      }
-    };
-
-    // Custom Event listener for NavBar
-    const handleOpenWaitlist = () => {
-      setIsWaitlistOpen(true);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    window.addEventListener('open-waitlist', handleOpenWaitlist);
-    document.addEventListener('mouseleave', handleMouseLeave);
-
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('open-waitlist', handleOpenWaitlist);
-      document.removeEventListener('mouseleave', handleMouseLeave);
-    };
-  }, []);
-
-  const handleCloseWaitlist = () => {
-    setIsWaitlistOpen(false);
-    const status = localStorage.getItem('waitlist_status');
-    if (status !== 'subscribed') {
-      localStorage.setItem('waitlist_status', 'dismissed');
-      localStorage.setItem('waitlist_dismissed_at', Date.now().toString());
-    }
-    setShowTopBar(true);
-  };
-
-  const handleSubscribe = () => {
-    localStorage.setItem('waitlist_status', 'subscribed');
-    setShowTopBar(true);
-    setIsWaitlistOpen(false);
-  };
-
+const MainLayout = ({ showTopBar, onOpenWaitlist }: { showTopBar: boolean, onOpenWaitlist: () => void }) => {
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col overflow-x-hidden animate-page-reveal">
       <ImpersonationBanner />
-      <TopBar isVisible={showTopBar} onReopen={() => setIsWaitlistOpen(true)} />
+      <TopBar isVisible={showTopBar} onReopen={onOpenWaitlist} />
       <Navbar hideWaitlist={showTopBar} />
       <main className="mx-auto flex-1 w-full overflow-x-hidden">
         <React.Suspense fallback={<PageSkeleton />}>
@@ -223,13 +138,6 @@ const MainLayout = () => {
         </React.Suspense>
       </main>
       <Footer />
-      <React.Suspense fallback={null}>
-        <WaitlistPopup
-          isOpen={isWaitlistOpen}
-          onClose={handleCloseWaitlist}
-          onSubscribe={handleSubscribe}
-        />
-      </React.Suspense>
     </div>
   )
 }
@@ -264,6 +172,86 @@ function App() {
     setShowSplash(false);
   };
 
+  const [isWaitlistOpen, setIsWaitlistOpen] = useState(false)
+  const [showTopBar, setShowTopBar] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const status = localStorage.getItem('waitlist_status');
+      const dismissedAt = localStorage.getItem('waitlist_dismissed_at');
+      if (status === 'subscribed') return true;
+      if (status === 'dismissed') {
+        if (!dismissedAt) return true;
+        const daysPassed = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
+        return daysPassed < 2;
+      }
+    }
+    return false;
+  })
+
+  useEffect(() => {
+    const status = localStorage.getItem('waitlist_status')
+    const dismissedAt = localStorage.getItem('waitlist_dismissed_at')
+
+    if (status === 'subscribed' || (status === 'dismissed' && (!dismissedAt || (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24) < 2))) {
+      return;
+    }
+
+    let isTriggered = false;
+
+    const timer = setTimeout(() => {
+      if (!isTriggered) {
+        setIsWaitlistOpen(true);
+        isTriggered = true;
+      }
+    }, 3000);
+
+    const handleScroll = () => {
+      if (!isTriggered && document.documentElement.scrollTop > document.documentElement.scrollHeight * 0.3) {
+        setIsWaitlistOpen(true);
+        isTriggered = true;
+        window.removeEventListener('scroll', handleScroll);
+      }
+    };
+
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (!isTriggered && e.clientY <= 0) {
+        setIsWaitlistOpen(true);
+        isTriggered = true;
+        document.removeEventListener('mouseleave', handleMouseLeave);
+      }
+    };
+
+    const handleOpenWaitlist = () => {
+      setIsWaitlistOpen(true);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('open-waitlist', handleOpenWaitlist);
+    document.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('open-waitlist', handleOpenWaitlist);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+    };
+  }, []);
+
+  const handleCloseWaitlist = () => {
+    setIsWaitlistOpen(false);
+    const status = localStorage.getItem('waitlist_status');
+    if (status !== 'subscribed') {
+      localStorage.setItem('waitlist_status', 'dismissed');
+      localStorage.setItem('waitlist_dismissed_at', Date.now().toString());
+    }
+    setShowTopBar(true);
+  };
+
+  const handleSubscribe = () => {
+    localStorage.setItem('waitlist_status', 'subscribed');
+    setShowTopBar(true);
+    setIsWaitlistOpen(false);
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthInitializer>
@@ -284,7 +272,7 @@ function App() {
             </Route>
 
             {/* Public Marketing Routes with Navbar */}
-            <Route element={<MainLayout />}>
+            <Route element={<MainLayout showTopBar={showTopBar} onOpenWaitlist={() => setIsWaitlistOpen(true)} />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/features" element={<FeaturesPage />} />
               <Route path="/features/gpu" element={<FeaturesGPUPage />} />
@@ -330,15 +318,6 @@ function App() {
                   <SettingsPage />
                 </ProtectedRoute>
               } />
-              {/* <Route path="/login" element={<LoginPage />} /> */}
-              {/* <Route path="/register" element={<RegisterPage />} /> */}
-
-              {/* Disabled user-facing routes → redirect home */}
-              <Route path="/dashboard" element={<Navigate to="/" replace />} />
-              <Route path="/apply-node-provider" element={<Navigate to="/" replace />} />
-              <Route path="/notifications" element={<Navigate to="/" replace />} />
-              <Route path="/client/*" element={<Navigate to="/" replace />} />
-              <Route path="/node/*" element={<Navigate to="/" replace />} />
 
               {/* Client Routes */}
               <Route
@@ -404,6 +383,11 @@ function App() {
 
           {/* Global Modals must be inside Router for Link to work */}
           <React.Suspense fallback={null}>
+            <WaitlistPopup
+              isOpen={isWaitlistOpen}
+              onClose={handleCloseWaitlist}
+              onSubscribe={handleSubscribe}
+            />
             <DepositModal />
             <WithdrawModal />
           </React.Suspense>
