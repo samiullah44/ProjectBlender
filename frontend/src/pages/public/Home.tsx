@@ -317,14 +317,7 @@ const DualCTASection: React.FC = () => {
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-          {/* 
-            TEMPORARY ACCESS CONTROL:
-            The handlers below intercept navigation to restricted dashboards and instead 
-            trigger the site-wide WaitlistPopup. 
-            
-            TO REVERT TO LIVE ACCESS:
-            Search for 'handleRestrictedCTA' and remove e.preventDefault() logic.
-          */}
+          
           
           {/* Client Path */}
           <motion.div
@@ -346,12 +339,8 @@ const DualCTASection: React.FC = () => {
                 <Link
                   to="/client/dashboard"
                   className="w-full"
-                  onClick={(e) => {
-                    // Start of Temporary Restriction
-                    e.preventDefault(); 
+                  onClick={() => {
                     analytics.trackClick('home_cta_client');
-                    window.dispatchEvent(new CustomEvent('open-waitlist'));
-                    // End of Temporary Restriction
                   }}
                 >
                   <Button className="w-full bg-white/5 hover:bg-emerald-600 text-white border border-white/10 hover:border-emerald-500 transition-all duration-300 py-6">
@@ -383,12 +372,8 @@ const DualCTASection: React.FC = () => {
                 <Link
                   to="/apply-node-provider"
                   className="w-full"
-                  onClick={(e) => {
-                    // Start of Temporary Restriction
-                    e.preventDefault();
+                  onClick={() => {
                     analytics.trackClick('home_cta_provider');
-                    window.dispatchEvent(new CustomEvent('open-waitlist'));
-                    // End of Temporary Restriction
                   }}
                 >
                   <Button className="w-full bg-white/5 hover:bg-purple-600 text-white border border-white/10 hover:border-purple-500 transition-all duration-300 py-6">
