@@ -72,7 +72,20 @@ namespace BlendFarm.Node.Services
             _identityService = identityService;
             _speedtestService = speedtestService;
             _nodeId = configuration["NodeSettings:NodeId"] ?? Guid.NewGuid().ToString();
-            _backendUrl = configuration["Backend:Url"] ?? "http://192.168.1.54:3000";
+            
+            // Normalize Backend URL:
+            // 1. Fallback to production if missing or empty string
+            // 2. Trim trailing /api if user included it (since methods append /api/...)
+            // 3. Ensure trailing slash for BaseAddress
+            var rawUrl = _configuration["Backend:Url"];
+            if (string.IsNullOrWhiteSpace(rawUrl)) 
+            {
+                rawUrl = "https://www.renderonnodes.com/api";
+            }
+            
+            _backendUrl = rawUrl.EndsWith("/api") ? rawUrl.Substring(0, rawUrl.Length - 4) : rawUrl;
+            _backendUrl = _backendUrl.TrimEnd('/');
+            
             _frameUploadUrls = new ConcurrentDictionary<int, (string, string)>();
             _blendFileCache = new ConcurrentDictionary<string, (string, DateTime)>();
              _computeScoreService = new ComputeScoreService(logger);
@@ -91,7 +104,7 @@ namespace BlendFarm.Node.Services
             _httpClient = new HttpClient(handler)
             {
                 Timeout = TimeSpan.FromMinutes(5),
-                BaseAddress = new Uri(_backendUrl)
+                BaseAddress = new Uri(_backendUrl + "/") // Methods will append "api/..."
             };
             
             // Set default headers

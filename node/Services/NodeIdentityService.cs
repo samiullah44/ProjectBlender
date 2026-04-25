@@ -203,7 +203,11 @@ namespace BlendFarm.Node.Services
 
 
 
-                var response = await httpClient.PostAsync($"{backendUrl.TrimEnd('/')}/api/nodes/register-with-token", content);
+                // Normalize URL to handle trailing /api or trailing slashes gracefully
+                var normalizedBackendUrl = backendUrl.EndsWith("/api") ? backendUrl.Substring(0, backendUrl.Length - 4) : backendUrl;
+                normalizedBackendUrl = normalizedBackendUrl.TrimEnd('/');
+
+                var response = await httpClient.PostAsync($"{normalizedBackendUrl}/api/nodes/register-with-token", content);
                 var body     = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)

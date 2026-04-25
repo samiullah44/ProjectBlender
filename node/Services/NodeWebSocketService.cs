@@ -75,9 +75,12 @@ namespace BlendFarm.Node.Services
             _hardware = hardware;
             _nodeId = nodeId;
 
-            var backendUrl = (configuration["Backend:Url"]
-                              ?? "http://192.168.1.54:3000")
-                             .TrimEnd('/');
+            var backendUrl = configuration["Backend:Url"];
+            if (string.IsNullOrWhiteSpace(backendUrl))
+            {
+                backendUrl = "https://www.renderonnodes.com/api";
+            }
+            backendUrl = backendUrl.TrimEnd('/');
 
             // Convert http(s) → ws(s)
             _wsUrl = backendUrl
