@@ -134,6 +134,11 @@ const CreateJob: React.FC = () => {
     }
   })
 
+  // NEW: Local string state for frame inputs to allow free editing
+  const [startFrameStr, setStartFrameStr] = useState('1')
+  const [endFrameStr, setEndFrameStr] = useState('100')
+  const [selectedFrameStr, setSelectedFrameStr] = useState('1')
+
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0]
@@ -617,11 +622,25 @@ const CreateJob: React.FC = () => {
                   <div>
                     <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Frame Number</label>
                     <input
-                      type="number"
-                      value={formData.selectedFrame}
-                      onChange={(e) => handleInputChange('selectedFrame', parseInt(e.target.value) || 1)}
+                      type="text"
+                      value={selectedFrameStr}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "" || /^\d+$/.test(val)) {
+                          setSelectedFrameStr(val);
+                          const num = parseInt(val);
+                          if (!isNaN(num)) {
+                            handleInputChange('selectedFrame', num);
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        let num = parseInt(selectedFrameStr);
+                        if (isNaN(num) || num < 0) num = 1;
+                        setSelectedFrameStr(num.toString());
+                        handleInputChange('selectedFrame', num);
+                      }}
                       className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white focus:border-blue-500 focus:outline-none transition-all text-sm"
-                      min="1"
                     />
                   </div>
                 )}
@@ -632,22 +651,56 @@ const CreateJob: React.FC = () => {
                     <div className="flex items-center gap-3">
                       <div className="flex-1">
                         <input
-                          type="number"
-                          value={formData.startFrame}
-                          onChange={(e) => handleInputChange('startFrame', parseInt(e.target.value) || 1)}
+                          type="text"
+                          value={startFrameStr}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "" || /^\d+$/.test(val)) {
+                              setStartFrameStr(val);
+                              const num = parseInt(val);
+                              if (!isNaN(num)) {
+                                handleInputChange('startFrame', num);
+                              }
+                            }
+                          }}
+                          onBlur={() => {
+                            let num = parseInt(startFrameStr);
+                            if (isNaN(num) || num < 0) num = 1;
+                            setStartFrameStr(num.toString());
+                            handleInputChange('startFrame', num);
+                            
+                            // Ensure end >= start
+                            if (formData.endFrame < num) {
+                              handleInputChange('endFrame', num);
+                              setEndFrameStr(num.toString());
+                            }
+                          }}
                           className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white focus:border-blue-500 focus:outline-none transition-all text-sm"
-                          min="1"
                         />
                         <div className="text-[10px] text-gray-500 mt-1 pl-1">Start frame</div>
                       </div>
                       <div className="text-gray-600 font-bold text-lg mt-[-12px]">→</div>
                       <div className="flex-1">
                         <input
-                          type="number"
-                          value={formData.endFrame}
-                          onChange={(e) => handleInputChange('endFrame', parseInt(e.target.value) || 1)}
+                          type="text"
+                          value={endFrameStr}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "" || /^\d+$/.test(val)) {
+                              setEndFrameStr(val);
+                              const num = parseInt(val);
+                              if (!isNaN(num)) {
+                                handleInputChange('endFrame', num);
+                              }
+                            }
+                          }}
+                          onBlur={() => {
+                            let num = parseInt(endFrameStr);
+                            if (isNaN(num) || num < formData.startFrame) num = formData.startFrame;
+                            setEndFrameStr(num.toString());
+                            handleInputChange('endFrame', num);
+                          }}
                           className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white focus:border-blue-500 focus:outline-none transition-all text-sm"
-                          min={formData.startFrame + 1}
                         />
                         <div className="text-[10px] text-gray-500 mt-1 pl-1">End frame</div>
                       </div>

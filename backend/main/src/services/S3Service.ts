@@ -60,7 +60,7 @@ export class S3Service {
   /**
    * Generate a pre-signed URL for downloading blend file
    */
-  async generateBlendFileDownloadUrl(fileKey: string, expiresIn: number = 3600): Promise<string> {
+  async generateBlendFileDownloadUrl(fileKey: string, expiresIn: number = 7200): Promise<string> {
     const cacheKey = `download_${fileKey}`;
     const cached = this.urlCache.get(cacheKey);
     // Add 5 min buffer so we do not return a URL that's about to expire
@@ -96,7 +96,7 @@ export class S3Service {
     jobId: string,
     frame: number,
     extension: string = 'png',
-    expiresIn: number = 3600
+    expiresIn: number = 7200
   ): Promise<{ uploadUrl: string; s3Key: string }> {
     const fileName = `frame_${frame.toString().padStart(4, '0')}.${extension}`;
     const fileKey = `renders/${jobId}/${fileName}`;
@@ -132,7 +132,7 @@ export class S3Service {
   /**
    * Generate download URL for rendered frame
    */
-  async generateFrameDownloadUrl(fileKey: string, expiresIn: number = 86400): Promise<string> {
+  async generateFrameDownloadUrl(fileKey: string, expiresIn: number = 604800): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: fileKey

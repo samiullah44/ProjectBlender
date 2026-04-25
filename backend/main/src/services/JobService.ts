@@ -641,9 +641,20 @@ export class JobService {
             const jobsWithUrls = await Promise.all(
                 jobs.map(async (job) => {
                     let blendFileUrl = job.blendFileUrl;
+                    let previewUrl = undefined;
                     try {
                         if (job.blendFileKey) {
                             blendFileUrl = await this.s3Service.generateBlendFileDownloadUrl(job.blendFileKey);
+                        }
+                        
+                        // If job has rendered frames, refresh the URL for the first one to show as a thumbnail
+                        if (job.outputUrls && job.outputUrls.length > 0) {
+                            const firstOutput = job.outputUrls[0];
+                            if (firstOutput && firstOutput.s3Key) {
+                                previewUrl = await this.s3Service.generateFrameDownloadUrl(firstOutput.s3Key);
+                            } else if (firstOutput) {
+                                previewUrl = firstOutput.url;
+                            }
                         }
                     } catch (err) {
                         console.warn(`Failed to generate URL for job ${job.jobId}:`, err);
@@ -651,6 +662,7 @@ export class JobService {
                     return {
                         ...job,
                         blendFileUrl,
+                        previewUrl,
                         outputCount: job.outputUrls?.length || 0
                     };
                 })

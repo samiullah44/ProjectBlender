@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
@@ -1228,7 +1228,7 @@ namespace BlendFarm.Node
                     },
                     Backend = new
                     {
-                        Url = "http://localhost:3000",
+                        Url = "https://www.renderonnodes.com/api",
                         HealthCheckEndpoint = "/health",
                         ApiTimeoutSeconds = 120,
                         EnableSslVerification = true

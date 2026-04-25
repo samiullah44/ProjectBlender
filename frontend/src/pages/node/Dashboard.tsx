@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -569,92 +570,97 @@ const NodeDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* Custom Token Modal (Since we don't have Dialog component guaranteed in UI folder) */}
-            <AnimatePresence>
-                {isTokenModalOpen && tokenData && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                            onClick={() => setIsTokenModalOpen(false)}
-                        />
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="relative bg-gray-900 border border-purple-500/30 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
-                        >
-                            <div className="p-6">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div>
-                                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                            <Zap className="w-5 h-5 text-purple-400" />
-                                            Node Registration Token
-                                        </h2>
-                                        <p className="text-sm text-gray-400 mt-1">
-                                            Run this token in your C# Node client to securely pair it with your account.
+            {/* Custom Token Modal (Registration) - Use Portal to bypass parent transforms */}
+            {createPortal(
+                <AnimatePresence>
+                    {isTokenModalOpen && tokenData && (
+                        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="fixed inset-0 bg-black/90 backdrop-blur-md pointer-events-auto"
+                                onClick={() => setIsTokenModalOpen(false)}
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: 40 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: 40 }}
+                                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                                className="relative bg-[#0D0D0E] border border-white/10 w-full max-w-lg rounded-2xl shadow-[0_0_100px_-20px_rgba(139,92,246,0.6)] overflow-hidden z-10 flex flex-col max-h-[90vh] pointer-events-auto"
+                            >
+                                <div className="overflow-y-auto flex-1 p-6 custom-scrollbar">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                                <Zap className="w-5 h-5 text-purple-400" />
+                                                Node Registration Token
+                                            </h2>
+                                            <p className="text-sm text-gray-400 mt-1">
+                                                Run this token in your C# Node client to securely pair it with your account.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => setIsTokenModalOpen(false)}
+                                            className="text-gray-500 hover:text-white transition-colors p-1"
+                                        >
+                                            <XCircle className="w-6 h-6" />
+                                        </button>
+                                    </div>
+
+                                    <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 mb-4 mt-6">
+                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                            <code className="text-xl sm:text-2xl font-mono text-cyan-400 font-bold tracking-wider break-all text-center sm:text-left">
+                                                {tokenData.token}
+                                            </code>
+                                            <Button
+                                                onClick={copyToClipboard}
+                                                variant="outline"
+                                                size="sm"
+                                                className={cn(
+                                                    "border-gray-800 hover:text-white transition-all w-full sm:w-auto",
+                                                    copied ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-gray-900 text-gray-400"
+                                                )}
+                                            >
+                                                {copied ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                                                {copied ? 'Copied!' : 'Copy'}
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 text-amber-400/90 text-[10px] sm:text-xs p-3 rounded-lg mb-6">
+                                        <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                                        <p>
+                                            This token will expire in 20 minutes (at {new Date(tokenData.expiresAt).toLocaleTimeString()}).
+                                            It can only be used <strong>once</strong>. As soon as the node registers, its identity is permanently linked to your account.
                                         </p>
                                     </div>
-                                    <button
-                                        onClick={() => setIsTokenModalOpen(false)}
-                                        className="text-gray-500 hover:text-white transition-colors"
-                                    >
-                                        <XCircle className="w-6 h-6" />
-                                    </button>
-                                </div>
 
-                                <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 mb-4 mt-6">
-                                    <div className="flex items-center justify-between">
-                                        <code className="text-2xl font-mono text-cyan-400 font-bold tracking-wider">
-                                            {tokenData.token}
-                                        </code>
-                                        <Button
-                                            onClick={copyToClipboard}
-                                            variant="outline"
-                                            className={cn(
-                                                "border-gray-800 hover:text-white transition-all",
-                                                copied ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20" : "bg-gray-900 text-gray-400 hover:bg-gray-800"
-                                            )}
-                                        >
-                                            {copied ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-                                            {copied ? 'Copied!' : 'Copy'}
-                                        </Button>
+                                    <div className="space-y-4">
+                                        <h4 className="text-sm font-medium text-gray-300">Next Steps:</h4>
+                                        <ol className="text-sm text-gray-400 space-y-3 list-decimal pl-4">
+                                            <li>Download and install the Node CLI software on your hardware.</li>
+                                            <li>Run the application (double-click the exe or run <code className="text-gray-300 bg-gray-800 px-1 rounded font-mono">dotnet run</code>)</li>
+                                            <li>When prompted, paste the token above into the console.</li>
+                                            <li>You will be instantly notified here when it comes online.</li>
+                                        </ol>
                                     </div>
                                 </div>
 
-                                <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 text-amber-400/90 text-xs p-3 rounded-lg mb-6">
-                                    <Info className="w-4 h-4 mt-0.5 shrink-0" />
-                                    <p>
-                                        This token will expire in 20 minutes (at {new Date(tokenData.expiresAt).toLocaleTimeString()}).
-                                        It can only be used <strong>once</strong>. As soon as the node registers, its identity is permanently linked to your account.
-                                    </p>
+                                <div className="bg-gray-950/50 px-6 py-4 flex justify-end border-t border-white/5 backdrop-blur-sm">
+                                    <Button
+                                        onClick={() => setIsTokenModalOpen(false)}
+                                        className="bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/20"
+                                    >
+                                        Done
+                                    </Button>
                                 </div>
-
-                                <div className="space-y-4">
-                                    <h4 className="text-sm font-medium text-gray-300">Next Steps:</h4>
-                                    <ol className="text-sm text-gray-400 space-y-3 list-decimal pl-4">
-                                        <li>Download and install the Node CLI software on your hardware.</li>
-                                        <li>Run the application (double-click the exe or run <code className="text-gray-300 bg-gray-800 px-1 rounded">dotnet run</code>)</li>
-                                        <li>When prompted, paste the token above into the console.</li>
-                                        <li>You will be instantly notified here when it comes online.</li>
-                                    </ol>
-                                </div>
-                            </div>
-
-                            <div className="bg-gray-950 px-6 py-4 flex justify-end border-t border-gray-800">
-                                <Button
-                                    onClick={() => setIsTokenModalOpen(false)}
-                                    className="bg-purple-600 hover:bg-purple-700 text-white"
-                                >
-                                    Done
-                                </Button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
         </div>
     )
 }

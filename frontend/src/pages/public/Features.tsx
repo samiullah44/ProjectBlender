@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Server, Shield, Zap, CircleDollarSign, 
+import {
+  Server, Shield, Zap, CircleDollarSign,
   Cpu, Globe, Layers, Lock, MonitorPlay, Box, FileImage
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -39,7 +39,7 @@ const Features = () => {
 
   return (
     <div className="bg-[#050505] min-h-screen text-white pt-24 pb-20">
-      
+
       {/* Hero Section */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 text-center mb-32">
         <motion.div initial="hidden" animate="visible" variants={fadeIn} className="max-w-4xl mx-auto">
@@ -55,25 +55,19 @@ const Features = () => {
           <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
             Unleash the power of idle GPUs globally. Process your most complex scenes in a fraction of the time, and at a fraction of the cost of traditional cloud rendering.
           </p>
-          <Button 
-            onClick={handleJoinWaitlist}
-            className="bg-indigo-600 hover:bg-indigo-700 text-lg px-8 py-6 rounded-2xl shadow-[0_0_20px_rgba(99,102,241,0.3)] transition-all hover:shadow-[0_0_30px_rgba(99,102,241,0.5)]"
-          >
-            Join the Waitlist
-          </Button>
         </motion.div>
       </section>
 
       {/* The Problem */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 mb-32">
-        <motion.div 
+        <motion.div
           initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }}
           variants={fadeIn}
           className="bg-gray-900/40 border border-white/5 rounded-3xl p-8 md:p-12 relative overflow-hidden"
         >
           <div className="absolute top-0 right-0 p-32 bg-red-500/5 blur-[120px] rounded-full" />
           <h2 className="text-3xl font-bold mb-10 text-center">The Industry Standard is Broken</h2>
-          
+
           <div className="grid md:grid-cols-3 gap-8 text-center relative z-10">
             <div className="p-6">
               <div className="w-16 h-16 bg-red-500/10 text-red-400 rounded-2xl flex items-center justify-center mx-auto mb-6">
@@ -113,7 +107,7 @@ const Features = () => {
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">We've built a revolutionary decentralized architecture to solve the rendering bottleneck.</p>
         </div>
 
-        <motion.div 
+        <motion.div
           variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }}
           className="grid md:grid-cols-2 gap-6"
         >
@@ -159,7 +153,7 @@ const Features = () => {
       <section className="bg-gray-900/30 border-y border-white/5 py-24 mb-32">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
-            
+
             {/* Tech Specs */}
             <motion.div initial="hidden" whileInView="visible" variants={fadeIn} viewport={{ once: true }}>
               <div className="inline-flex items-center gap-2 text-indigo-400 font-semibold mb-6">
@@ -216,7 +210,7 @@ const Features = () => {
 
       {/* CTA */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 text-center pb-10">
-        <motion.div 
+        <motion.div
           initial="hidden" whileInView="visible" variants={fadeIn} viewport={{ once: true }}
           className="bg-gradient-to-r from-indigo-900/40 to-emerald-900/40 border border-white/10 rounded-3xl p-12 md:p-20"
         >
@@ -224,14 +218,13 @@ const Features = () => {
           <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
             Get notified the moment we go live. Early adopters will receive exclusive beta priority and free rendering credits to test out the platform.
           </p>
-          <Button 
+          <Button
             onClick={isSubscribed ? undefined : handleJoinWaitlist}
             disabled={isSubscribed}
-            className={`text-lg px-8 py-6 rounded-2xl font-bold transition-all shadow-xl ${
-              isSubscribed 
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 cursor-not-allowed' 
-                : 'bg-white text-indigo-950 hover:bg-gray-100 hover:scale-105'
-            }`}
+            className={`text-lg px-8 py-6 rounded-2xl font-bold transition-all shadow-xl ${isSubscribed
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 cursor-not-allowed'
+              : 'bg-white text-indigo-950 hover:bg-gray-100 hover:scale-105'
+              }`}
           >
             {isSubscribed ? "You're on the list!" : "Claim Priority Access"}
           </Button>
