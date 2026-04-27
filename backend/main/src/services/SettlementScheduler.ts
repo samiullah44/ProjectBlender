@@ -12,8 +12,8 @@ import { forceRequeueActiveJobs } from "./FrameQueueService";
 
 // ── Config ───────────────────────────────────────────────────────────────────
 // Change these two lines:
-const CHECK_INTERVAL_MS = 60 * 60 * 1000;  // 1 hours for testing
-const JOB_THRESHOLD = 10;              // Trigger on every 10 jobs
+const CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000;  // 1 hours for testing
+const JOB_THRESHOLD = 15;              // Trigger on every 10 jobs
 const TIME_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export class SettlementScheduler {
@@ -38,8 +38,8 @@ export class SettlementScheduler {
       return;
     }
 
-    console.log("[SettlementScheduler] ✅ Started. Checking every 10 seconds.");
-    console.log(`  Job threshold: ${JOB_THRESHOLD} | Time threshold: 1 day`);
+    console.log(`[SettlementScheduler] ✅ Started. Checking every ${CHECK_INTERVAL_MS / (60 * 60 * 1000)} hours.`);
+    console.log(`  Job threshold: ${JOB_THRESHOLD} | Time threshold: ${TIME_THRESHOLD_MS / (24 * 60 * 60 * 1000)} day`);
 
     // Run an initial check 30 seconds after boot (give DB time to connect)
     setTimeout(() => this.check(), 30_000);

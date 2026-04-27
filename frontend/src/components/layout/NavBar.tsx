@@ -291,8 +291,8 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
               : 'bg-gray-950/80 border-gray-900'
         )}
       >
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 lg:h-20">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-6 xl:px-8">
+          <div className="flex items-center justify-between h-16 lg:h-16 xl:h-20 gap-2 lg:gap-3 xl:gap-6">
             {/* Logo */}
             <div className="flex items-center">
               <Link to="/" className="flex items-center gap-3 group">
@@ -316,7 +316,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden lg:flex items-center space-x-1">
+            <div className="hidden lg:flex items-center space-x-0 xl:space-x-1 flex-shrink min-w-0">
               {navItems.map((item) => (
                 <div
                   key={item.label}
@@ -327,7 +327,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                   <Link
                     to={item.href}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                      "flex items-center gap-1.5 px-2.5 lg:px-3 xl:px-4 py-2 xl:py-2.5 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap",
                       location.pathname === item.href
                         ? "text-white bg-white/5"
                         : isProvider
@@ -335,7 +335,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                           : "text-gray-300 hover:text-white hover:bg-white/5"
                     )}
                   >
-                    {item.icon}
+                    <span className="hidden xl:inline-flex">{item.icon}</span>
                     {item.label}
                     {item.submenu && (
                       <ChevronDown className={cn(
@@ -389,7 +389,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
             </div>
 
             {/* Right Side - Modules & Auth */}
-            <div className="hidden lg:flex items-center gap-4">
+            <div className="hidden lg:flex items-center gap-1.5 xl:gap-3 shrink-0">
               {isAuthenticated && user ? (
                 <>
                   {/* Notifications */}
@@ -397,7 +397,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
 
                   {/* Role Switcher */}
                   {user.roles && user.roles.length > 1 && (
-                    <div className="flex items-center gap-2 bg-gray-900/50 p-1 rounded-lg border border-white/5 mx-2">
+                    <div className="flex items-center gap-1 bg-gray-900/50 p-1 rounded-lg border border-white/5">
                       {user.roles.includes('client') && (
                         <button
                           onClick={() => {
@@ -406,7 +406,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                             });
                           }}
                           className={cn(
-                            "px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2",
+                            "px-2 xl:px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5",
                             (user.primaryRole || user.role) === 'client'
                               ? "bg-emerald-500 text-white shadow-lg"
                               : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -424,7 +424,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                             });
                           }}
                           className={cn(
-                            "px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2",
+                            "px-2 xl:px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5",
                             (user.primaryRole || user.role) === 'node_provider'
                               ? "bg-purple-600 text-white shadow-lg"
                               : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -442,7 +442,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                             });
                           }}
                           className={cn(
-                            "px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2",
+                            "px-2 xl:px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5",
                             (user.primaryRole || user.role) === 'admin'
                               ? "bg-amber-600 text-white shadow-lg"
                               : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -457,13 +457,13 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
 
                   {/* Module Links */}
                   {moduleLinks.length > 0 && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       {moduleLinks.map((link) => (
                         <Link
                           key={link.label}
                           to={link.href}
                           className={cn(
-                            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                            "flex items-center gap-1.5 px-2.5 xl:px-4 py-1.5 xl:py-2 rounded-lg text-xs xl:text-sm font-medium transition-all duration-200 whitespace-nowrap",
                             link.bgColor,
                             link.color,
                             "hover:opacity-90 border border-transparent hover:border-white/10"
@@ -478,7 +478,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
 
                   {/* Combined Balance & User Profile Widget */}
                   <div className={cn(
-                    "flex items-center rounded-full transition-all relative backdrop-blur-sm",
+                    "flex items-center rounded-full transition-all relative backdrop-blur-sm shrink-0",
                     isProvider
                       ? "bg-purple-500/10 hover:bg-purple-500/15 border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
                       : "bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
@@ -491,15 +491,17 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                           setBalanceMenuOpen(!balanceMenuOpen);
                           setUserMenuOpen(false);
                         }}
-                        className="flex items-center gap-2 pl-4 pr-3 py-1.5 transition-colors group"
+                        className="flex items-center gap-1.5 pl-2.5 xl:pl-4 pr-2 xl:pr-3 py-1.5 transition-colors group"
                       >
                         <span className={cn(
-                          "text-sm font-bold tracking-wide transition-colors",
+                          "text-xs xl:text-sm font-bold tracking-wide transition-colors",
                           isProvider
                             ? "text-purple-400 group-hover:text-purple-300"
                             : "text-emerald-400 group-hover:text-emerald-300"
                         )}>
-                          RNDR {isRefreshing ? '...' : (creditedAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+                          {isRefreshing ? '...' : (creditedAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                          <span className="hidden xl:inline"> RNDR</span>
+                          <span className="xl:hidden"> R</span>
                         </span>
                       </button>
 

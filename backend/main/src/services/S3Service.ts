@@ -246,7 +246,7 @@ export class S3Service {
           UploadId,
           PartNumber: partNumber,
         }),
-        { expiresIn: 3600 * 10 }, // 10 minutes
+        { expiresIn: 3600 * 10 }, // 10 minutes 
       );
 
       presignedUrls.push({ partNumber, url });
