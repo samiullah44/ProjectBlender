@@ -294,7 +294,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-6 xl:px-8">
           <div className="flex items-center justify-between h-16 lg:h-16 xl:h-20 gap-2 lg:gap-3 xl:gap-6">
             {/* Logo */}
-            <div className="flex items-center">
+            <div className="flex items-center shrink-0">
               <Link to="/" className="flex items-center gap-3 group">
                 <div className="flex flex-col">
                   <span className="font-bold text-xl tracking-tight">
@@ -308,7 +308,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                     </span>
                     <span className="text-white">OnNodes</span>
                   </span>
-                  <span className="text-xs text-gray-400 font-medium tracking-wide">
+                  <span className="hidden xl:block text-xs text-gray-400 font-medium tracking-wide">
                     DISTRIBUTED RENDERING
                   </span>
                 </div>
@@ -316,7 +316,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden lg:flex items-center space-x-0 xl:space-x-1 flex-shrink min-w-0">
+            <div className="hidden lg:flex flex-1 items-center justify-center space-x-0 xl:space-x-1">
               {navItems.map((item) => (
                 <div
                   key={item.label}
@@ -413,7 +413,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                           )}
                         >
                           <User className="w-3.5 h-3.5" />
-                          Client
+                          <span className="hidden xl:inline">Client</span>
                         </button>
                       )}
                       {user.roles.includes('node_provider') && (
@@ -431,7 +431,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                           )}
                         >
                           <Server className="w-3.5 h-3.5" />
-                          Provider
+                          <span className="hidden xl:inline">Provider</span>
                         </button>
                       )}
                       {user.roles.includes('admin') && (
@@ -449,7 +449,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                           )}
                         >
                           <Shield className="w-3.5 h-3.5" />
-                          Admin
+                          <span className="hidden xl:inline">Admin</span>
                         </button>
                       )}
                     </div>
@@ -470,7 +470,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                           )}
                         >
                           {link.icon}
-                          {link.label}
+                          <span className="hidden xl:inline">{link.label}</span>
                         </Link>
                       ))}
                     </div>
