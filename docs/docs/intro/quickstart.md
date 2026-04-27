@@ -33,43 +33,41 @@ If you have a `.blend` file and want to use the network's decentralized GPUs to 
    Click the **"Client"** button on the top right of the navigation bar, and connect your Solana Phantom or Solflare wallet.
    *(Don't have a wallet? Read the [Wallet Setup Guide](./wallet-setup)).*
 
-2. **Contribute Funds:** 
-   You must have a minimum balance of computing credits (**RON**) to commission jobs. These act as the fuel for the network.
+2. **Fund your Account:** 
+   Ensure your account holds a sufficient balance of **RON** (Compute Credits). These credits are the economic fuel of every compute mission on the network.
 
-3. **Upload your Scene:** 
-   Navigate to the **Client Dashboard**, click "New Job." Here, you slice and encode your `.blend` file to our secure nodes. *(Read the [Job Management](../clients/job-management) guide to ensure your file is packed correctly).*
+3. **Submit your Mission:** 
+   Navigate to the **Management Portal** and create a new compute mission. The platform will stage your scene assets to the secure **Staging Fabric** and initialize the job allocation pipeline. *(Read the [Asset Preparation](../clients/scene-preparation) guide to ensure your project is correctly packaged).*
 
 4. **Retrieve Results:** 
-   Once the network consensus confirms your job is `COMPLETED`, the final mathematically-verified image will appear in your dashboard ready for download.
+   Once the network verifies your job has reached **FINALIZED** status, the completed frames become available for retrieval directly from your portal dashboard.
 
-<div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/artist-dashboard.png" alt="Artist Workflow" style={{borderRadius: '8px', border: '1px solid #10B981'}} />
-  <p style={{fontSize: '0.8rem', color: '#888'}}>*The RenderOnNodes Client Dashboard.*</p>
-</div>
+:::note[Screenshot Coming Soon]
+This section will include a screenshot of the live RenderOnNodes Management Portal. Please provide a screenshot of your dashboard so we can embed an accurate, up-to-date visual here.
+:::
 
   </TabItem>
   <TabItem value="provider" label="I want to Earn RON (Provider)">
 
 ### The Node Provider Journey
 
-If you have a Windows PC with an NVIDIA RTX or AMD Radeon GPU and want to earn tokens for processing other people's frames:
+If you have a Windows PC with an NVIDIA RTX or AMD Radeon GPU and want to earn tokens for processing other people's compute missions:
 
-1. **Download the Node Application:** 
-   Toggle the top navigation to **"Provider"**, and download the lightweight `BlendFarm.exe` desktop app.
+1. **Download the Execution Agent:** 
+   Toggle the top navigation to **"Provider"** and download the **RenderOnNodes Execution Agent** — a lightweight desktop application.
 
-2. **Link your Payout Address:** 
-   When you first open the app, you will be prompted to paste the public Solana address where you want to receive your earnings.
+2. **Link your Settlement Address:** 
+   When you first open the application, you will be prompted to connect your Solana wallet. This is the address where your earned **RON** will be automatically delivered.
 
-3. **Activate the Heartbeat:** 
-   Click **"Start Node"**. As long as `BlendFarm.exe` is running, it will constantly poll the network looking for incoming Artist jobs that match your exact hardware specifications.
+3. **Activate the Agent:** 
+   Click **"Start Agent"**. As long as the Execution Agent is running and your system passes performance validation, the network's **[Distribution Engine](../concepts/scheduler-and-queues)** will autonomously assign compute missions to your hardware.
 
-4. **Earn Tokens:** 
-   Once you process jobs and cross the Settlement Threshold (see [Settlement System](../concepts/settlement-system)), RON tokens are automatically airdropped into your wallet—gas free.
+4. **Earn Tokens Automatically:** 
+   Once your agent completes verified missions and crosses the **[Settlement Threshold](../concepts/settlement-system)**, RON tokens are automatically credited to your wallet — platform-managed, gas free.
 
-<div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/node-dashboard.png" alt="Provider Application" style={{borderRadius: '8px', border: '1px solid #8B5CF6'}} />
-  <p style={{fontSize: '0.8rem', color: '#888'}}>*The BlendFarm.exe Desktop Node Interface.*</p>
-</div>
+:::note[Screenshot Coming Soon]
+This section will include a screenshot of the live RenderOnNodes Node Agent interface. Please provide a screenshot of the agent running on your machine so we can embed an accurate, up-to-date visual here.
+:::
 
   </TabItem>
 </Tabs>
