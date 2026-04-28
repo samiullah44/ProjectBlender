@@ -10,8 +10,8 @@ export interface IUser extends Document {
   password?: string;
   isVerified: boolean;
   // CHANGE 1: role → roles array (with backward compatibility)
-  roles: ('client' | 'node_provider' | 'admin')[];
-  role?: 'client' | 'node_provider' | 'admin'; // Kept for backward compatibility
+  roles: ('client' | 'node_provider' | 'admin' | 'writer')[];
+  role?: 'client' | 'node_provider' | 'admin' | 'writer'; // Kept for backward compatibility
   credits: number;
   // NEW: Store the specific generated PDA token account
   depositTokenAddress?: string;
@@ -46,7 +46,7 @@ export interface IUser extends Document {
     ipAddress: string;
     additionalNotes?: string;
   };
-  primaryRole?: 'client' | 'node_provider' | 'admin';
+  primaryRole?: 'client' | 'node_provider' | 'admin' | 'writer';
   rejectionReason?: string;
   suspicionTag?: 'none' | 'little suspicious' | 'more suspicious' | 'complete suspicious';
 
@@ -63,6 +63,9 @@ export interface IUser extends Document {
     totalSpent: number;
     totalEarned: number;
   };
+
+  // Blog favorites
+  favoriteBlogPosts: mongoose.Types.ObjectId[];
 
   // Timestamps
   lastLoginAt?: Date;
@@ -116,13 +119,13 @@ const userSchema = new Schema<IUser>(
     // CHANGE 1: Keep old role field for backward compatibility
     role: {
       type: String,
-      enum: ['client', 'node_provider', 'admin'],
+      enum: ['client', 'node_provider', 'admin', 'writer'],
       default: 'client'
     },
     // CHANGE 1: ADD new roles array
     roles: {
       type: [String],
-      enum: ['client', 'node_provider', 'admin'],
+      enum: ['client', 'node_provider', 'admin', 'writer'],
       default: ['client']
     },
     credits: {
@@ -194,7 +197,7 @@ const userSchema = new Schema<IUser>(
     },
     primaryRole: {
       type: String,
-      enum: ['client', 'node_provider', 'admin']
+      enum: ['client', 'node_provider', 'admin', 'writer']
     },
     rejectionReason: String,
     suspicionTag: {
@@ -230,7 +233,11 @@ const userSchema = new Schema<IUser>(
         default: 0
       }
     },
-    lastLoginAt: Date
+    lastLoginAt: Date,
+    favoriteBlogPosts: [{
+      type: Schema.Types.ObjectId,
+      ref: 'Blog'
+    }]
   },
   {
     timestamps: true

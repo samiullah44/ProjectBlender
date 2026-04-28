@@ -130,6 +130,9 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
     toast.success('Logged out successfully')
   }
 
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const blogHref = isLocal ? window.location.origin + '/?simulateBlogDomain=true' : 'https://blog.rendernodes.com';
+
   const navItems: NavItem[] = [
     {
       label: 'Home',
@@ -183,6 +186,12 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
           href: '/contact',
           description: 'Get in touch with us',
           icon: <Mail className="w-4 h-4" />
+        },
+        {
+          label: 'Blog',
+          href: blogHref,
+          description: 'Latest updates & guides',
+          icon: <FileText className="w-4 h-4" />
         },
       ]
     },
@@ -265,6 +274,11 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
       href: '/notifications',
       icon: <Bell className="w-4 h-4" />
     },
+    ...(user?.roles?.includes('writer') || user?.roles?.includes('admin') ? [{
+      label: 'Content Studio',
+      href: '/dashboard/content-studio',
+      icon: <BookOpen className="w-4 h-4" />
+    }] : []),
     {
       label: activeRole === 'node_provider' ? 'Earnings' : 'Billing',
       href: activeRole === 'node_provider' ? '/node/earnings' : '/client/billing',
@@ -356,30 +370,40 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                         className="absolute left-0 mt-2 w-72 rounded-xl bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden"
                       >
                         <div className="py-2">
-                          {item.submenu.map((subItem) => (
-                            <Link
-                              key={subItem.label}
-                              to={subItem.href}
-                              className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors group"
-                            >
-                              <div className={cn(
-                                "p-2 rounded-lg bg-white/5 transition-colors",
-                                isProvider ? "group-hover:bg-purple-500/20" : "group-hover:bg-emerald-500/20"
-                              )}>
-                                {subItem.icon}
-                              </div>
-                              <div className="flex-1">
-                                <div className="font-medium text-sm text-white">
-                                  {subItem.label}
+                          {item.submenu.map((subItem) => {
+                            const isExternal = subItem.href.startsWith('http');
+                            const linkClass = "flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors group";
+                            const content = (
+                              <>
+                                <div className={cn(
+                                  "p-2 rounded-lg bg-white/5 transition-colors",
+                                  isProvider ? "group-hover:bg-purple-500/20" : "group-hover:bg-emerald-500/20"
+                                )}>
+                                  {subItem.icon}
                                 </div>
-                                {subItem.description && (
-                                  <div className="text-xs text-gray-400">
-                                    {subItem.description}
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm text-white">
+                                    {subItem.label}
                                   </div>
-                                )}
-                              </div>
-                            </Link>
-                          ))}
+                                  {subItem.description && (
+                                    <div className="text-xs text-gray-400">
+                                      {subItem.description}
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            );
+
+                            return isExternal ? (
+                              <a key={subItem.label} href={subItem.href} target="_blank" rel="noopener noreferrer" className={linkClass}>
+                                {content}
+                              </a>
+                            ) : (
+                              <Link key={subItem.label} to={subItem.href} className={linkClass}>
+                                {content}
+                              </Link>
+                            );
+                          })}
                         </div>
                       </motion.div>
                     )}
@@ -806,17 +830,34 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                                 exit={{ height: 0, opacity: 0 }}
                                 className="overflow-hidden ml-4 pl-4 border-l border-white/5 space-y-1"
                               >
-                                {item.submenu.map((subItem) => (
-                                  <Link
-                                    key={subItem.label}
-                                    to={subItem.href}
-                                    onClick={() => setIsOpen(false)}
-                                    className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-                                  >
-                                    {subItem.icon}
-                                    {subItem.label}
-                                  </Link>
-                                ))}
+                                {item.submenu.map((subItem) => {
+                                  const isExternal = subItem.href.startsWith('http');
+                                  const linkClass = "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors";
+                                  
+                                  return isExternal ? (
+                                    <a
+                                      key={subItem.label}
+                                      href={subItem.href}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={() => setIsOpen(false)}
+                                      className={linkClass}
+                                    >
+                                      {subItem.icon}
+                                      {subItem.label}
+                                    </a>
+                                  ) : (
+                                    <Link
+                                      key={subItem.label}
+                                      to={subItem.href}
+                                      onClick={() => setIsOpen(false)}
+                                      className={linkClass}
+                                    >
+                                      {subItem.icon}
+                                      {subItem.label}
+                                    </Link>
+                                  );
+                                })}
                               </motion.div>
                             )}
                           </AnimatePresence>

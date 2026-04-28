@@ -39,6 +39,9 @@ const ProfilePage = React.lazy(() => import('@/pages/public/Profile'))
 const SettingsPage = React.lazy(() => import('@/pages/public/Settings'))
 const FAQPage = React.lazy(() => import('@/pages/public/FAQ'))
 
+// Lazy loaded Blog App
+const BlogApp = React.lazy(() => import('./BlogApp'))
+
 // New Public Pages
 const AboutUsPage = React.lazy(() => import('@/pages/public/AboutUs'))
 const ContactPage = React.lazy(() => import('@/pages/public/Contact'))
@@ -68,6 +71,9 @@ const NodeDashboard = React.lazy(() => import('@/pages/node/Dashboard'))
 const NodeDetails = React.lazy(() => import('@/pages/node/NodeDetails'))
 const NodeSetupGuide = React.lazy(() => import('@/pages/node/NodeSetupGuide'))
 const NodeEarnings = React.lazy(() => import('@/pages/node/Earnings'))
+
+// Lazy loaded CMS Pages
+const ContentStudio = React.lazy(() => import('@/pages/cms/ContentStudio'))
 
 // Lazy loaded Admin Pages
 const AdminLogin = React.lazy(() => import('@/pages/admin/AdminLogin'))
@@ -161,6 +167,9 @@ const AnalyticsTracker = () => {
 }
 
 function App() {
+  const isBlogSubdomain = typeof window !== 'undefined' && 
+    (window.location.hostname.startsWith('blog.') || window.location.search.includes('simulateBlogDomain=true'));
+
   // const [showSplash, setShowSplash] = useState(() => {
   //   // Show splash only once per session
   //   return !sessionStorage.getItem('splash_shown');
@@ -251,6 +260,16 @@ function App() {
     setShowTopBar(true);
     setIsWaitlistOpen(false);
   };
+
+  if (isBlogSubdomain) {
+    return (
+        <QueryClientProvider client={queryClient}>
+          <React.Suspense fallback={<PageSkeleton />}>
+             <BlogApp />
+          </React.Suspense>
+        </QueryClientProvider>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -372,6 +391,16 @@ function App() {
                       <Route path="/analytics/user/:userId" element={<AdminUserAnalyticsDetail />} />
                       <Route path="/user-analytics" element={<AdminUserAnalytics />} />
                     </Routes>
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* CMS Content Studio Routes */}
+              <Route
+                path="/dashboard/content-studio/*"
+                element={
+                  <ProtectedRoute allowedRoles={['writer', 'admin']}>
+                    <ContentStudio />
                   </ProtectedRoute>
                 }
               />

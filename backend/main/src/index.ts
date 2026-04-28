@@ -7,6 +7,7 @@ import { connectDatabase } from './config/database';
 import { settlementScheduler } from './services/SettlementScheduler';
 import { closeQueue, redis } from './services/FrameQueueService';
 import { env } from './config/env';
+import { seedTemplates } from './controllers/templateController';
 
 console.log('🚀 Booting system...');
 console.log('📡 Redis URL detected:', process.env.REDIS_URL ? 'YES' : 'NO (Using localhost)');
@@ -37,6 +38,9 @@ async function checkRedisConnection() {
 
     // Connect to MongoDB
     await connectDatabase();
+
+    // Seed built-in templates (idempotent)
+    await seedTemplates();
 
     // Check Redis
     const redisConnected = await checkRedisConnection();

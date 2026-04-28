@@ -192,6 +192,35 @@ export class S3Service {
   }
 
   /**
+   * Upload a blog image to S3 under the blog-images/ prefix and return a pre-signed URL
+   */
+  async uploadBlogImage(file: Express.Multer.File): Promise<string> {
+    const fileKey = `blog-images/${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
+
+    const command = new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: fileKey,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    });
+
+    await this.s3Client.send(command);
+
+    // Use CloudFront domain if configured, otherwise fall back to pre-signed URL
+    const cloudfrontDomain = process.env.CLOUDFRONT_DOMAIN;
+    if (cloudfrontDomain) {
+      return `${cloudfrontDomain.replace(/\/$/, '')}/${fileKey}`;
+    }
+
+    // Fallback: 7-day pre-signed URL
+    const getCommand = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: fileKey,
+    });
+    return getSignedUrl(this.s3Client, getCommand, { expiresIn: 604800 });
+  }
+
+  /**
    * Get public URL (if bucket is public)
    */
   getPublicUrl(fileKey: string): string {

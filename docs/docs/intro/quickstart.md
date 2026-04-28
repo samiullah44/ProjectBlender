@@ -42,9 +42,10 @@ If you have a `.blend` file and want to use the network's decentralized GPUs to 
 4. **Retrieve Results:** 
    Once the network verifies your job has reached **FINALIZED** status, the completed frames become available for retrieval directly from your portal dashboard.
 
-:::note[Screenshot Coming Soon]
-This section will include a screenshot of the live RenderOnNodes Management Portal. Please provide a screenshot of your dashboard so we can embed an accurate, up-to-date visual here.
-:::
+<div style={{textAlign: 'center', margin: '30px 0'}}>
+  <img src="/img/artist-dashboard.png" alt="RenderOnNodes Client Dashboard" style={{borderRadius: '8px', border: '1px solid #10B981', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+  <p style={{fontSize: '0.8rem', color: '#888'}}>*The RenderOnNodes Client Management Portal.*</p>
+</div>
 
   </TabItem>
   <TabItem value="provider" label="I want to Earn RON (Provider)">
@@ -65,9 +66,10 @@ If you have a Windows PC with an NVIDIA RTX or AMD Radeon GPU and want to earn t
 4. **Earn Tokens Automatically:** 
    Once your agent completes verified missions and crosses the **[Settlement Threshold](../concepts/settlement-system)**, RON tokens are automatically credited to your wallet — platform-managed, gas free.
 
-:::note[Screenshot Coming Soon]
-This section will include a screenshot of the live RenderOnNodes Node Agent interface. Please provide a screenshot of the agent running on your machine so we can embed an accurate, up-to-date visual here.
-:::
+<div style={{textAlign: 'center', margin: '30px 0'}}>
+  <img src="/img/node-dashboard.png" alt="RenderOnNodes Provider Dashboard" style={{borderRadius: '8px', border: '1px solid #8B5CF6', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+  <p style={{fontSize: '0.8rem', color: '#888'}}>*The RenderOnNodes Node Provider Dashboard.*</p>
+</div>
 
   </TabItem>
 </Tabs>
