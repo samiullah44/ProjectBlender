@@ -1,4 +1,5 @@
-import React, { useState, useRef, KeyboardEvent } from 'react';
+import React, { useState, useRef } from 'react';
+import type { KeyboardEvent } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -272,10 +273,10 @@ const MetadataPanel: React.FC<MetadataPanelProps> = ({
       {/* Collapsed icon strip */}
       {!expanded && (
         <div className="flex flex-col items-center gap-3 pt-3 text-gray-500">
-          <Folder size={18} title="Category" />
-          <Tag size={18} title="Tags" />
-          <Image size={18} title="Cover Image" />
-          <Search size={18} title="SEO" />
+          <Folder size={18} aria-label="Category" />
+          <Tag size={18} aria-label="Tags" />
+          <Image size={18} aria-label="Cover Image" />
+          <Search size={18} aria-label="SEO" />
         </div>
       )}
 

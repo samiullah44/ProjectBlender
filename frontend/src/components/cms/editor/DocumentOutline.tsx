@@ -97,7 +97,7 @@ const DocumentOutline: React.FC<DocumentOutlineProps> = ({ editor }) => {
       {/* Collapsed icon strip */}
       {!expanded && (
         <div className="flex flex-col items-center pt-3 text-gray-500">
-          <List size={18} title="Document Outline" />
+          <List size={18} aria-label="Document Outline" />
         </div>
       )}
 

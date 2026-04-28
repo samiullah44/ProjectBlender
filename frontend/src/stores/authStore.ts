@@ -10,9 +10,9 @@ interface User {
     email: string
     username: string
     name: string
-    role: 'client' | 'node_provider' | 'admin'
-    roles?: ('client' | 'node_provider' | 'admin')[]
-    primaryRole?: 'client' | 'node_provider' | 'admin'
+    role: 'client' | 'node_provider' | 'admin' | 'writer'
+    roles?: ('client' | 'node_provider' | 'admin' | 'writer')[]
+    primaryRole?: 'client' | 'node_provider' | 'admin' | 'writer'
     credits: number
     tokenBalance: number
     depositTokenAddress?: string

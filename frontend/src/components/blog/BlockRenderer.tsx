@@ -71,7 +71,7 @@ function renderBlock(block: ContentBlock, index: number): React.ReactNode {
   switch (block.type) {
     case 'heading': {
       const level = block.attrs?.level ?? 1;
-      const Tag = `h${Math.min(Math.max(level, 1), 6)}` as keyof JSX.IntrinsicElements;
+      const safeLevel = Math.min(Math.max(level, 1), 6) as 1 | 2 | 3 | 4 | 5 | 6;
       const headingClasses: Record<number, string> = {
         1: 'text-4xl font-extrabold mt-10 mb-4 text-gray-900',
         2: 'text-3xl font-bold mt-8 mb-3 text-gray-900',
@@ -80,11 +80,14 @@ function renderBlock(block: ContentBlock, index: number): React.ReactNode {
         5: 'text-lg font-semibold mt-4 mb-1 text-gray-800',
         6: 'text-base font-semibold mt-3 mb-1 text-gray-700',
       };
-      return (
-        <Tag key={index} className={headingClasses[level] ?? headingClasses[1]}>
-          {renderInlineContent(block.content)}
-        </Tag>
-      );
+      const cls = headingClasses[safeLevel] ?? headingClasses[1];
+      const children = renderInlineContent(block.content);
+      if (safeLevel === 1) return <h1 key={index} className={cls}>{children}</h1>;
+      if (safeLevel === 2) return <h2 key={index} className={cls}>{children}</h2>;
+      if (safeLevel === 3) return <h3 key={index} className={cls}>{children}</h3>;
+      if (safeLevel === 4) return <h4 key={index} className={cls}>{children}</h4>;
+      if (safeLevel === 5) return <h5 key={index} className={cls}>{children}</h5>;
+      return <h6 key={index} className={cls}>{children}</h6>;
     }
 
     case 'paragraph': {
