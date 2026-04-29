@@ -131,7 +131,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
   }
 
   const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  const blogHref = isLocal ? window.location.origin + '/?simulateBlogDomain=true' : 'https://blog.rendernodes.com';
+  const blogHref = isLocal ? window.location.origin + '/?simulateBlogDomain=true' : 'https://blog.renderonnodes.com';
 
   const navItems: NavItem[] = [
     {
@@ -226,7 +226,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
     if (!isAuthenticated || !user) return []
 
     const activeRole = user.primaryRole || user.role;
-    
+
     // Return only the link for the currently active role
     if (activeRole === 'admin') {
       return [{
@@ -833,7 +833,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                                 {item.submenu.map((subItem) => {
                                   const isExternal = subItem.href.startsWith('http');
                                   const linkClass = "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors";
-                                  
+
                                   return isExternal ? (
                                     <a
                                       key={subItem.label}
@@ -916,20 +916,20 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                             className={cn(
                               "flex items-center justify-between w-full px-4 py-3 rounded-xl transition-all border",
                               activeRole === 'admin' ? "bg-amber-500/10 border-amber-500/20 text-amber-400" :
-                              activeRole === 'node_provider' ? "bg-purple-500/10 border-purple-500/20 text-purple-400" :
-                              "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                activeRole === 'node_provider' ? "bg-purple-500/10 border-purple-500/20 text-purple-400" :
+                                  "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                             )}
                           >
                             <div className="flex items-center gap-3">
                               <div className={cn(
                                 "p-2 rounded-lg bg-black/20",
                                 activeRole === 'admin' ? "text-amber-400" :
-                                activeRole === 'node_provider' ? "text-purple-400" :
-                                "text-emerald-400"
+                                  activeRole === 'node_provider' ? "text-purple-400" :
+                                    "text-emerald-400"
                               )}>
                                 {activeRole === 'admin' ? <Shield className="w-4 h-4" /> :
-                                 activeRole === 'node_provider' ? <Server className="w-4 h-4" /> :
-                                 <User className="w-4 h-4" />}
+                                  activeRole === 'node_provider' ? <Server className="w-4 h-4" /> :
+                                    <User className="w-4 h-4" />}
                               </div>
                               <span className="font-bold text-sm capitalize">
                                 {activeRole?.replace('_', ' ')} View
@@ -940,7 +940,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                               isMobileRoleDropdownOpen && "rotate-180"
                             )} />
                           </button>
-                          
+
                           <AnimatePresence>
                             {isMobileRoleDropdownOpen && (
                               <motion.div
