@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { BubbleMenu, Editor } from '@tiptap/react'
-import { Bold, Italic, Highlighter, Link } from 'lucide-react'
+import { Bold, Italic, Highlighter, Link, Columns, Rows, Trash2, Plus } from 'lucide-react'
 
 interface FloatingToolbarProps {
   editor: Editor
@@ -50,6 +50,9 @@ export function FloatingToolbar({ editor }: FloatingToolbarProps) {
     <BubbleMenu
       editor={editor}
       tippyOptions={{ duration: 100 }}
+      shouldShow={({ editor, state }) => {
+        return editor.isActive('table') || !state.selection.empty;
+      }}
       className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-gray-900 p-1 shadow-xl"
     >
       {showLinkInput ? (
@@ -111,6 +114,56 @@ export function FloatingToolbar({ editor }: FloatingToolbarProps) {
           >
             <Link size={14} />
           </ToolbarButton>
+
+          {editor.isActive('table') && (
+            <>
+              <div className="mx-0.5 h-4 w-px bg-white/10" />
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().addColumnAfter().run()}
+                isActive={false}
+                title="Add Column After"
+              >
+                <div className="flex items-center"><Columns size={12}/><Plus size={10}/></div>
+              </ToolbarButton>
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().deleteColumn().run()}
+                isActive={false}
+                title="Delete Column"
+              >
+                <div className="flex items-center text-red-400"><Columns size={12}/><Trash2 size={10}/></div>
+              </ToolbarButton>
+              
+              <div className="mx-0.5 h-4 w-px bg-white/10" />
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().addRowAfter().run()}
+                isActive={false}
+                title="Add Row After"
+              >
+                <div className="flex items-center"><Rows size={12}/><Plus size={10}/></div>
+              </ToolbarButton>
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().deleteRow().run()}
+                isActive={false}
+                title="Delete Row"
+              >
+                <div className="flex items-center text-red-400"><Rows size={12}/><Trash2 size={10}/></div>
+              </ToolbarButton>
+              
+              <div className="mx-0.5 h-4 w-px bg-white/10" />
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().deleteTable().run()}
+                isActive={false}
+                title="Delete Table"
+              >
+                <div className="flex items-center text-red-500"><Trash2 size={14}/></div>
+              </ToolbarButton>
+            </>
+          )}
         </>
       )}
     </BubbleMenu>
@@ -132,7 +185,7 @@ function ToolbarButton({ onClick, isActive, title, children }: ToolbarButtonProp
         onClick()
       }}
       title={title}
-      className={`rounded p-1.5 transition-colors ${
+      className={`rounded p-1.5 transition-colors flex items-center justify-center ${
         isActive
           ? 'bg-indigo-600 text-white'
           : 'text-gray-300 hover:bg-white/10 hover:text-white'

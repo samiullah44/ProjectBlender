@@ -109,3 +109,6 @@ export const optionalAuth = (req: AuthRequest, res: Response, next: NextFunction
     next();
   }
 };
+
+// Alias for named-import compatibility
+export const optionalAuthenticate = optionalAuth;

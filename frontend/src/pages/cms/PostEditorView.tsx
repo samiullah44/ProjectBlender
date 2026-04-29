@@ -40,6 +40,7 @@ const PostEditorView: React.FC = () => {
   const [seoTitle, setSeoTitle] = useState('');
   const [seoDescription, setSeoDescription] = useState('');
   const [ogImage, setOgImage] = useState('');
+  const [isFeatured, setIsFeatured] = useState(false);
 
   const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
   const [isSaving, setIsSaving] = useState(false);
@@ -111,6 +112,7 @@ const PostEditorView: React.FC = () => {
       setSeoTitle(blog.seoMeta?.title ?? '');
       setSeoDescription(blog.seoMeta?.description ?? '');
       setOgImage(blog.seoMeta?.ogImage ?? '');
+      setIsFeatured(blog.isFeatured ?? false);
       setPostIdBoth(blog._id);
       slugManuallySet.current = true;
 
@@ -157,6 +159,7 @@ const PostEditorView: React.FC = () => {
   const seoTitleRef = useRef(seoTitle);
   const seoDescriptionRef = useRef(seoDescription);
   const ogImageRef = useRef(ogImage);
+  const isFeaturedRef = useRef(isFeatured);
 
   useEffect(() => { titleRef.current = title; }, [title]);
   useEffect(() => { slugRef.current = slug; }, [slug]);
@@ -167,8 +170,14 @@ const PostEditorView: React.FC = () => {
   useEffect(() => { seoTitleRef.current = seoTitle; }, [seoTitle]);
   useEffect(() => { seoDescriptionRef.current = seoDescription; }, [seoDescription]);
   useEffect(() => { ogImageRef.current = ogImage; }, [ogImage]);
+  useEffect(() => { isFeaturedRef.current = isFeatured; }, [isFeatured]);
 
   const savePost = useCallback(async (overrideStatus?: PostStatus): Promise<boolean> => {
+    if (!titleRef.current.trim()) {
+      setSlugError('Title is required to save');
+      return false;
+    }
+
     setIsSaving(true);
     setSlugError('');
     setSlugConflictSuggestion('');
@@ -180,6 +189,7 @@ const PostEditorView: React.FC = () => {
       category: categoryRef.current,
       tags: tagsRef.current,
       coverImage: coverImageRef.current,
+      isFeatured: isFeaturedRef.current,
       contentBlocks: contentBlocksRef.current,
       seoMeta: {
         title: seoTitleRef.current,
@@ -339,6 +349,8 @@ const PostEditorView: React.FC = () => {
           onSeoDescriptionChange={setSeoDescription}
           ogImage={ogImage}
           onOgImageChange={setOgImage}
+          isFeatured={isFeatured}
+          onIsFeaturedChange={setIsFeatured}
         />
       </div>
     </div>

@@ -9,6 +9,7 @@ import {
   Folder,
   X,
   Upload,
+  Star
 } from 'lucide-react';
 
 const CATEGORIES = ['Technology', 'Tutorial', 'News', 'Analysis', 'General'];
@@ -230,7 +231,10 @@ const SEOPanel: React.FC<SEOPanelProps> = ({
 );
 
 // ── MetadataPanel ─────────────────────────────────────────────────────────────
-const MetadataPanel: React.FC<MetadataPanelProps> = ({
+const MetadataPanel: React.FC<MetadataPanelProps & { 
+  isFeatured: boolean; 
+  onIsFeaturedChange: (v: boolean) => void; 
+}> = ({
   category,
   onCategoryChange,
   tags,
@@ -243,6 +247,8 @@ const MetadataPanel: React.FC<MetadataPanelProps> = ({
   onSeoDescriptionChange,
   ogImage,
   onOgImageChange,
+  isFeatured,
+  onIsFeaturedChange,
 }) => {
   const [expanded, setExpanded] = useState(true);
 
@@ -282,7 +288,19 @@ const MetadataPanel: React.FC<MetadataPanelProps> = ({
 
       {/* Expanded content */}
       {expanded && (
-        <div className="flex-1 overflow-y-auto p-3 space-y-5">
+        <div className="flex-1 overflow-y-auto p-3 space-y-5 text-gray-100">
+          {/* Featured Toggle */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800 border border-gray-700 hover:border-purple-500/50 transition-colors cursor-pointer group"
+               onClick={() => onIsFeaturedChange(!isFeatured)}>
+            <div className="flex items-center gap-2">
+              <Star className={`w-4 h-4 ${isFeatured ? 'text-yellow-400 fill-yellow-400' : 'text-gray-500 group-hover:text-gray-400'}`} />
+              <span className="text-sm font-medium">Featured Article</span>
+            </div>
+            <div className={`w-8 h-4 rounded-full relative transition-colors ${isFeatured ? 'bg-purple-600' : 'bg-gray-700'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${isFeatured ? 'left-4.5' : 'left-0.5'}`} />
+            </div>
+          </div>
+
           {/* Category */}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Category</label>

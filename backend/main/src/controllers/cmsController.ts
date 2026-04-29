@@ -59,7 +59,7 @@ async function findUniqueSlug(baseSlug: string, excludeId?: string): Promise<str
 
 export const createBlog = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, slug: bodySlug, templateId, category, tags, contentBlocks, seoMeta, coverImage } = req.body;
+    const { title, slug: bodySlug, templateId, category, tags, contentBlocks, seoMeta, coverImage, status, isFeatured } = req.body;
 
     if (!title) {
       res.status(400).json({ success: false, error: 'Title is required' });
@@ -76,6 +76,15 @@ export const createBlog = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    const isAdmin = req.user!.roles?.includes('admin');
+    let finalStatus = status || 'DRAFT';
+
+    // Status transition enforcement to prevent non-admins from publishing
+    if (!isAdmin && finalStatus === 'PUBLISHED') {
+      res.status(403).json({ success: false, error: 'Insufficient permissions' });
+      return;
+    }
+
     const blog = new Blog({
       title,
       slug: baseSlug,
@@ -86,7 +95,9 @@ export const createBlog = async (req: AuthRequest, res: Response): Promise<void>
       contentBlocks,
       seoMeta,
       coverImage,
-      status: 'DRAFT',
+      status: finalStatus,
+      isFeatured: isFeatured || false,
+      publishedAt: finalStatus === 'PUBLISHED' ? new Date() : undefined,
     });
 
     await blog.save();

@@ -16,8 +16,10 @@ export interface IBlog extends Document {
   tags: string[];
   coverImage?: string;
   favoritesCount: number;
+  viewsCount: number;
   readTime: string;
   pinned: boolean;
+  isFeatured: boolean;
   publishedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -39,8 +41,10 @@ const blogSchema = new Schema<IBlog>({
   tags: { type: [String], default: [] },
   coverImage: { type: String },
   favoritesCount: { type: Number, default: 0 },
+  viewsCount: { type: Number, default: 0 },
   readTime: { type: String, default: '5 min read' },
   pinned: { type: Boolean, default: false },
+  isFeatured: { type: Boolean, default: false },
   publishedAt: { type: Date }
 }, {
   timestamps: true
@@ -50,6 +54,7 @@ blogSchema.index({ status: 1, publishedAt: -1 });
 blogSchema.index({ slug: 1 });
 blogSchema.index({ category: 1 });
 blogSchema.index({ pinned: 1 });
+blogSchema.index({ isFeatured: 1 });
 blogSchema.index({ authorId: 1, updatedAt: -1 });
 blogSchema.index({ status: 1, slug: 1 });
 

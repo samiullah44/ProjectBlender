@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Clock, Calendar, User, Tag, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Clock, Calendar, User, Tag, ChevronRight, Eye } from 'lucide-react';
 import api from '@/lib/axios';
 import BlockRenderer from '../../components/blog/BlockRenderer';
 import type { ContentBlock } from '@/types/blog';
@@ -22,6 +22,7 @@ interface BlogPostData {
   readTime: string;
   publishedAt: string;
   favoritesCount: number;
+  viewsCount: number;
 }
 
 function getAuthorName(authorId: BlogPostData['authorId']): string {

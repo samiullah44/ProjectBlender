@@ -28,7 +28,12 @@ export default function FavoriteButton({ slug, initialCount }: FavoriteButtonPro
   const [count, setCount] = useState(initialCount ?? 0);
   const [loading, setLoading] = useState(false);
 
-  // On mount: determine initial favorited state
+  // Sync initialCount when it changes (data reloads)
+  useEffect(() => {
+    setCount(initialCount ?? 0);
+  }, [initialCount]);
+
+  // On mount: determine initial favorited state from local storage or server
   useEffect(() => {
     if (isAuthenticated) {
       const token = localStorage.getItem('token');
@@ -44,49 +49,40 @@ export default function FavoriteButton({ slug, initialCount }: FavoriteButtonPro
             setFavorited(isFav);
           }
         })
-        .catch(() => {
-          // silently ignore fetch errors
-        });
+        .catch(() => {/* silently ignore */});
     } else {
-      const favorites = getLocalFavorites();
-      setFavorited(favorites.includes(slug));
+      setFavorited(getLocalFavorites().includes(slug));
     }
   }, [slug, isAuthenticated]);
 
-  const handleToggle = async () => {
+  const handleToggle = async (e: React.MouseEvent) => {
+    // Prevent navigating away when inside a <Link> tag
+    e.preventDefault();
+    e.stopPropagation();
     if (loading) return;
+    setLoading(true);
 
-    if (isAuthenticated) {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const method = favorited ? 'DELETE' : 'POST';
-      try {
-        const res = await fetch(`/api/blogs/${slug}/favorite`, {
-          method,
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (data.success) {
-          const next = !favorited;
-          setFavorited(next);
-          setCount((c) => (next ? c + 1 : Math.max(0, c - 1)));
-        }
-      } catch {
-        // silently ignore
-      } finally {
-        setLoading(false);
+    const token = isAuthenticated ? localStorage.getItem('token') : null;
+    const method = favorited ? 'DELETE' : 'POST';
+
+    try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/blogs/${slug}/favorite`, { method, headers });
+      const data = await res.json();
+
+      if (data.success) {
+        const next = !favorited;
+        setFavorited(next);
+        setCount((c) => (next ? c + 1 : Math.max(0, c - 1)));
+
+        // Keep localStorage in sync (used for immediate re-render state across pages)
+        const favorites = getLocalFavorites();
+        setLocalFavorites(next ? [...favorites, slug] : favorites.filter((s) => s !== slug));
       }
-    } else {
-      const favorites = getLocalFavorites();
-      if (favorited) {
-        setLocalFavorites(favorites.filter((s) => s !== slug));
-        setFavorited(false);
-        setCount((c) => Math.max(0, c - 1));
-      } else {
-        setLocalFavorites([...favorites, slug]);
-        setFavorited(true);
-        setCount((c) => c + 1);
-      }
+    } catch {/* silently ignore */} finally {
+      setLoading(false);
     }
   };
 
@@ -106,9 +102,7 @@ export default function FavoriteButton({ slug, initialCount }: FavoriteButtonPro
         size={16}
         className={favorited ? 'fill-red-500 text-red-500' : 'text-gray-500'}
       />
-      {initialCount !== undefined && (
-        <span>{count}</span>
-      )}
+      {initialCount !== undefined && <span>{count}</span>}
     </button>
   );
 }
