@@ -265,6 +265,7 @@ function App() {
     return (
       <QueryClientProvider client={queryClient}>
         <Router>
+          <ScrollToTop />
           <React.Suspense fallback={<PageSkeleton />}>
             <BlogApp />
           </React.Suspense>

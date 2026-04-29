@@ -146,7 +146,7 @@ export const BlogHome = () => {
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-2">
                 <Star className="w-4 h-4 text-purple-600 fill-purple-600" />
-                <h3 className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">Featured</h3>
+                <h3 className="text-sm font-bold tracking-[0.1em] text-gray-400 uppercase">Featured</h3>
               </div>
               <div className="flex gap-2">
                 <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 bg-white shadow-sm">
@@ -157,7 +157,7 @@ export const BlogHome = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="flex gap-6 overflow-x-auto pb-8 snap-x no-scrollbar scroll-smooth">
               {(featuredPosts as any[]).map((post: any, i: number) => (
                 <Link key={post._id} to={`/${post.slug}`} className="snap-center shrink-0">
@@ -172,24 +172,24 @@ export const BlogHome = () => {
                       <div>
                         {post.category && (
                           <div className="flex items-center gap-2 mb-4">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
                             <span className="w-1 h-1 rounded-full bg-gray-300" />
-                            <span className="text-[10px] font-bold text-purple-600 uppercase tracking-widest">{post.category}</span>
+                            <span className="text-xs font-bold text-purple-600 uppercase tracking-widest">{post.category}</span>
                           </div>
                         )}
                         <h4 className="text-2xl sm:text-3xl font-extrabold text-gray-900 leading-[1.1] group-hover:text-purple-600 transition-colors line-clamp-3">
                           {post.title}
                         </h4>
                       </div>
-                      
+
                       <div className="flex items-center gap-6 text-xs text-gray-400 font-medium">
-                         <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />{post.readTime}</span>
-                         <div className="ml-auto w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-all">
-                           <ChevronRight className="w-4 h-4" />
-                         </div>
+                        <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />{post.readTime}</span>
+                        <div className="ml-auto w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-all">
+                          <ChevronRight className="w-4 h-4" />
+                        </div>
                       </div>
                     </div>
-                    
+
                     <div className="hidden sm:block flex-1 p-4">
                       <div className="w-full h-full rounded-[24px] overflow-hidden relative">
                         <img
@@ -209,7 +209,7 @@ export const BlogHome = () => {
 
         {/* Category Pill Row */}
         <div className="mb-12">
-          <h3 className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase mb-5">Browse by Category</h3>
+          <h3 className="text-sm font-bold tracking-[0.1em] text-gray-400 uppercase mb-5">Browse by Category</h3>
           <div className="flex flex-wrap gap-3">
             {availableCategories.map((cat) => (
               <button
@@ -225,7 +225,7 @@ export const BlogHome = () => {
                 <div className="absolute bottom-3 left-3 z-20 flex flex-col gap-0.5">
                   <span className="px-2.5 py-1 rounded-full bg-white text-gray-900 text-xs font-bold shadow-sm inline-block leading-none">{cat.name}</span>
                   {cat.name !== 'All' && categoryCounts[cat.name] > 0 && (
-                    <span className="text-white/80 text-[10px] pl-1">{categoryCounts[cat.name]} articles</span>
+                    <span className="text-white/80 text-xs pl-1">{categoryCounts[cat.name]} articles</span>
                   )}
                 </div>
               </button>
@@ -242,7 +242,7 @@ export const BlogHome = () => {
             {/* Pinned / Featured */}
             {!isLoadingPinned && pinnedPost && activeTab === 'All' && !searchQuery && (
               <div className="mb-12 space-y-6">
-                <h3 className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">Featured Case Study</h3>
+                <h3 className="text-sm font-bold tracking-[0.1em] text-gray-400 uppercase">Featured Case Study</h3>
                 <Link to={`/${pinnedPost.slug}`} className="grid md:grid-cols-2 gap-10 items-center bg-gray-50 rounded-3xl p-8 border border-gray-100 cursor-pointer group hover:border-gray-200 transition-colors block">
                   <div className="flex flex-col h-full justify-center">
                     <span className="text-sm font-bold text-gray-400 mb-3">{new Date(pinnedPost.publishedAt).toLocaleDateString()}</span>
@@ -269,7 +269,7 @@ export const BlogHome = () => {
 
             {/* Sort Controls */}
             <div className="flex items-center justify-between mb-8">
-              <h3 className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">
+              <h3 className="text-sm font-bold tracking-[0.1em] text-gray-400 uppercase">
                 {searchQuery ? `Results for "${searchQuery}"` : activeTab === 'All' ? 'Recent Posts' : `${activeTab} Posts`}
               </h3>
               <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
@@ -348,7 +348,7 @@ export const BlogHome = () => {
 
             {/* Filter by Topics */}
             <div>
-              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-4">Filter by Topics</h4>
+              <h4 className="text-sm font-bold text-gray-400 uppercase tracking-[0.1em] mb-4">Filter by Topics</h4>
               <div className="flex flex-col divide-y divide-gray-100">
                 {Object.entries(categoryCounts)
                   .sort(([, a], [, b]) => b - a)
@@ -380,7 +380,7 @@ export const BlogHome = () => {
             {/* Popular Now */}
             {featuredPosts.length > 0 && (
               <div>
-                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-4">Popular Now</h4>
+                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-[0.1em] mb-4">Popular Now</h4>
                 <div className="flex flex-col gap-4">
                   {(featuredPosts as any[]).map((post: any, i: number) => (
                     <Link key={post._id} to={`/${post.slug}`} className="group">

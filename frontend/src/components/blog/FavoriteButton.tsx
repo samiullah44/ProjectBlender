@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Heart } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import api from '@/lib/axios';
 
 interface FavoriteButtonProps {
   slug: string;
@@ -35,13 +36,13 @@ export default function FavoriteButton({ slug, initialCount }: FavoriteButtonPro
 
   // On mount: determine initial favorited state from local storage or server
   useEffect(() => {
+    const favorites = getLocalFavorites();
+    const isLocalFav = favorites.includes(slug);
+    
     if (isAuthenticated) {
-      const token = localStorage.getItem('token');
-      fetch('/api/blogs/favorites', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => res.json())
-        .then((data) => {
+      api.get('/blogs/favorites')
+        .then((res) => {
+          const data = res.data;
           if (data.success && Array.isArray(data.blogs)) {
             const isFav = data.blogs.some(
               (b: { slug: string }) => b.slug === slug
@@ -49,9 +50,12 @@ export default function FavoriteButton({ slug, initialCount }: FavoriteButtonPro
             setFavorited(isFav);
           }
         })
-        .catch(() => {/* silently ignore */});
+        .catch(() => {
+          // fallback to local storage if API fails or while loading
+          setFavorited(isLocalFav);
+        });
     } else {
-      setFavorited(getLocalFavorites().includes(slug));
+      setFavorited(isLocalFav);
     }
   }, [slug, isAuthenticated]);
 
@@ -62,26 +66,25 @@ export default function FavoriteButton({ slug, initialCount }: FavoriteButtonPro
     if (loading) return;
     setLoading(true);
 
-    const token = isAuthenticated ? localStorage.getItem('token') : null;
-    const method = favorited ? 'DELETE' : 'POST';
-
     try {
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch(`/api/blogs/${slug}/favorite`, { method, headers });
-      const data = await res.json();
+      const res = await (favorited 
+        ? api.delete(`/blogs/${slug}/favorite`)
+        : api.post(`/blogs/${slug}/favorite`));
+      
+      const data = res.data;
 
       if (data.success) {
         const next = !favorited;
         setFavorited(next);
         setCount((c) => (next ? c + 1 : Math.max(0, c - 1)));
 
-        // Keep localStorage in sync (used for immediate re-render state across pages)
+        // Keep localStorage in sync
         const favorites = getLocalFavorites();
         setLocalFavorites(next ? [...favorites, slug] : favorites.filter((s) => s !== slug));
       }
-    } catch {/* silently ignore */} finally {
+    } catch (error) {
+      console.error('Favorite toggle failed:', error);
+    } finally {
       setLoading(false);
     }
   };
