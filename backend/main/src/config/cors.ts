@@ -12,6 +12,7 @@ export const createCorsOptions = (): CorsOptions => ({
       'http://localhost:8080',
       'https://main.d1zbjn2d2gkpde.amplifyapp.com',
       "https://blog.renderonnodes.com",
+      "https://www.blog.renderonnodes.com",
       env.frontendUrl || '',
       /\.awsapprunner\.com$/
     ].filter(Boolean);
