@@ -264,9 +264,11 @@ function App() {
   if (isBlogSubdomain) {
     return (
       <QueryClientProvider client={queryClient}>
-        <React.Suspense fallback={<PageSkeleton />}>
-          <BlogApp />
-        </React.Suspense>
+        <Router>
+          <React.Suspense fallback={<PageSkeleton />}>
+            <BlogApp />
+          </React.Suspense>
+        </Router>
       </QueryClientProvider>
     );
   }
