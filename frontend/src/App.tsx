@@ -167,8 +167,8 @@ const AnalyticsTracker = () => {
 }
 
 function App() {
-  const isBlogSubdomain = typeof window !== 'undefined' && 
-    (window.location.hostname.startsWith('blog.') || window.location.search.includes('simulateBlogDomain=true'));
+  const isBlogSubdomain = typeof window !== 'undefined' &&
+    /^((www)\.)?blog\.renderonnodes\.com$/.test(window.location.hostname) || window.location.search.includes('simulateBlogDomain=true');
 
   // const [showSplash, setShowSplash] = useState(() => {
   //   // Show splash only once per session
@@ -263,11 +263,11 @@ function App() {
 
   if (isBlogSubdomain) {
     return (
-        <QueryClientProvider client={queryClient}>
-          <React.Suspense fallback={<PageSkeleton />}>
-             <BlogApp />
-          </React.Suspense>
-        </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <React.Suspense fallback={<PageSkeleton />}>
+          <BlogApp />
+        </React.Suspense>
+      </QueryClientProvider>
     );
   }
 
