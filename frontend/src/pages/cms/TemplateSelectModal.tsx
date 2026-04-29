@@ -122,7 +122,7 @@ const TemplateSelectModal = ({ onClose }: Props) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative bg-gray-900 border border-gray-700 rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+      <div className="relative bg-gray-900 border border-gray-700 rounded-xl w-full max-w-5xl h-full lg:h-[600px] max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700 shrink-0">
           <div>
