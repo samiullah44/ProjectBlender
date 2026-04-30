@@ -104,6 +104,13 @@ class WebSocketService {
         // Send auth message if user is logged in
         this.authenticateIfPossible()
         break
+      case 'comment_added':
+      case 'comment_updated':
+      case 'comment_deleted':
+      case 'comment_claps_updated':
+      case 'comment_visibility_changed':
+        this.handleCommentUpdate(data)
+        break
       case 'credit_balance_updated':
         console.log('💳 Credit balance update received, refreshing...')
         window.dispatchEvent(new Event('refresh_credit_balance'))
@@ -219,6 +226,11 @@ class WebSocketService {
     // Handle system updates if needed
     console.log('System update:', data)
 
+    // Check if this is a comment update wrapped in a system update
+    if (data.data?.type?.startsWith('comment_')) {
+      this.handleCommentUpdate(data.data);
+    }
+
     // Notify all system subscribers
     this.systemSubscriptions.forEach(callback => {
       try {
@@ -227,6 +239,11 @@ class WebSocketService {
         console.error('Error in system update callback:', error)
       }
     })
+  }
+
+  private handleCommentUpdate(data: any) {
+    console.log('💬 Comment update received:', data.type, data.slug)
+    window.dispatchEvent(new CustomEvent('comment_update', { detail: data }))
   }
 
   private subscribeToJobInternal(jobId: string) {

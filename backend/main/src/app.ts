@@ -26,6 +26,8 @@ import analyticsRoutes from './routes/api/analytics';
 import newsletterRoutes from './routes/api/newsletter';
 import blogRoutes from './routes/api/blogs';
 import cmsRoutes from './routes/api/cms.routes';
+import commentsRouter from './routes/api/comments';
+import reportsRouter from './routes/api/reports';
 
 // Import your CORS middleware
 import { corsMiddleware } from './config/cors';
@@ -79,7 +81,9 @@ routePrefixes.forEach(prefix => {
   app.use(`${prefix}/analytics`, analyticsRoutes);
   app.use(`${prefix}/newsletter`, newsletterRoutes);
   app.use(`${prefix}/blogs`, blogRoutes);
+  app.use(`${prefix}/blogs`, commentsRouter);
   app.use(`${prefix}/cms`, cmsRoutes);
+  app.use(`${prefix}/reports`, reportsRouter);
 });
 
 // WebSocket endpoint

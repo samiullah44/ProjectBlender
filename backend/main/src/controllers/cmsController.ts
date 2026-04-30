@@ -4,6 +4,7 @@ import multer from 'multer';
 import { Blog } from '../models/Blog';
 import { AuthRequest } from '../middleware/auth';
 import { S3Service } from '../services/S3Service';
+import { wsService } from '../app';
 
 const s3Service = new S3Service();
 
@@ -59,7 +60,7 @@ async function findUniqueSlug(baseSlug: string, excludeId?: string): Promise<str
 
 export const createBlog = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, slug: bodySlug, templateId, category, tags, contentBlocks, seoMeta, coverImage, status, isFeatured } = req.body;
+    const { title, slug: bodySlug, templateId, category, tags, contentBlocks, seoMeta, coverImage, status, isFeatured, readTime } = req.body;
 
     if (!title) {
       res.status(400).json({ success: false, error: 'Title is required' });
@@ -95,6 +96,7 @@ export const createBlog = async (req: AuthRequest, res: Response): Promise<void>
       contentBlocks,
       seoMeta,
       coverImage,
+      readTime,
       status: finalStatus,
       isFeatured: isFeatured || false,
       publishedAt: finalStatus === 'PUBLISHED' ? new Date() : undefined,
@@ -212,6 +214,16 @@ export const updateBlog = async (req: AuthRequest, res: Response): Promise<void>
     Object.assign(blog, safeRest);
 
     await blog.save();
+
+    // Notify all connected clients when a post is published or unpublished
+    if (newStatus === 'PUBLISHED' || (newStatus === 'DRAFT' && blog.status !== 'PUBLISHED')) {
+      wsService.broadcastSystemUpdate({
+        type: 'blog_status_changed',
+        slug: blog.slug,
+        status: blog.status,
+      });
+    }
+
     res.status(200).json({ success: true, blog });
   } catch (error) {
     console.error('updateBlog error:', error);

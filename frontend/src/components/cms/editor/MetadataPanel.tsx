@@ -9,7 +9,8 @@ import {
   Folder,
   X,
   Upload,
-  Star
+  Star,
+  Clock
 } from 'lucide-react';
 
 const CATEGORIES = ['Technology', 'Tutorial', 'News', 'Analysis', 'General'];
@@ -27,6 +28,8 @@ interface MetadataPanelProps {
   onSeoDescriptionChange: (desc: string) => void;
   ogImage: string;
   onOgImageChange: (url: string) => void;
+  readTime: string;
+  onReadTimeChange: (v: string) => void;
 }
 
 async function uploadImage(file: File): Promise<string> {
@@ -247,6 +250,8 @@ const MetadataPanel: React.FC<MetadataPanelProps & {
   onSeoDescriptionChange,
   ogImage,
   onOgImageChange,
+  readTime,
+  onReadTimeChange,
   isFeatured,
   onIsFeaturedChange,
 }) => {
@@ -327,6 +332,23 @@ const MetadataPanel: React.FC<MetadataPanelProps & {
             value={coverImage}
             onChange={onCoverImageChange}
           />
+
+          {/* Read Time */}
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Read Time</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-500">
+                <Clock size={14} />
+              </div>
+              <input
+                type="text"
+                value={readTime}
+                onChange={(e) => onReadTimeChange(e.target.value)}
+                placeholder="e.g. 5 min read"
+                className="w-full pl-9 pr-2.5 py-1.5 rounded bg-gray-800 border border-gray-700 text-sm text-white placeholder-gray-500 outline-none focus:border-gray-500"
+              />
+            </div>
+          </div>
 
           {/* Divider */}
           <div className="border-t border-gray-700 pt-4">

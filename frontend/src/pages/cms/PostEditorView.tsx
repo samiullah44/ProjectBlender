@@ -40,6 +40,7 @@ const PostEditorView: React.FC = () => {
   const [seoTitle, setSeoTitle] = useState('');
   const [seoDescription, setSeoDescription] = useState('');
   const [ogImage, setOgImage] = useState('');
+  const [readTime, setReadTime] = useState('5 min read');
   const [isFeatured, setIsFeatured] = useState(false);
 
   const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
@@ -112,6 +113,7 @@ const PostEditorView: React.FC = () => {
       setSeoTitle(blog.seoMeta?.title ?? '');
       setSeoDescription(blog.seoMeta?.description ?? '');
       setOgImage(blog.seoMeta?.ogImage ?? '');
+      setReadTime(blog.readTime ?? '5 min read');
       setIsFeatured(blog.isFeatured ?? false);
       setPostIdBoth(blog._id);
       slugManuallySet.current = true;
@@ -159,6 +161,7 @@ const PostEditorView: React.FC = () => {
   const seoTitleRef = useRef(seoTitle);
   const seoDescriptionRef = useRef(seoDescription);
   const ogImageRef = useRef(ogImage);
+  const readTimeRef = useRef(readTime);
   const isFeaturedRef = useRef(isFeatured);
 
   useEffect(() => { titleRef.current = title; }, [title]);
@@ -170,6 +173,7 @@ const PostEditorView: React.FC = () => {
   useEffect(() => { seoTitleRef.current = seoTitle; }, [seoTitle]);
   useEffect(() => { seoDescriptionRef.current = seoDescription; }, [seoDescription]);
   useEffect(() => { ogImageRef.current = ogImage; }, [ogImage]);
+  useEffect(() => { readTimeRef.current = readTime; }, [readTime]);
   useEffect(() => { isFeaturedRef.current = isFeatured; }, [isFeatured]);
 
   const savePost = useCallback(async (overrideStatus?: PostStatus): Promise<boolean> => {
@@ -189,6 +193,7 @@ const PostEditorView: React.FC = () => {
       category: categoryRef.current,
       tags: tagsRef.current,
       coverImage: coverImageRef.current,
+      readTime: readTimeRef.current,
       isFeatured: isFeaturedRef.current,
       contentBlocks: contentBlocksRef.current,
       seoMeta: {
@@ -349,6 +354,8 @@ const PostEditorView: React.FC = () => {
           onSeoDescriptionChange={setSeoDescription}
           ogImage={ogImage}
           onOgImageChange={setOgImage}
+          readTime={readTime}
+          onReadTimeChange={setReadTime}
           isFeatured={isFeatured}
           onIsFeaturedChange={setIsFeatured}
         />

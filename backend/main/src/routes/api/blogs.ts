@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { Blog } from '../../models/Blog';
 import { User } from '../../models/User';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../../middleware/auth';
+import { wsService } from '../../app';
 
 const router = Router();
 
@@ -87,6 +88,8 @@ router.post('/:slug/favorite', optionalAuthenticate, async (req: AuthRequest, re
     }
 
     res.json({ success: true, favorited: true });
+    // Notify all clients so favorite count updates live
+    wsService.broadcastSystemUpdate({ type: 'blog_favorited', slug });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -121,6 +124,8 @@ router.delete('/:slug/favorite', optionalAuthenticate, async (req: AuthRequest, 
     }
 
     res.json({ success: true, favorited: false });
+    // Notify all clients so favorite count updates live
+    wsService.broadcastSystemUpdate({ type: 'blog_favorited', slug });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

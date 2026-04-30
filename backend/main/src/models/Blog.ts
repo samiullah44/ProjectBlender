@@ -17,6 +17,7 @@ export interface IBlog extends Document {
   coverImage?: string;
   favoritesCount: number;
   viewsCount: number;
+  commentsCount: number;
   readTime: string;
   pinned: boolean;
   isFeatured: boolean;
@@ -42,6 +43,7 @@ const blogSchema = new Schema<IBlog>({
   coverImage: { type: String },
   favoritesCount: { type: Number, default: 0 },
   viewsCount: { type: Number, default: 0 },
+  commentsCount: { type: Number, default: 0, min: 0 },
   readTime: { type: String, default: '5 min read' },
   pinned: { type: Boolean, default: false },
   isFeatured: { type: Boolean, default: false },

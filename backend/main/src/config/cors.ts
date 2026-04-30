@@ -33,7 +33,7 @@ export const createCorsOptions = (): CorsOptions => ({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-impersonating-user', 'X-Node-Id', 'X-Node-Secret'],
   credentials: true,
   maxAge: 86400

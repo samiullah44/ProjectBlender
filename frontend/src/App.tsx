@@ -87,6 +87,7 @@ const AdminAudit = React.lazy(() => import('@/pages/admin/AuditLogs'))
 const AdminAnalytics = React.lazy(() => import('@/pages/admin/Analytics'))
 const AdminUserAnalyticsDetail = React.lazy(() => import('@/pages/admin/UserAnalyticsDetail'))
 const AdminUserAnalytics = React.lazy(() => import('@/pages/admin/UserAnalyitcs'))
+const AdminReports = React.lazy(() => import('@/pages/admin/Reports'))
 
 import { useAuthStore } from '@/stores/authStore'
 
@@ -270,6 +271,23 @@ function App() {
             <BlogApp />
           </React.Suspense>
         </Router>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#111827',
+              color: '#f9fafb',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: 500,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            },
+            success: { iconTheme: { primary: '#10b981', secondary: '#111827' } },
+            error: { iconTheme: { primary: '#ef4444', secondary: '#111827' } },
+          }}
+        />
       </QueryClientProvider>
     );
   }
@@ -393,6 +411,7 @@ function App() {
                       <Route path="/analytics/users/:userId" element={<AdminUserAnalyticsDetail />} />
                       <Route path="/analytics/user/:userId" element={<AdminUserAnalyticsDetail />} />
                       <Route path="/user-analytics" element={<AdminUserAnalytics />} />
+                      <Route path="/reports" element={<AdminReports />} />
                     </Routes>
                   </ProtectedRoute>
                 }

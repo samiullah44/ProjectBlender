@@ -8,6 +8,7 @@ import {
     Users,
     Shield,
     ShieldCheck,
+    Flag,
     ChevronRight,
     Menu,
     X
@@ -23,6 +24,7 @@ const navItems = [
     { to: '/admin/users', label: 'Users', icon: Users },
     { to: '/admin/applications', label: 'Applications', icon: Shield },
     { to: '/admin/audit', label: 'Audit Logs', icon: ShieldCheck },
+    { to: '/admin/reports', label: 'Reports', icon: Flag },
 ]
 
 interface AdminLayoutProps {

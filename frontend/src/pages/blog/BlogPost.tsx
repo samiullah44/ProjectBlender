@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Clock, Calendar, User, Tag, ChevronRight, Eye } from 'lucide-react';
@@ -7,6 +7,9 @@ import BlockRenderer from '../../components/blog/BlockRenderer';
 import type { ContentBlock } from '@/types/blog';
 import SEO from '../../components/SEO';
 import FavoriteButton from '../../components/blog/FavoriteButton';
+import CommentSection from '@/components/blog/comments/CommentSection';
+import BottomActionBar from '@/components/blog/comments/BottomActionBar';
+import { useBlogRealtime } from '@/hooks/useBlogRealtime';
 
 interface BlogPostData {
   _id: string;
@@ -23,6 +26,7 @@ interface BlogPostData {
   publishedAt: string;
   favoritesCount: number;
   viewsCount: number;
+  commentsCount: number;
 }
 
 function getAuthorName(authorId: BlogPostData['authorId']): string {
@@ -58,6 +62,10 @@ function BlogPostSkeleton() {
 
 export const BlogPost: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
+  const commentSectionRef = useRef<HTMLDivElement>(null);
+
+  // Auto-refresh comments, likes, and post data via WebSocket
+  useBlogRealtime({ slug });
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['blogPost', slug],
@@ -239,6 +247,14 @@ export const BlogPost: React.FC = () => {
           </div>
         )}
 
+        {/* Action bar — comment count, share, report */}
+        <BottomActionBar
+          commentCount={data?.blog?.commentsCount ?? 0}
+          postTitle={blog.title}
+          blogId={blog._id}
+          commentSectionRef={commentSectionRef}
+        />
+
         {/* Author card */}
         <div className="mt-12 p-6 rounded-2xl bg-gray-50 border border-gray-100">
           <div className="flex items-start gap-4">
@@ -252,6 +268,13 @@ export const BlogPost: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Comment section */}
+        <CommentSection
+          slug={blog.slug}
+          initialCount={blog.commentsCount ?? 0}
+          ref={commentSectionRef}
+        />
 
         {/* Footer nav */}
         <div className="mt-12 pt-8 border-t border-gray-100 flex items-center justify-between">
