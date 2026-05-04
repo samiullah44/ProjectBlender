@@ -117,23 +117,32 @@ export const listBlogs = async (req: AuthRequest, res: Response): Promise<void> 
     const isAdmin = req.user!.roles?.includes('admin');
     const { status, search, page = '1', limit = '20' } = req.query as Record<string, string>;
 
-    const filter: any = {};
+    const conditions: any[] = [];
 
-    // Scope: writers see only their own posts
+    // Scope: writers see all published posts + their own posts (Drafts/Review)
     if (!isAdmin) {
-      filter.authorId = req.user!.userId;
+      conditions.push({
+        $or: [
+          { status: 'PUBLISHED' },
+          { authorId: req.user!.userId }
+        ]
+      });
     }
 
     if (status) {
-      filter.status = status;
+      conditions.push({ status });
     }
 
     if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { category: { $regex: search, $options: 'i' } },
-      ];
+      conditions.push({
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { category: { $regex: search, $options: 'i' } },
+        ]
+      });
     }
+
+    const filter = conditions.length > 0 ? { $and: conditions } : {};
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));

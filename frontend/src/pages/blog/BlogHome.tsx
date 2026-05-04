@@ -180,7 +180,7 @@ export const BlogHome = () => {
               <div className="w-8 h-8 bg-[#7C3AED]/10 rounded-xl flex items-center justify-center shadow-sm">
                 <Star className="w-4 h-4 text-[#7C3AED] fill-[#7C3AED]" />
               </div>
-              <h3 className="text-[12px] font-black tracking-[0.3em] text-[#7C3AED] uppercase">Featured Stories</h3>
+              <h3 className="text-[12px] font-black tracking-[0.3em] text-[#7C3AED] uppercase">FEATURED CONTENT</h3>
             </div>
 
             <div className="grid lg:grid-cols-3 gap-8">
@@ -239,7 +239,7 @@ export const BlogHome = () => {
               </div>
 
               {/* Side Column (Right) */}
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col border-t border-gray-100 lg:border-t-0">
                 {(featuredPosts as any[]).slice(1, 4).map((post, i) => (
                   <Link key={post._id} to={`/${post.slug}`} className="group block">
                     <motion.div
@@ -247,9 +247,9 @@ export const BlogHome = () => {
                       whileInView={{ opacity: 1, x: 0 }}
                       viewport={{ once: true }}
                       transition={{ delay: i * 0.1, duration: 0.6 }}
-                      className="bg-white rounded-[32px] border border-gray-100 shadow-[0_4px_20px_rgba(0,0,0,0.01)] hover:shadow-[0_24px_50px_rgba(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 p-4 h-full flex gap-4 items-center"
+                      className="py-6 flex gap-6 items-center border-b border-gray-100 last:border-0 hover:bg-gray-50/30 transition-all duration-300"
                     >
-                      <div className="w-24 lg:w-28 aspect-square rounded-2xl overflow-hidden shrink-0">
+                      <div className="w-32 lg:w-44 aspect-[16/10] rounded-2xl overflow-hidden shrink-0 shadow-sm transition-transform duration-500 group-hover:shadow-md">
                         <img
                           src={post.coverImage || post.seoMeta?.ogImage || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&q=80'}
                           alt={post.title}
@@ -257,16 +257,18 @@ export const BlogHome = () => {
                         />
                       </div>
                       <div className="flex-1 py-1">
-                        <span className="text-[9px] font-black text-[#7C3AED] uppercase tracking-[0.2em] mb-1.5 block">
-                          {post.category || 'CASE STUDY'}
-                        </span>
-                        <h5 className="text-[15px] font-bold text-gray-900 leading-[1.3] group-hover:text-purple-600 transition-colors line-clamp-2 mb-2.5">
-                          {post.title}
-                        </h5>
-                        <div className="flex items-center gap-3 text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                          <span>{new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                          <span className="w-1 h-1 rounded-full bg-gray-200" />
-                          <span className="flex items-center gap-1.5"><Clock className="w-3 h-3" />{post.readTime}</span>
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-black text-[#7C3AED] uppercase tracking-[0.2em]">
+                            {post.category || 'CASE STUDY'}
+                          </span>
+                          <div className="flex items-center gap-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            <span>{new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                            <span className="w-1 h-1 rounded-full bg-gray-200" />
+                            <span className="flex items-center gap-1.5">{post.readTime}</span>
+                          </div>
+                          <h5 className="text-[17px] font-bold text-gray-900 leading-[1.3] group-hover:text-purple-600 transition-colors line-clamp-2">
+                            {post.title}
+                          </h5>
                         </div>
                       </div>
                     </motion.div>
