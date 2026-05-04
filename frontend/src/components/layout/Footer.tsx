@@ -11,10 +11,11 @@ const Footer: React.FC = () => {
           {/* Brand & Description */}
           <div className="col-span-1 md:col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-4 group">
-              <span className="font-bold text-xl tracking-tight">
-                <span className="text-indigo-400">Render</span>
-                <span className="text-white">OnNodes</span>
-              </span>
+              <img
+                src="/assets/images/logo.png"
+                alt="RenderOnNodes"
+                className="h-10 w-auto object-contain"
+              />
             </Link>
             <p className="text-gray-400 text-sm mb-6 max-w-sm leading-relaxed">
               We are building the world's most accessible, high-performance distributed rendering network. Harness the power of idle GPUs globally.
@@ -85,16 +86,11 @@ const Footer: React.FC = () => {
         </div>
 
         {/* Bottom Bar */}
-        <div className="border-t border-white/5 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="border-t border-white/5 pt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
           <p className="text-sm text-gray-500">
             &copy; {new Date().getFullYear()} RenderOnNodes Network. All rights reserved.
           </p>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-semibold text-emerald-500 tracking-wider uppercase">
-              Under Development
-            </span>
-          </div>
+
         </div>
       </div>
     </footer>

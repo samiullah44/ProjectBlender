@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { Clock, ChevronRight, ChevronLeft, Search, ArrowUpRight, Eye, Star, Filter } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Clock, ChevronRight, ChevronLeft, Search, ArrowUpRight, Eye, Star, Filter, LayoutGrid, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import api from '@/lib/axios';
 import FavoriteButton from '../../components/blog/FavoriteButton';
 import Footer from '@/components/layout/Footer';
 import { useBlogRealtime } from '@/hooks/useBlogRealtime';
+import { CryptoWidget } from '@/components/blog/CryptoWidget';
 
 const ALL_CATEGORIES = [
   { name: 'All', color: 'from-purple-500 to-indigo-600', image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80' },
@@ -23,6 +24,7 @@ export const BlogHome = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [sortBy, setSortBy] = useState<'recent' | 'popular'>('recent');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Auto-refresh when a blog is published/unpublished
   useBlogRealtime();
@@ -94,32 +96,19 @@ export const BlogHome = () => {
       <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100/50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-[#7C3AED] flex items-center justify-center text-white font-bold">
-              <svg viewBox="0 0 24 24" className="w-4.5 h-4.5 fill-current" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-              </svg>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-lg tracking-tight text-gray-900 leading-none">RenderOnNodes</span>
-              <span className="text-[8px] text-gray-400 font-black tracking-[0.2em] uppercase mt-0.5">DISTRIBUTED RENDERING</span>
-            </div>
+            <img
+              src="/assets/images/logo_blog.png"
+              alt="RenderOnNodes"
+              className="h-10 w-auto object-contain"
+            />
           </Link>
 
           {/* Central space empty as requested */}
           <div className="flex-1" />
 
           <div className="hidden sm:flex items-center gap-4">
-            <div className="flex items-center gap-2 border border-gray-100 rounded-xl px-3 py-1.5 bg-gray-50/30 w-48 group focus-within:ring-2 focus-within:ring-purple-500/10 transition-all">
-              <Search className="w-3.5 h-3.5 text-gray-400" />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search..."
-                className="bg-transparent text-[13px] outline-none text-gray-700 placeholder-gray-400 w-full"
-              />
-            </div>
-            <a 
-              href="https://www.renderonnodes.com" 
+            <a
+              href="https://www.renderonnodes.com"
               className="bg-gray-900 text-white px-5 py-2 rounded-xl font-bold text-[12px] tracking-wide uppercase transition-all hover:bg-black hover:shadow-lg hover:shadow-gray-200 active:scale-95"
             >
               Main App
@@ -144,16 +133,28 @@ export const BlogHome = () => {
                 </span>
               </div>
 
-              <h1 className="text-4xl sm:text-6xl lg:text-[76px] font-black tracking-[-0.04em] text-gray-900 mb-6 leading-[0.95] flex flex-col">
-                <span className="whitespace-nowrap">Distributed Compute</span>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7C3AED] to-[#4F46E5] whitespace-nowrap">
+              <h1 className="text-3xl sm:text-5xl lg:text-[58px] font-black tracking-[-0.04em] text-gray-900 mb-6 leading-tight sm:leading-[1.05]">
+                <span className="block whitespace-nowrap">Distributed Compute</span>
+                <span className="block text-transparent bg-clip-text bg-linear-to-r from-[#7C3AED] to-[#4F46E5] pb-2 sm:pb-4 whitespace-nowrap">
                   Intelligence Hub
                 </span>
               </h1>
 
-              <p className="text-lg sm:text-xl text-gray-500 max-w-xl leading-relaxed font-medium">
+              <p className="text-lg sm:text-xl text-gray-500 max-w-xl leading-relaxed font-medium mb-10">
                 Real-time insights, architecture breakdowns, and ecosystem updates from the RenderOnNodes network.
               </p>
+
+              {/* Action Buttons
+              <div className="flex flex-wrap items-center gap-4 mb-14">
+                <button className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-8 py-3.5 rounded-xl font-bold text-sm transition-all shadow-[0_8px_20px_rgba(124,58,237,0.3)] hover:-translate-y-0.5 whitespace-nowrap">
+                  Explore Architecture
+                </button>
+                <button className="bg-white border border-gray-200 text-gray-900 hover:border-gray-300 hover:bg-gray-50 px-8 py-3.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap">
+                  View Live Network
+                </button>
+              </div> */}
+
+
             </motion.div>
           </div>
 
@@ -172,6 +173,9 @@ export const BlogHome = () => {
             </motion.div>
           </div>
         </div>
+
+        {/* Crypto Market Snapshot Widget */}
+        <CryptoWidget />
 
         {/* Featured Content Section - Compact 1+3 Dynamic Layout */}
         {featuredPosts.length > 0 && (
@@ -281,8 +285,25 @@ export const BlogHome = () => {
 
         {/* Category Browsing Row - High Fidelity Pills */}
         <div className="mb-20">
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-6">
             <h3 className="text-[12px] font-black tracking-[0.3em] text-[#7C3AED] uppercase">Browse by Category</h3>
+            <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-white w-56 focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-300 transition-all shadow-sm">
+              <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search articles..."
+                className="bg-transparent text-[13px] outline-none text-gray-700 placeholder-gray-400 w-full"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-gray-300 hover:text-gray-500 transition-colors shrink-0 text-xs font-bold"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap gap-4">
             {availableCategories.map((cat, i) => (
@@ -307,81 +328,185 @@ export const BlogHome = () => {
 
           {/* LEFT: Post List */}
           <div className="flex-1 min-w-0">
-            {/* Sort Controls - Premium Design */}
+            {/* Sort Controls + View Toggle */}
             <div className="flex items-center justify-between mb-10 pb-4 border-b border-gray-100">
               <h3 className="text-[12px] font-black tracking-[0.3em] text-gray-400 uppercase">
                 {searchQuery ? `Results for "${searchQuery}"` : activeTab === 'All' ? 'Latest Insights' : `${activeTab} Feed`}
               </h3>
-              <div className="flex items-center gap-1 bg-gray-100/50 rounded-xl p-1">
-                {([['recent', 'RECENT'], ['popular', 'POPULAR']] as const).map(([val, label]) => (
+              <div className="flex items-center gap-2">
+                {/* Sort toggle */}
+                <div className="flex items-center gap-1 bg-gray-100/50 rounded-xl p-1">
+                  {([['recent', 'RECENT'], ['popular', 'POPULAR']] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setSortBy(val)}
+                      className={cn(
+                        "text-[10px] px-4 py-2 rounded-lg font-black tracking-widest transition-all",
+                        sortBy === val ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {/* View mode toggle */}
+                <div className="flex items-center gap-1 bg-gray-100/50 rounded-xl p-1">
                   <button
-                    key={val}
-                    onClick={() => setSortBy(val)}
+                    onClick={() => setViewMode('grid')}
+                    title="Grid view"
                     className={cn(
-                      "text-[10px] px-4 py-2 rounded-lg font-black tracking-widest transition-all",
-                      sortBy === val ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                      "p-2 rounded-lg transition-all",
+                      viewMode === 'grid' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"
                     )}
                   >
-                    {label}
+                    <LayoutGrid className="w-3.5 h-3.5" />
                   </button>
-                ))}
+                  <button
+                    onClick={() => setViewMode('list')}
+                    title="List view"
+                    className={cn(
+                      "p-2 rounded-lg transition-all",
+                      viewMode === 'list' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                    )}
+                  >
+                    <List className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Post List */}
-            <div className="space-y-12">
-              {isLoading ? (
-                <div className="space-y-12">
-                  {[1, 2, 3].map(i => <div key={i} className="h-40 bg-gray-50 animate-pulse rounded-[32px]" />)}
-                </div>
-              ) : filteredSortedPosts.length === 0 ? (
-                <div className="text-center py-24 bg-gray-50 rounded-[40px] border border-dashed border-gray-200">
-                  <Filter className="w-10 h-10 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-400 font-bold tracking-tight">No articles found in this category.</p>
-                </div>
-              ) : filteredSortedPosts.map((post: any, i: number) => (
-                <div key={post._id} className="relative group/card bg-white rounded-[40px] border border-gray-50 hover:bg-gray-50/50 transition-all p-2 pr-6">
-                  <Link to={`/${post.slug}`}>
-                    <motion.article
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: i * 0.05 }}
-                      className="group cursor-pointer grid grid-cols-1 sm:grid-cols-[1fr_280px] gap-8 items-center"
-                    >
-                      <div className="pl-6 py-6">
-                        <div className="flex items-center gap-3 mb-4">
-                          <span className="text-[10px] font-black text-[#7C3AED] uppercase tracking-widest bg-purple-50 px-2.5 py-0.5 rounded-full">{post.category}</span>
-                          <span className="w-1 h-1 rounded-full bg-gray-200" />
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+            {/* Post Grid / List — animated layout switch */}
+            {isLoading ? (
+              <div className={cn(
+                viewMode === 'grid'
+                  ? "grid grid-cols-1 sm:grid-cols-2 gap-6"
+                  : "space-y-12"
+              )}>
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="h-40 bg-gray-50 animate-pulse rounded-[32px]" />
+                ))}
+              </div>
+            ) : filteredSortedPosts.length === 0 ? (
+              <div className="text-center py-24 bg-gray-50 rounded-[40px] border border-dashed border-gray-200">
+                <Filter className="w-10 h-10 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-400 font-bold tracking-tight">No articles found in this category.</p>
+              </div>
+            ) : (
+              <AnimatePresence mode="wait">
+                {viewMode === 'grid' ? (
+                  /* ── GRID VIEW ── */
+                  <motion.div
+                    key="grid"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-6"
+                  >
+                    {filteredSortedPosts.map((post: any, i: number) => (
+                      <motion.div
+                        key={post._id}
+                        initial={{ opacity: 0, scale: 0.97 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.04, duration: 0.22, ease: 'easeOut' }}
+                        className="relative group/card"
+                      >
+                        <Link to={`/${post.slug}`}>
+                          <article className="group bg-white rounded-[28px] border border-gray-100 hover:border-gray-200 hover:shadow-[0_20px_60px_rgba(0,0,0,0.07)] transition-all duration-500 overflow-hidden flex flex-col h-full">
+                            {/* Cover image */}
+                            <div className="w-full h-[180px] overflow-hidden relative shrink-0">
+                              <img
+                                src={post.coverImage || post.seoMeta?.ogImage || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&q=80'}
+                                alt={post.title}
+                                className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700 bg-gray-100"
+                              />
+                              <div className="absolute top-3 left-3">
+                                <span className="text-[10px] font-black text-[#7C3AED] uppercase tracking-widest bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full shadow-sm">
+                                  {post.category}
+                                </span>
+                              </div>
+                            </div>
+                            {/* Content */}
+                            <div className="p-5 flex flex-col flex-1">
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                  {new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </span>
+                                <span className="w-1 h-1 rounded-full bg-gray-200" />
+                                <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                  <Clock className="w-3 h-3" />{post.readTime}
+                                </span>
+                              </div>
+                              <h3 className="text-base font-bold text-gray-900 mb-2 leading-snug group-hover:text-purple-600 transition-colors line-clamp-2">
+                                {post.title}
+                              </h3>
+                              <p className="text-gray-500 line-clamp-2 text-sm leading-relaxed font-medium flex-1">
+                                {post.seoMeta?.description || 'Explore the technical details and innovative approaches behind this update...'}
+                              </p>
+                            </div>
+                          </article>
+                        </Link>
+                        <div className="absolute top-[188px] right-4">
+                          <FavoriteButton slug={post.slug} initialCount={post.favoritesCount} />
                         </div>
-                        <h3 className="text-2xl font-bold text-gray-900 mb-4 leading-tight group-hover:text-purple-600 transition-colors">
-                          {post.title}
-                        </h3>
-                        <p className="text-gray-500 line-clamp-2 leading-relaxed mb-6 text-sm font-medium">
-                          {post.seoMeta?.description || 'Explore the technical details and innovative approaches behind this update...'}
-                        </p>
-                        <div className="flex items-center gap-6 text-[10px] text-gray-400 font-extrabold tracking-widest">
-                          <span className="flex items-center gap-2"><Clock className="w-4 h-4" />{post.readTime}</span>
-                          <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> 1.2K VIEWS</span>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                ) : (
+                  /* ── LIST VIEW ── */
+                  <motion.div
+                    key="list"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    className="space-y-12"
+                  >
+                    {filteredSortedPosts.map((post: any, i: number) => (
+                      <motion.div
+                        key={post._id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.04, duration: 0.22, ease: 'easeOut' }}
+                        className="relative group/card bg-white rounded-[40px] border border-gray-50 hover:bg-gray-50/50 transition-all p-2 pr-6"
+                      >
+                        <Link to={`/${post.slug}`}>
+                          <article className="group cursor-pointer grid grid-cols-1 sm:grid-cols-[1fr_280px] gap-8 items-center">
+                            <div className="pl-6 py-6">
+                              <div className="flex items-center gap-3 mb-4">
+                                <span className="text-[10px] font-black text-[#7C3AED] uppercase tracking-widest bg-purple-50 px-2.5 py-0.5 rounded-full">{post.category}</span>
+                                <span className="w-1 h-1 rounded-full bg-gray-200" />
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                              </div>
+                              <h3 className="text-2xl font-bold text-gray-900 mb-4 leading-tight group-hover:text-purple-600 transition-colors">
+                                {post.title}
+                              </h3>
+                              <p className="text-gray-500 line-clamp-2 leading-relaxed mb-6 text-sm font-medium">
+                                {post.seoMeta?.description || 'Explore the technical details and innovative approaches behind this update...'}
+                              </p>
+                              <div className="flex items-center gap-6 text-[10px] text-gray-400 font-extrabold tracking-widest">
+                                <span className="flex items-center gap-2"><Clock className="w-4 h-4" />{post.readTime}</span>
+                                <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> 1.2K VIEWS</span>
+                              </div>
+                            </div>
+                            <div className="w-full sm:w-[280px] h-[200px] rounded-[32px] overflow-hidden relative order-first sm:order-last shrink-0 shadow-sm group-hover:shadow-xl transition-all duration-700">
+                              <img
+                                src={post.coverImage || post.seoMeta?.ogImage || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&q=80'}
+                                alt={post.title}
+                                className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-1000 bg-gray-100"
+                              />
+                            </div>
+                          </article>
+                        </Link>
+                        <div className="absolute top-8 right-8">
+                          <FavoriteButton slug={post.slug} initialCount={post.favoritesCount} />
                         </div>
-                      </div>
-
-                      <div className="w-full sm:w-[280px] h-[200px] rounded-[32px] overflow-hidden relative order-first sm:order-last shrink-0 shadow-sm group-hover:shadow-xl transition-all duration-700">
-                        <img
-                          src={post.coverImage || post.seoMeta?.ogImage || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&q=80'}
-                          alt={post.title}
-                          className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-1000 bg-gray-100"
-                        />
-                      </div>
-                    </motion.article>
-                  </Link>
-                  <div className="absolute top-8 right-8">
-                    <FavoriteButton slug={post.slug} initialCount={post.favoritesCount} />
-                  </div>
-                </div>
-              ))}
-            </div>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            )}
           </div>
 
           {/* RIGHT: Sidebar */}

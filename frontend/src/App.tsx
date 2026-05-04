@@ -50,6 +50,7 @@ const BlogPage = React.lazy(() => import('@/pages/public/Blog'))
 const ArtistsPage = React.lazy(() => import('@/pages/public/Artists'))
 const NodeProvidersPage = React.lazy(() => import('@/pages/public/NodeProviders'))
 const ComputeClientsPage = React.lazy(() => import('@/pages/public/ComputeClients'))
+const LogoPreviewPage = React.lazy(() => import('@/pages/public/LogoPreview'))
 
 // Legal Pages
 const TermsOfService = React.lazy(() => import('@/pages/public/TermsOfService'))
@@ -337,6 +338,7 @@ function App() {
               <Route path="/participants/artists" element={<ArtistsPage />} />
               <Route path="/participants/node-providers" element={<NodeProvidersPage />} />
               <Route path="/participants/compute-clients" element={<ComputeClientsPage />} />
+              <Route path="/logo-preview" element={<LogoPreviewPage />} />
 
               {/* Legal Routes */}
               <Route path="/terms" element={<TermsOfService />} />

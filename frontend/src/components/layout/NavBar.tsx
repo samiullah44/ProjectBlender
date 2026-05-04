@@ -310,22 +310,11 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
             {/* Logo */}
             <div className="flex items-center shrink-0">
               <Link to="/" className="flex items-center gap-3 group">
-                <div className="flex flex-col">
-                  <span className="font-bold text-xl tracking-tight">
-                    <span className={cn(
-                      "bg-gradient-to-r bg-clip-text text-transparent transition-all duration-500",
-                      isProvider
-                        ? "bg-purple-500"
-                        : "from-emerald-400 to-cyan-400"
-                    )}>
-                      Render
-                    </span>
-                    <span className="text-white">OnNodes</span>
-                  </span>
-                  <span className="hidden xl:block text-xs text-gray-400 font-medium tracking-wide">
-                    DISTRIBUTED RENDERING
-                  </span>
-                </div>
+                <img
+                  src="/assets/images/logo.png"
+                  alt="RenderOnNodes"
+                  className="h-10 w-auto object-contain"
+                />
               </Link>
             </div>
 
