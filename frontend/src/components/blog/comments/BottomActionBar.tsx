@@ -68,15 +68,6 @@ export default function BottomActionBar({
   };
 
   const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: postTitle, url: window.location.href });
-        toast.success('Link copied!', { duration: 2000 });
-        return;
-      } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return;
-      }
-    }
     try {
       await navigator.clipboard.writeText(window.location.href);
       toast.success('Link copied!', { duration: 2000 });
