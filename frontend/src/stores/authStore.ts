@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware'
 import { axiosInstance } from '@/lib/axios'
 import { toast } from 'react-hot-toast'
 import { websocketService } from '@/services/websocketService'
+import { setSharedToken, removeSharedToken, getSharedToken } from '@/lib/cookieUtils'
 
 interface User {
     id: string
@@ -114,6 +115,7 @@ export const useAuthStore = create<AuthStore>()(
                     if (response.data.success) {
                         const { token, user } = response.data
                         localStorage.setItem('token', token)
+                        setSharedToken(token)
 
                         set({
                             user,
@@ -299,6 +301,7 @@ export const useAuthStore = create<AuthStore>()(
 
             logout: () => {
                 localStorage.removeItem('token')
+                removeSharedToken()
                 localStorage.removeItem('impersonatingUserId')
                 set({
                     user: null,
@@ -363,10 +366,9 @@ export const useAuthStore = create<AuthStore>()(
                     const response = await axiosInstance.get('/auth/profile')
 
                     if (response.data.success) {
-                        if (response.data.token) {
                             localStorage.setItem('token', response.data.token)
+                            setSharedToken(response.data.token)
                             set({ token: response.data.token })
-                        }
                         set({
                             user: response.data.user,
                             isLoading: false
@@ -390,6 +392,7 @@ export const useAuthStore = create<AuthStore>()(
 
             setToken: (token: string) => {
                 localStorage.setItem('token', token)
+                setSharedToken(token)
                 set({ token, isAuthenticated: true })
             },
 

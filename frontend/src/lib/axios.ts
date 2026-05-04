@@ -2,6 +2,8 @@
 import axios from 'axios'
 import { toast } from 'react-hot-toast'
 
+import { getSharedToken } from './cookieUtils'
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5035/api'
 
 export const axiosInstance = axios.create({
@@ -15,7 +17,7 @@ export const axiosInstance = axios.create({
 // Add request interceptor for auth tokens
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('token') || getSharedToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
