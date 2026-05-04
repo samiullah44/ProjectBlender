@@ -10,6 +10,7 @@ import { analytics } from '@/services/analytics'
 import { useAnalytics } from '@/hooks/useAnalytics'
 import SplashScreen from '@/components/ui/SplashScreen'
 import { PageSkeleton } from '@/components/ui/PageSkeleton'
+import { getSharedToken } from '@/lib/cookieUtils'
 
 // Layouts and Core Components (Keep static)
 import Navbar from '@/components/layout/NavBar'
@@ -113,8 +114,12 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
   }, [])
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('token') || getSharedToken()
     if (token) {
+      // If token came from cookie but not in localStorage, sync it
+      if (!localStorage.getItem('token')) {
+        localStorage.setItem('token', token)
+      }
       getProfile().catch(() => {
         localStorage.removeItem('token')
       })
@@ -265,12 +270,14 @@ function App() {
   if (isBlogSubdomain) {
     return (
       <QueryClientProvider client={queryClient}>
-        <Router>
-          <ScrollToTop />
-          <React.Suspense fallback={<PageSkeleton />}>
-            <BlogApp />
-          </React.Suspense>
-        </Router>
+        <AuthInitializer>
+          <Router>
+            <ScrollToTop />
+            <React.Suspense fallback={<PageSkeleton />}>
+              <BlogApp />
+            </React.Suspense>
+          </Router>
+        </AuthInitializer>
         <Toaster
           position="top-right"
           toastOptions={{
