@@ -9,15 +9,14 @@ interface ResponseInputProps {
 
 const MAX_LENGTH = 1000;
 
-// Resolve the main app login URL — works on both localhost and production
 function getLoginUrl(): string {
-  const { hostname, protocol } = window.location;
+  const { hostname, protocol, pathname } = window.location;
   // On the blog subdomain (blog.renderonnodes.com) → redirect to main app
   if (hostname.includes('blog.')) {
-    return `${protocol}//${hostname.replace('blog.', '')}/login`;
+    return `${protocol}//${hostname.replace('blog.', '')}/login?returnTo=${encodeURIComponent(window.location.href)}`;
   }
   // On localhost or any other host, use the same origin
-  return '/login';
+  return `/login?returnTo=${encodeURIComponent(pathname)}`;
 }
 
 export default function ResponseInput({ slug, currentUser }: ResponseInputProps) {

@@ -368,9 +368,10 @@ export const useAuthStore = create<AuthStore>()(
                     if (response.data.success) {
                             localStorage.setItem('token', response.data.token)
                             setSharedToken(response.data.token)
-                            set({ token: response.data.token })
+                            set({ token: response.data.token, isAuthenticated: true })
                         set({
                             user: response.data.user,
+                            isAuthenticated: true,
                             isLoading: false
                         })
                         websocketService.authenticate(response.data.user.id)

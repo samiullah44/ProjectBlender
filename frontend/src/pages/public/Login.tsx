@@ -41,11 +41,16 @@ const LoginPage: React.FC = () => {
         }
     })
 
-    const from = (location.state as any)?.from?.pathname || '/'
+    const searchParams = new URLSearchParams(location.search)
+    const returnTo = searchParams.get('returnTo') || (location.state as any)?.from?.pathname || '/'
 
     useEffect(() => {
         if (isAuthenticated) {
-            navigate('/', { replace: true })
+            if (returnTo.startsWith('http')) {
+                window.location.href = returnTo
+            } else {
+                navigate(returnTo, { replace: true })
+            }
             return
         }
         clearError()
@@ -68,12 +73,19 @@ const LoginPage: React.FC = () => {
 
         const result = await login(data.email, data.password)
         if (result.success) {
-            navigate('/', { replace: true })
+            if (returnTo.startsWith('http')) {
+                window.location.href = returnTo
+            } else {
+                navigate(returnTo, { replace: true })
+            }
         }
     }
 
     const handleOAuthLogin = (provider: 'google' | 'github') => {
         setIsOAuthLoading(true)
+        if (returnTo) {
+            localStorage.setItem('oauth_returnTo', returnTo)
+        }
         const urls = getOAuthUrls()
         window.location.href = urls[provider]
     }
