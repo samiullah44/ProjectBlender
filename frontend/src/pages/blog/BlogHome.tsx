@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, ChevronRight, ChevronLeft, Search, ArrowUpRight, Eye, Star, Filter, LayoutGrid, List } from 'lucide-react';
+import { Clock, ChevronRight, ChevronLeft, Search, ArrowUpRight, Eye, Star, Filter, LayoutGrid, List, RefreshCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -77,6 +77,14 @@ export const BlogHome = () => {
     queryKey: ['featuredBlogs'],
     queryFn: async () => {
       const res = await api.get(`/blogs?featured=true&limit=6`);
+      return res.data.blogs;
+    }
+  });
+
+  const { data: trendingPosts = [] } = useQuery({
+    queryKey: ['trendingBlogs'],
+    queryFn: async () => {
+      const res = await api.get(`/blogs?sortBy=views&limit=5`);
       return res.data.blogs;
     }
   });
@@ -207,7 +215,7 @@ export const BlogHome = () => {
 
         {/* Featured Content Section - New Layout matching image */}
         {featuredPosts.length > 0 && (
-          <div className="mb-24">
+          <div className="mb-14">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center shadow-sm">
                 <Star className="w-4 h-4 text-[#7C3AED] fill-[#7C3AED]" />
@@ -287,10 +295,23 @@ export const BlogHome = () => {
 
 
         {/* Category Browsing Row - High Fidelity Pills */}
-        <div id="browse-categories" className="mb-20 scroll-mt-24">
+        <div id="browse-categories" className="mb-14 scroll-mt-24">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-[12px] font-black tracking-[0.3em] text-[#7C3AED] uppercase">Browse by Category</h3>
-            <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-white w-56 focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-300 transition-all shadow-sm">
+            <div className="flex items-center gap-6">
+              {(activeTab !== 'All' || searchQuery) && (
+                <button 
+                  onClick={() => {
+                    handleTabChange('All');
+                    setSearchQuery('');
+                  }}
+                  className="text-[11px] font-black text-purple-600 uppercase tracking-widest hover:text-purple-800 transition-colors flex items-center gap-1 group/btn"
+                >
+                  <RefreshCcw size={12} className="group-hover/btn:rotate-180 transition-transform duration-500" />
+                  <span>Show All Articles</span>
+                </button>
+              )}
+              <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-white w-56 focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-300 transition-all shadow-sm">
               <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
               <input
                 value={searchQuery}
@@ -308,6 +329,7 @@ export const BlogHome = () => {
               )}
             </div>
           </div>
+        </div>
           <div className="flex flex-wrap gap-4">
             {ALL_CATEGORIES.map((cat, i) => (
               <button
@@ -328,14 +350,14 @@ export const BlogHome = () => {
 
         {/* Main content + Sidebar */}
         <div className="flex flex-col lg:flex-row gap-16">
-
-          {/* LEFT: Post List */}
           <div className="flex-1 min-w-0">
             {/* Sort Controls + View Toggle */}
             <div className="flex items-center justify-between mb-10 pb-4 border-b border-gray-100">
-              <h3 className="text-[12px] font-black tracking-[0.3em] text-gray-400 uppercase">
-                {searchQuery ? `Results for "${searchQuery}"` : activeTab === 'All' ? 'Latest Insights' : `${activeTab} Feed`}
-              </h3>
+              <div className="flex items-center gap-4">
+                <h3 className="text-[12px] font-black tracking-[0.3em] text-gray-400 uppercase">
+                  {searchQuery ? `Results for "${searchQuery}"` : activeTab === 'All' ? 'Latest Insights' : `${activeTab} Feed`}
+                </h3>
+              </div>
               <div className="flex items-center gap-2">
                 {/* Sort toggle */}
                 <div className="flex items-center gap-1 bg-gray-100/50 rounded-xl p-1">
@@ -446,6 +468,16 @@ export const BlogHome = () => {
                               <p className="text-gray-500 line-clamp-2 text-sm leading-relaxed font-medium flex-1">
                                 {post.seoMeta?.description || 'Explore the technical details and innovative approaches behind this update...'}
                               </p>
+                              
+                              <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-5 h-5 rounded-full bg-gray-100 overflow-hidden">
+                                     <img src={`https://ui-avatars.com/api/?name=Admin+User&background=random`} className="w-full h-full object-cover" />
+                                  </div>
+                                  <span className="text-[10px] font-bold text-gray-800">Admin User</span>
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">{post.readTime}</span>
+                              </div>
                             </div>
                           </article>
                         </Link>
@@ -463,7 +495,7 @@ export const BlogHome = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
                     transition={{ duration: 0.25, ease: 'easeInOut' }}
-                    className="space-y-12"
+                    className="space-y-6"
                   >
                     {filteredSortedPosts.map((post: any, i: number) => (
                       <motion.div
@@ -471,7 +503,7 @@ export const BlogHome = () => {
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: i * 0.04, duration: 0.22, ease: 'easeOut' }}
-                        className="relative group/card bg-white rounded-[40px] border border-gray-50 hover:bg-gray-50/50 transition-all p-2 pr-6"
+                        className="relative group/card bg-white rounded-[32px] border border-gray-50 hover:bg-gray-50/50 transition-all p-2 pr-6"
                       >
                         <Link to={`/${post.slug}`}>
                           <article className="group cursor-pointer grid grid-cols-1 sm:grid-cols-[280px_1fr] gap-8 items-center">
@@ -497,8 +529,8 @@ export const BlogHome = () => {
 
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-gray-100 overflow-hidden">
-                                     <img src={`https://ui-avatars.com/api/?name=${post.authorName || 'Admin'}&background=random`} className="w-full h-full object-cover" />
+                                   <div className="w-6 h-6 rounded-full bg-gray-100 overflow-hidden">
+                                     <img src={`https://ui-avatars.com/api/?name=Admin+User&background=random`} className="w-full h-full object-cover" />
                                   </div>
                                   <span className="text-[11px] font-bold text-gray-800">Admin User</span>
                                 </div>
@@ -555,14 +587,14 @@ export const BlogHome = () => {
             </div>
 
             {/* Trending Articles */}
-            {featuredPosts.length > 0 && (
+            {trendingPosts.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-6">
                   <Star className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
                   <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Trending Articles</h4>
                 </div>
                 <div className="flex flex-col gap-6">
-                  {(featuredPosts as any[]).map((post: any, i: number) => (
+                  {(trendingPosts as any[]).map((post: any, i: number) => (
                     <Link key={post._id} to={`/${post.slug}`} className="group">
                       <div className="flex gap-4 items-center">
                         <span className="text-[11px] font-black text-gray-400 leading-none shrink-0 w-4">

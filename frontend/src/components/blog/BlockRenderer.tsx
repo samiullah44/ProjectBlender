@@ -82,12 +82,17 @@ function renderBlock(block: ContentBlock, index: number): React.ReactNode {
       };
       const cls = headingClasses[safeLevel] ?? headingClasses[1];
       const children = renderInlineContent(block.content);
-      if (safeLevel === 1) return <h1 key={index} className={cls}>{children}</h1>;
-      if (safeLevel === 2) return <h2 key={index} className={cls}>{children}</h2>;
-      if (safeLevel === 3) return <h3 key={index} className={cls}>{children}</h3>;
-      if (safeLevel === 4) return <h4 key={index} className={cls}>{children}</h4>;
-      if (safeLevel === 5) return <h5 key={index} className={cls}>{children}</h5>;
-      return <h6 key={index} className={cls}>{children}</h6>;
+      
+      // Generate ID for anchoring
+      const headingText = block.content?.map((n: any) => n.text ?? '').join('') || '';
+      const id = headingText.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      
+      if (safeLevel === 1) return <h1 key={index} id={id} className={cls}>{children}</h1>;
+      if (safeLevel === 2) return <h2 key={index} id={id} className={cls}>{children}</h2>;
+      if (safeLevel === 3) return <h3 key={index} id={id} className={cls}>{children}</h3>;
+      if (safeLevel === 4) return <h4 key={index} id={id} className={cls}>{children}</h4>;
+      if (safeLevel === 5) return <h5 key={index} id={id} className={cls}>{children}</h5>;
+      return <h6 key={index} id={id} className={cls}>{children}</h6>;
     }
 
     case 'paragraph': {

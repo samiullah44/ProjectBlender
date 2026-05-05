@@ -9,7 +9,7 @@ const router = Router();
 // PUBLIC: Get published blogs
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { category, limit = 10, pinned, featured } = req.query;
+    const { category, limit = 10, pinned, featured, sortBy } = req.query;
     const query: any = { status: 'PUBLISHED' };
     
     if (category && category !== 'All') {
@@ -28,8 +28,15 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       query.isFeatured = false;
     }
 
+    const sortOptions: any = {};
+    if (sortBy === 'views') {
+      sortOptions.viewsCount = -1;
+    } else {
+      sortOptions.publishedAt = -1;
+    }
+
     const blogs = await Blog.find(query)
-      .sort({ publishedAt: -1 })
+      .sort(sortOptions)
       .limit(Number(limit))
       .populate('authorId', 'name username');
 

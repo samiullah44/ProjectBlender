@@ -109,15 +109,6 @@ export const CryptoWidget = () => {
             <span className="text-[10px] font-bold tracking-wider text-green-600 uppercase">Live</span>
           </div>
         </div>
-        <a
-          href="https://www.coingecko.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-500 hover:text-indigo-600 uppercase tracking-widest transition-colors"
-        >
-          View all markets
-          <ArrowUpRight className="w-3.5 h-3.5" />
-        </a>
       </div>
 
       {/* Grid of Coins */}

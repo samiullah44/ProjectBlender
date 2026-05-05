@@ -47,7 +47,7 @@ class WebSocketService {
         this.subscribeToJobInternal(jobId)
       })
 
-      toast.success('Real-time updates connected')
+      // toast.success('Real-time updates connected')
     }
 
     this.socket.onmessage = (event) => {
