@@ -11,6 +11,7 @@ import { editorExtensions } from '../../components/cms/editor/extensions';
 import type { ContentBlock } from '@/types/blog';
 import MetadataPanel from '../../components/cms/editor/MetadataPanel';
 import DocumentOutline from '../../components/cms/editor/DocumentOutline';
+import BlogPreviewModal from '../../components/cms/editor/BlogPreviewModal';
 
 type PostStatus = 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED';
 type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -28,7 +29,14 @@ const PostEditorView: React.FC = () => {
   const templateId = searchParams.get('templateId');
 
   const user = useAuthStore((s) => s.user);
-  const isAdmin = !!(user?.roles?.includes('admin') || user?.role === 'admin');
+  const canPublish = !!(
+    user?.role === 'admin' || 
+    user?.roles?.includes('admin') || 
+    user?.role === 'writer' || 
+    user?.roles?.includes('writer')
+  );
+
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const [postId, setPostId] = useState<string | null>(id ?? null);
   const [title, setTitle] = useState('');
@@ -265,12 +273,13 @@ const PostEditorView: React.FC = () => {
         title={title}
         onTitleChange={handleTitleChange}
         status={status}
-        isAdmin={isAdmin}
+        canPublish={canPublish}
         autoSaveStatus={autoSaveStatus}
         onSaveDraft={handleSaveDraft}
         onSubmitForReview={handleSubmitForReview}
         onPublish={handlePublish}
         onUnpublish={handleUnpublish}
+        onPreview={() => setIsPreviewOpen(true)}
         isSaving={isSaving}
       />
 
@@ -320,6 +329,9 @@ const PostEditorView: React.FC = () => {
                 [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-indigo-500 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic [&_.ProseMirror_blockquote]:text-gray-400
                 [&_.ProseMirror_pre]:bg-gray-800 [&_.ProseMirror_pre]:rounded [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:mb-3
                 [&_.ProseMirror_img]:max-w-full [&_.ProseMirror_img]:rounded-lg [&_.ProseMirror_img]:my-4
+                [&_.ProseMirror_img.image-align-left]:mr-auto [&_.ProseMirror_img.image-align-left]:ml-0
+                [&_.ProseMirror_img.image-align-center]:mx-auto
+                [&_.ProseMirror_img.image-align-right]:ml-auto [&_.ProseMirror_img.image-align-right]:mr-0
                 [&_.ProseMirror_table]:w-full [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:mb-4
                 [&_.ProseMirror_td]:border [&_.ProseMirror_td]:border-gray-600 [&_.ProseMirror_td]:p-2
                 [&_.ProseMirror_th]:border [&_.ProseMirror_th]:border-gray-600 [&_.ProseMirror_th]:p-2 [&_.ProseMirror_th]:bg-gray-800 [&_.ProseMirror_th]:font-semibold
@@ -358,6 +370,19 @@ const PostEditorView: React.FC = () => {
           onReadTimeChange={setReadTime}
           isFeatured={isFeatured}
           onIsFeaturedChange={setIsFeatured}
+        />
+
+        <BlogPreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          data={{
+            title,
+            category,
+            coverImage,
+            contentBlocks: contentBlocksRef.current,
+            readTime,
+            authorName: user?.name || user?.username,
+          }}
         />
       </div>
     </div>

@@ -2,7 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface INewsletter extends Document {
   email: string;
-  role?: 'artist' | 'provider';
+  role?: 'artist' | 'provider' | 'blog_subscriber';
   status: 'subscribed' | 'unsubscribed';
   subscribedAt: Date;
 }
@@ -18,7 +18,7 @@ const NewsletterSchema: Schema = new Schema({
   },
   role: {
     type: String,
-    enum: ['artist', 'provider'],
+    enum: ['artist', 'provider', 'blog_subscriber'],
     required: false
   },
   status: {

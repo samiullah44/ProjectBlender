@@ -141,22 +141,33 @@ function renderBlock(block: ContentBlock, index: number): React.ReactNode {
     }
 
     case 'image': {
-      // TipTap v2 stores: { type: 'image', attrs: { src, alt, title } }
+      // TipTap v2 stores: { type: 'image', attrs: { src, alt, title, width, align } }
       const src = block.attrs?.src ?? block.attrs?.url ?? '';
       const alt = block.attrs?.alt ?? '';
       const title = block.attrs?.title ?? '';
+      const width = block.attrs?.width || '100%';
+      const align = block.attrs?.align || 'center';
+      
       if (!src) return null;
+
+      const alignClasses: Record<string, string> = {
+        left: 'mr-auto',
+        center: 'mx-auto',
+        right: 'ml-auto',
+      };
+
       return (
-        <figure key={index} className="my-8">
+        <figure key={index} className="my-8 flex flex-col">
           <img
             src={src}
             alt={alt}
             title={title || undefined}
-            className="w-full max-w-full rounded-xl object-cover shadow-md"
+            style={{ width }}
+            className={`max-w-full rounded-xl object-cover shadow-md transition-all duration-300 ${alignClasses[align] || 'mx-auto'}`}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
           {title && (
-            <figcaption className="text-center text-sm text-gray-500 mt-2 italic">
+            <figcaption className={`text-sm text-gray-500 mt-2 italic ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}`}>
               {title}
             </figcaption>
           )}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Twitter, Github, Linkedin, Cpu } from 'lucide-react';
+import { Twitter, Linkedin, Facebook, Youtube } from 'lucide-react';
 
 const Footer: React.FC = () => {
   return (
@@ -26,6 +26,12 @@ const Footer: React.FC = () => {
               </a>
               <a href="https://www.linkedin.com/company/rebderonnodes/" aria-label="LinkedIn" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
                 <Linkedin className="w-4 h-4" />
+              </a>
+              <a href="https://www.facebook.com/share/1BGi4RdYta/" aria-label="Facebook" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                <Facebook className="w-4 h-4" />
+              </a>
+              <a href="https://www.youtube.com/@RenderOnNodes-k8d" aria-label="YouTube" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                <Youtube className="w-4 h-4" />
               </a>
             </div>
           </div>

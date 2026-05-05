@@ -9,6 +9,9 @@ import FavoriteButton from '../../components/blog/FavoriteButton';
 import Footer from '@/components/layout/Footer';
 import { useBlogRealtime } from '@/hooks/useBlogRealtime';
 import { CryptoWidget } from '@/components/blog/CryptoWidget';
+import NewsletterBox from '@/components/blog/NewsletterBox';
+import SocialLinksBox from '@/components/blog/SocialLinksBox';
+import ShareSidebar from '@/components/blog/ShareSidebar';
 
 const ALL_CATEGORIES = [
   { name: 'All', color: 'from-purple-500 to-indigo-600', image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80' },
@@ -177,111 +180,86 @@ export const BlogHome = () => {
         {/* Crypto Market Snapshot Widget */}
         <CryptoWidget />
 
-        {/* Featured Content Section - Compact 1+3 Dynamic Layout */}
+        {/* Featured Content Section - New Layout matching image */}
         {featuredPosts.length > 0 && (
           <div className="mb-24">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 bg-[#7C3AED]/10 rounded-xl flex items-center justify-center shadow-sm">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center shadow-sm">
                 <Star className="w-4 h-4 text-[#7C3AED] fill-[#7C3AED]" />
               </div>
-              <h3 className="text-[12px] font-black tracking-[0.3em] text-[#7C3AED] uppercase">FEATURED CONTENT</h3>
+              <h3 className="text-[12px] font-black tracking-[0.3em] text-[#7C3AED] uppercase">FEATURED ARTICLE</h3>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-8">
-              {/* Main Featured Card (Left) */}
-              <div className="lg:col-span-2">
-                {featuredPosts[0] && (
-                  <Link to={`/${featuredPosts[0].slug}`} className="group block h-full">
-                    <motion.div
-                      initial={{ opacity: 0, y: 30 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                      className="bg-white rounded-[40px] border border-gray-100 shadow-[0_12px_60px_rgba(0,0,0,0.03)] hover:shadow-[0_40px_100px_rgba(0,0,0,0.1)] hover:-translate-y-2 transition-all duration-700 overflow-hidden h-full flex flex-col"
-                    >
-                      <div className="aspect-[21/9] overflow-hidden relative">
-                        <img
-                          src={featuredPosts[0].coverImage || featuredPosts[0].seoMeta?.ogImage || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80'}
-                          alt={featuredPosts[0].title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
-                        />
-                        <div className="absolute top-6 left-6 flex items-center gap-2">
-                          <span className="px-3 py-1 rounded-full bg-white/90 backdrop-blur-md shadow-sm text-[10px] font-black text-purple-600 uppercase tracking-widest">
-                            {featuredPosts[0].category || 'DEEP DIVE'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="p-10 flex flex-col flex-1">
-                        <h4 className="text-3xl lg:text-4xl font-bold text-gray-900 leading-[1.1] group-hover:text-purple-600 transition-colors mb-4 line-clamp-2">
-                          {featuredPosts[0].title}
-                        </h4>
-
-                        <p className="text-gray-500 text-base leading-relaxed mb-8 line-clamp-2 max-w-xl">
-                          {featuredPosts[0].seoMeta?.description || featuredPosts[0].excerpt || 'Discover the latest developments in decentralized GPU rendering.'}
-                        </p>
-
-                        <div className="mt-auto flex items-center justify-between pt-6 border-t border-gray-50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden ring-2 ring-gray-50">
-                              <img src={`https://ui-avatars.com/api/?name=${featuredPosts[0].authorName || featuredPosts[0].author?.name || 'Admin'}&background=random`} alt="Author" />
-                            </div>
-                            <div className="flex flex-col -space-y-1">
-                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Written By</span>
-                              <span className="text-[13px] font-bold text-gray-900">{featuredPosts[0].authorName || featuredPosts[0].author?.name || 'Admin User'}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                            <span>{new Date(featuredPosts[0].publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                            <span className="flex items-center gap-2"><Clock className="w-4 h-4" />{featuredPosts[0].readTime}</span>
+            <div className="flex flex-col lg:flex-row gap-10">
+              {/* Left Column: Featured Card + Share Sidebar */}
+              <div className="flex-1 flex flex-col md:flex-row gap-8 lg:gap-12 min-w-0">
+                {/* Main Featured Card */}
+                <div className="flex-1 min-w-0">
+                  {featuredPosts[0] && (
+                    <Link to={`/${featuredPosts[0].slug}`} className="group block">
+                      <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 0.8 }}
+                        className="bg-white rounded-[40px] border border-gray-200/60 shadow-[0_12px_60px_rgba(0,0,0,0.02)] hover:shadow-[0_40px_100px_rgba(0,0,0,0.06)] hover:-translate-y-2 transition-all duration-700 overflow-hidden flex flex-col"
+                      >
+                        <div className="aspect-[21/10] overflow-hidden relative">
+                          <img
+                            src={featuredPosts[0].coverImage || featuredPosts[0].seoMeta?.ogImage || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80'}
+                            alt={featuredPosts[0].title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
+                          />
+                          <div className="absolute top-6 left-6 flex items-center gap-2">
+                            <span className="px-4 py-1.5 rounded-full bg-white/95 backdrop-blur-md shadow-sm text-[10px] font-black text-purple-600 uppercase tracking-widest">
+                              {featuredPosts[0].category || 'ENGINEERING'}
+                            </span>
                           </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  </Link>
-                )}
+
+                        <div className="p-10 flex flex-col">
+                          <h4 className="text-3xl lg:text-[40px] font-bold text-gray-900 leading-[1.1] group-hover:text-purple-600 transition-colors mb-6 line-clamp-2">
+                            {featuredPosts[0].title}
+                          </h4>
+
+                          <p className="text-gray-500 text-base leading-relaxed mb-10 line-clamp-2 max-w-2xl font-medium">
+                            {featuredPosts[0].seoMeta?.description || featuredPosts[0].excerpt || 'Discover the latest developments in decentralized GPU rendering and how they are shaping the future of 3D art.'}
+                          </p>
+
+                          <div className="mt-auto flex items-center justify-between pt-8 border-t border-gray-50">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden ring-2 ring-gray-50">
+                                <img src={`https://ui-avatars.com/api/?name=${featuredPosts[0].authorName || featuredPosts[0].author?.name || 'Admin'}&background=random`} alt="Author" className="w-full h-full object-cover" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-[13px] font-bold text-gray-900 leading-tight">{featuredPosts[0].authorName || featuredPosts[0].author?.name || 'Akash Kumar'}</span>
+                                <span className="text-[11px] font-bold text-gray-400">Lead Engineer</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-6 text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                              <span>{new Date(featuredPosts[0].publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                              <span className="flex items-center gap-2"><Clock className="w-4 h-4" />{featuredPosts[0].readTime || '8 MIN READ'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    </Link>
+                  )}
+                </div>
+
+                {/* Share Sidebar Integration */}
+                <ShareSidebar url={featuredPosts[0] ? `${window.location.origin}/${featuredPosts[0].slug}` : window.location.href} />
               </div>
 
-              {/* Side Column (Right) */}
-              <div className="flex flex-col border-t border-gray-100 lg:border-t-0">
-                {(featuredPosts as any[]).slice(1, 4).map((post, i) => (
-                  <Link key={post._id} to={`/${post.slug}`} className="group block">
-                    <motion.div
-                      initial={{ opacity: 0, x: 20 }}
-                      whileInView={{ opacity: 1, x: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: i * 0.1, duration: 0.6 }}
-                      className="py-6 flex gap-6 items-center border-b border-gray-100 last:border-0 hover:bg-gray-50/30 transition-all duration-300"
-                    >
-                      <div className="w-32 lg:w-44 aspect-[16/10] rounded-2xl overflow-hidden shrink-0 shadow-sm transition-transform duration-500 group-hover:shadow-md">
-                        <img
-                          src={post.coverImage || post.seoMeta?.ogImage || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&q=80'}
-                          alt={post.title}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                        />
-                      </div>
-                      <div className="flex-1 py-1">
-                        <div className="flex flex-col gap-1.5">
-                          <span className="text-[10px] font-black text-[#7C3AED] uppercase tracking-[0.2em]">
-                            {post.category || 'CASE STUDY'}
-                          </span>
-                          <div className="flex items-center gap-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                            <span>{new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                            <span className="w-1 h-1 rounded-full bg-gray-200" />
-                            <span className="flex items-center gap-1.5">{post.readTime}</span>
-                          </div>
-                          <h5 className="text-[17px] font-bold text-gray-900 leading-[1.3] group-hover:text-purple-600 transition-colors line-clamp-2">
-                            {post.title}
-                          </h5>
-                        </div>
-                      </div>
-                    </motion.div>
-                  </Link>
-                ))}
-              </div>
+              {/* Right Column: Newsletter + Social */}
+              <aside className="w-full lg:w-[380px] flex flex-col gap-8 shrink-0">
+                <NewsletterBox />
+                <SocialLinksBox />
+              </aside>
             </div>
           </div>
         )}
+
 
         {/* Category Browsing Row - High Fidelity Pills */}
         <div className="mb-20">

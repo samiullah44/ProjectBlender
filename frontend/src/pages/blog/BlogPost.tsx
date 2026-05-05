@@ -219,7 +219,7 @@ export const BlogPost: React.FC = () => {
           [&_ul]:list-disc [&_ul]:pl-7 [&_ul]:my-5 [&_ul]:space-y-2 [&_ul]:text-gray-700 [&_ul]:text-[17px]
           [&_ol]:list-decimal [&_ol]:pl-7 [&_ol]:my-5 [&_ol]:space-y-2 [&_ol]:text-gray-700 [&_ol]:text-[17px]
           [&_li]:leading-relaxed
-          [&_img]:rounded-xl [&_img]:my-8 [&_img]:w-full [&_img]:shadow-md
+          [&_img]:rounded-xl [&_img]:my-8 [&_img]:max-w-full [&_img]:shadow-md
           [&_figure]:my-8
           [&_figcaption]:text-center [&_figcaption]:text-sm [&_figcaption]:text-gray-400 [&_figcaption]:mt-2 [&_figcaption]:italic
           [&_table]:w-full [&_table]:border-collapse [&_table]:my-8 [&_table]:text-sm

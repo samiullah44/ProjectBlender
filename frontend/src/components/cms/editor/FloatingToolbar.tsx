@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { BubbleMenu, Editor } from '@tiptap/react'
-import { Bold, Italic, Highlighter, Link, Columns, Rows, Trash2, Plus } from 'lucide-react'
+import { Bold, Italic, Highlighter, Link, Columns, Rows, Trash2, Plus, AlignLeft, AlignCenter, AlignRight, Maximize, Minimize } from 'lucide-react'
 
 interface FloatingToolbarProps {
   editor: Editor
@@ -51,7 +51,7 @@ export function FloatingToolbar({ editor }: FloatingToolbarProps) {
       editor={editor}
       tippyOptions={{ duration: 100 }}
       shouldShow={({ editor, state }) => {
-        return editor.isActive('table') || !state.selection.empty;
+        return editor.isActive('table') || editor.isActive('image') || !state.selection.empty;
       }}
       className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-gray-900 p-1 shadow-xl"
     >
@@ -114,6 +114,62 @@ export function FloatingToolbar({ editor }: FloatingToolbarProps) {
           >
             <Link size={14} />
           </ToolbarButton>
+
+          {editor.isActive('image') && (
+            <>
+              <div className="mx-0.5 h-4 w-px bg-white/10" />
+              
+              <ToolbarButton
+                onClick={() => editor.chain().focus().updateAttributes('image', { width: '25%' }).run()}
+                isActive={editor.getAttributes('image').width === '25%'}
+                title="Small (25%)"
+              >
+                <span className="text-[10px] font-bold">25%</span>
+              </ToolbarButton>
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().updateAttributes('image', { width: '50%' }).run()}
+                isActive={editor.getAttributes('image').width === '50%'}
+                title="Medium (50%)"
+              >
+                <span className="text-[10px] font-bold">50%</span>
+              </ToolbarButton>
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().updateAttributes('image', { width: '100%' }).run()}
+                isActive={editor.getAttributes('image').width === '100%' || !editor.getAttributes('image').width}
+                title="Full Width (100%)"
+              >
+                <span className="text-[10px] font-bold">100%</span>
+              </ToolbarButton>
+
+              <div className="mx-0.5 h-4 w-px bg-white/10" />
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().updateAttributes('image', { align: 'left' }).run()}
+                isActive={editor.getAttributes('image').align === 'left'}
+                title="Align Left"
+              >
+                <AlignLeft size={14} />
+              </ToolbarButton>
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().updateAttributes('image', { align: 'center' }).run()}
+                isActive={editor.getAttributes('image').align === 'center' || !editor.getAttributes('image').align}
+                title="Align Center"
+              >
+                <AlignCenter size={14} />
+              </ToolbarButton>
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().updateAttributes('image', { align: 'right' }).run()}
+                isActive={editor.getAttributes('image').align === 'right'}
+                title="Align Right"
+              >
+                <AlignRight size={14} />
+              </ToolbarButton>
+            </>
+          )}
 
           {editor.isActive('table') && (
             <>
