@@ -78,10 +78,13 @@ export const createBlog = async (req: AuthRequest, res: Response): Promise<void>
     }
 
     const isAdmin = req.user!.roles?.includes('admin');
+    const isWriter = req.user!.roles?.includes('writer');
+    const canPublish = isAdmin || isWriter;
+
     let finalStatus = status || 'DRAFT';
 
-    // Status transition enforcement to prevent non-admins from publishing
-    if (!isAdmin && finalStatus === 'PUBLISHED') {
+    // Status transition enforcement to prevent unauthorized publishing
+    if (!canPublish && finalStatus === 'PUBLISHED') {
       res.status(403).json({ success: false, error: 'Insufficient permissions' });
       return;
     }
@@ -115,12 +118,14 @@ export const createBlog = async (req: AuthRequest, res: Response): Promise<void>
 export const listBlogs = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const isAdmin = req.user!.roles?.includes('admin');
+    const isWriter = req.user!.roles?.includes('writer');
+    const canSeeAll = isAdmin || isWriter;
     const { status, search, page = '1', limit = '20' } = req.query as Record<string, string>;
 
     const conditions: any[] = [];
 
-    // Scope: writers see all published posts + their own posts (Drafts/Review)
-    if (!isAdmin) {
+    // Scope: writers and admins see all posts
+    if (!canSeeAll) {
       conditions.push({
         $or: [
           { status: 'PUBLISHED' },
@@ -187,9 +192,11 @@ export const updateBlog = async (req: AuthRequest, res: Response): Promise<void>
     }
 
     const isAdmin = req.user!.roles?.includes('admin');
+    const isWriter = req.user!.roles?.includes('writer');
     const isAuthor = blog.authorId.toString() === req.user!.userId;
+    const canManage = isAdmin || isWriter;
 
-    if (!isAdmin && !isAuthor) {
+    if (!canManage && !isAuthor) {
       res.status(403).json({ success: false, error: 'Insufficient permissions' });
       return;
     }
@@ -198,7 +205,7 @@ export const updateBlog = async (req: AuthRequest, res: Response): Promise<void>
 
     // Status transition enforcement
     if (newStatus !== undefined) {
-      if (!isAdmin && newStatus === 'PUBLISHED') {
+      if (!canManage && newStatus === 'PUBLISHED') {
         res.status(403).json({ success: false, error: 'Insufficient permissions' });
         return;
       }
@@ -251,9 +258,11 @@ export const deleteBlog = async (req: AuthRequest, res: Response): Promise<void>
     }
 
     const isAdmin = req.user!.roles?.includes('admin');
+    const isWriter = req.user!.roles?.includes('writer');
     const isAuthor = blog.authorId.toString() === req.user!.userId;
+    const canDelete = isAdmin || isWriter;
 
-    if (!isAdmin && !isAuthor) {
+    if (!canDelete && !isAuthor) {
       res.status(403).json({ success: false, error: 'Insufficient permissions' });
       return;
     }

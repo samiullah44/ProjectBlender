@@ -13,7 +13,7 @@ import {
   Clock
 } from 'lucide-react';
 
-const CATEGORIES = ['Technology', 'Tutorial', 'News', 'Analysis', 'General'];
+const CATEGORIES = ['Technology', 'Tutorial', 'News', 'Analysis', 'Updates', 'General'];
 
 interface MetadataPanelProps {
   category: string;

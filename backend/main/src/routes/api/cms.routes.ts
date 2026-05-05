@@ -34,9 +34,9 @@ router.post('/upload', uploadMiddleware, uploadImage);
 // Template routes — list is accessible to writer + admin (router-level guard covers it)
 router.get('/templates', listTemplates);
 
-// Template mutations — admin only
-router.post('/templates', authorize('admin'), createTemplate);
-router.patch('/templates/:id', authorize('admin'), updateTemplate);
-router.delete('/templates/:id', authorize('admin'), deleteTemplate);
+// Template mutations — admin + writer
+router.post('/templates', createTemplate);
+router.patch('/templates/:id', updateTemplate);
+router.delete('/templates/:id', deleteTemplate);
 
 export default router;

@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, ChevronRight, ChevronLeft, Search, ArrowUpRight, Eye, Star, Filter, LayoutGrid, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/axios';
 import FavoriteButton from '../../components/blog/FavoriteButton';
@@ -15,19 +15,44 @@ import ShareSidebar from '@/components/blog/ShareSidebar';
 
 const ALL_CATEGORIES = [
   { name: 'All', color: 'from-purple-500 to-indigo-600', image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80' },
-  { name: 'Tutorials', color: 'from-blue-500 to-cyan-600', image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&q=80' },
-  { name: 'Updates', color: 'from-green-500 to-emerald-600', image: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80' },
-  { name: 'Architecture', color: 'from-orange-500 to-rose-600', image: 'https://images.unsplash.com/photo-1591488320449-011701bb6704?w=800&q=80' },
-  { name: 'Deep Dive', color: 'from-pink-500 to-purple-600', image: 'https://images.unsplash.com/photo-1624953901718-b674a65b4a5a?w=800&q=80' },
-  { name: 'Community', color: 'from-yellow-500 to-amber-600', image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&q=80' },
+  { name: 'Technology', color: 'from-blue-500 to-cyan-600', image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&q=80' },
+  { name: 'Tutorial', color: 'from-green-500 to-emerald-600', image: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80' },
+  { name: 'News', color: 'from-orange-500 to-rose-600', image: 'https://images.unsplash.com/photo-1591488320449-011701bb6704?w=800&q=80' },
+  { name: 'Analysis', color: 'from-pink-500 to-purple-600', image: 'https://images.unsplash.com/photo-1624953901718-b674a65b4a5a?w=800&q=80' },
+  { name: 'Updates', color: 'from-yellow-500 to-amber-600', image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&q=80' },
+  { name: 'General', color: 'from-gray-500 to-gray-600', image: 'https://images.unsplash.com/photo-1432821596592-e2c18b78144f?w=800&q=80' },
 ];
 
 export const BlogHome = () => {
-  const [activeTab, setActiveTab] = useState('All');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('category') || 'All';
+  
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [sortBy, setSortBy] = useState<'recent' | 'popular'>('recent');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  useEffect(() => {
+    const category = searchParams.get('category');
+    if (category) {
+      setActiveTab(category);
+      // Auto-scroll to the category section if it's not the initial 'All' view
+      const element = document.getElementById('browse-categories');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (category: string) => {
+    setActiveTab(category);
+    if (category === 'All') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ category });
+    }
+  };
 
   // Auto-refresh when a blog is published/unpublished
   useBlogRealtime();
@@ -202,7 +227,7 @@ export const BlogHome = () => {
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                         transition={{ duration: 0.8 }}
-                        className="bg-white rounded-[40px] border border-gray-200/60 shadow-[0_12px_60px_rgba(0,0,0,0.02)] hover:shadow-[0_40px_100px_rgba(0,0,0,0.06)] hover:-translate-y-2 transition-all duration-700 overflow-hidden flex flex-col"
+                        className="bg-white rounded-[40px] border border-gray-200/60 shadow-[0_12px_60px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col"
                       >
                         <div className="aspect-[21/10] overflow-hidden relative">
                           <img
@@ -232,8 +257,8 @@ export const BlogHome = () => {
                                 <img src={`https://ui-avatars.com/api/?name=${featuredPosts[0].authorName || featuredPosts[0].author?.name || 'Admin'}&background=random`} alt="Author" className="w-full h-full object-cover" />
                               </div>
                               <div className="flex flex-col">
-                                <span className="text-[13px] font-bold text-gray-900 leading-tight">{featuredPosts[0].authorName || featuredPosts[0].author?.name || 'Akash Kumar'}</span>
-                                <span className="text-[11px] font-bold text-gray-400">Lead Engineer</span>
+                                <span className="text-[13px] font-bold text-gray-900 leading-tight">{'Admin User'}</span>
+                                <span className="text-[11px] font-bold text-gray-400">Moderator</span>
                               </div>
                             </div>
                             <div className="flex items-center gap-6 text-[11px] font-black text-gray-400 uppercase tracking-widest">
@@ -262,7 +287,7 @@ export const BlogHome = () => {
 
 
         {/* Category Browsing Row - High Fidelity Pills */}
-        <div className="mb-20">
+        <div id="browse-categories" className="mb-20 scroll-mt-24">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-[12px] font-black tracking-[0.3em] text-[#7C3AED] uppercase">Browse by Category</h3>
             <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-white w-56 focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-300 transition-all shadow-sm">
@@ -284,10 +309,10 @@ export const BlogHome = () => {
             </div>
           </div>
           <div className="flex flex-wrap gap-4">
-            {availableCategories.map((cat, i) => (
+            {ALL_CATEGORIES.map((cat, i) => (
               <button
                 key={cat.name}
-                onClick={() => setActiveTab(cat.name)}
+                onClick={() => handleTabChange(cat.name)}
                 className={cn(
                   "px-8 py-4 rounded-2xl font-bold text-sm transition-all duration-300 active:scale-95 border-2",
                   activeTab === cat.name
@@ -390,7 +415,7 @@ export const BlogHome = () => {
                         className="relative group/card"
                       >
                         <Link to={`/${post.slug}`}>
-                          <article className="group bg-white rounded-[28px] border border-gray-100 hover:border-gray-200 hover:shadow-[0_20px_60px_rgba(0,0,0,0.07)] transition-all duration-500 overflow-hidden flex flex-col h-full">
+                          <article className="group bg-white rounded-[28px] border border-gray-100 overflow-hidden flex flex-col h-full">
                             {/* Cover image */}
                             <div className="w-full h-[180px] overflow-hidden relative shrink-0">
                               <img
@@ -449,30 +474,38 @@ export const BlogHome = () => {
                         className="relative group/card bg-white rounded-[40px] border border-gray-50 hover:bg-gray-50/50 transition-all p-2 pr-6"
                       >
                         <Link to={`/${post.slug}`}>
-                          <article className="group cursor-pointer grid grid-cols-1 sm:grid-cols-[1fr_280px] gap-8 items-center">
-                            <div className="pl-6 py-6">
-                              <div className="flex items-center gap-3 mb-4">
-                                <span className="text-[10px] font-black text-[#7C3AED] uppercase tracking-widest bg-purple-50 px-2.5 py-0.5 rounded-full">{post.category}</span>
-                                <span className="w-1 h-1 rounded-full bg-gray-200" />
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                              </div>
-                              <h3 className="text-2xl font-bold text-gray-900 mb-4 leading-tight group-hover:text-purple-600 transition-colors">
-                                {post.title}
-                              </h3>
-                              <p className="text-gray-500 line-clamp-2 leading-relaxed mb-6 text-sm font-medium">
-                                {post.seoMeta?.description || 'Explore the technical details and innovative approaches behind this update...'}
-                              </p>
-                              <div className="flex items-center gap-6 text-[10px] text-gray-400 font-extrabold tracking-widest">
-                                <span className="flex items-center gap-2"><Clock className="w-4 h-4" />{post.readTime}</span>
-                                <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> 1.2K VIEWS</span>
-                              </div>
-                            </div>
-                            <div className="w-full sm:w-[280px] h-[200px] rounded-[32px] overflow-hidden relative order-first sm:order-last shrink-0 shadow-sm group-hover:shadow-xl transition-all duration-700">
+                          <article className="group cursor-pointer grid grid-cols-1 sm:grid-cols-[280px_1fr] gap-8 items-center">
+                            <div className="w-full sm:w-[280px] h-[200px] rounded-[32px] overflow-hidden relative shadow-sm group-hover:shadow-xl transition-all duration-700">
                               <img
                                 src={post.coverImage || post.seoMeta?.ogImage || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&q=80'}
                                 alt={post.title}
                                 className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-1000 bg-gray-100"
                               />
+                            </div>
+                            <div className="pr-6 py-4">
+                              <div className="flex items-center gap-3 mb-3">
+                                <span className="text-[10px] font-black text-[#7C3AED] uppercase tracking-widest bg-purple-50 px-2.5 py-1 rounded-full">{post.category}</span>
+                                <span className="w-1 h-1 rounded-full bg-gray-200" />
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                              </div>
+                              <h3 className="text-xl font-bold text-gray-900 mb-3 leading-tight group-hover:text-purple-600 transition-colors">
+                                {post.title}
+                              </h3>
+                              <p className="text-gray-500 line-clamp-2 leading-relaxed mb-6 text-sm font-medium">
+                                {post.seoMeta?.description || 'Explore the technical details and innovative approaches behind this update...'}
+                              </p>
+
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-gray-100 overflow-hidden">
+                                     <img src={`https://ui-avatars.com/api/?name=${post.authorName || 'Admin'}&background=random`} className="w-full h-full object-cover" />
+                                  </div>
+                                  <span className="text-[11px] font-bold text-gray-800">Admin User</span>
+                                </div>
+                                <div className="flex items-center gap-4 text-[10px] text-gray-400 font-extrabold tracking-widest">
+                                  <span className="flex items-center gap-2"><Clock className="w-3.5 h-3.5" />{post.readTime}</span>
+                                </div>
+                              </div>
                             </div>
                           </article>
                         </Link>
@@ -501,7 +534,7 @@ export const BlogHome = () => {
                     return (
                       <button
                         key={cat}
-                        onClick={() => setActiveTab(cat)}
+                        onClick={() => handleTabChange(cat)}
                         className={cn(
                           "flex items-center justify-between py-3 group text-left transition-colors",
                           activeTab === cat ? "text-purple-700" : "text-gray-700 hover:text-purple-600"
@@ -521,19 +554,31 @@ export const BlogHome = () => {
               </div>
             </div>
 
-            {/* Popular Now */}
+            {/* Trending Articles */}
             {featuredPosts.length > 0 && (
               <div>
-                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-[0.1em] mb-4">Popular Now</h4>
-                <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 mb-6">
+                  <Star className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
+                  <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Trending Articles</h4>
+                </div>
+                <div className="flex flex-col gap-6">
                   {(featuredPosts as any[]).map((post: any, i: number) => (
                     <Link key={post._id} to={`/${post.slug}`} className="group">
-                      <div className="flex gap-3 items-start">
-                        <span className="text-2xl font-black text-gray-100 leading-none shrink-0 w-6">
+                      <div className="flex gap-4 items-center">
+                        <span className="text-[11px] font-black text-gray-400 leading-none shrink-0 w-4">
                           {String(i + 1).padStart(2, '0')}
                         </span>
-                        <div>
-                          <p className="text-xs font-semibold text-gray-800 group-hover:text-purple-600 transition-colors leading-snug line-clamp-2">{post.title}</p>
+                        <div className="w-20 h-14 rounded-xl overflow-hidden shrink-0 shadow-sm">
+                           <img 
+                             src={post.coverImage || post.seoMeta?.ogImage || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&q=80'} 
+                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                           />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <p className="text-[12px] font-bold text-gray-800 group-hover:text-purple-600 transition-colors leading-tight line-clamp-2">{post.title}</p>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">
+                            {new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
                         </div>
                       </div>
                     </Link>

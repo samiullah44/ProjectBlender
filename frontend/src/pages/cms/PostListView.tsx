@@ -48,9 +48,11 @@ const FILTER_TABS: { label: string; value: FilterTab }[] = [
 
 function getAuthorName(authorId: BlogAuthor | string): string {
   if (typeof authorId === 'object' && authorId !== null) {
-    return authorId.name || authorId.username || 'Unknown';
+    const name = authorId.name || authorId.username;
+    if (!name || name === 'Akash Kumar') return 'Admin User';
+    return name;
   }
-  return 'Unknown';
+  return 'Admin User';
 }
 
 function formatDate(dateStr: string): string {
@@ -117,12 +119,14 @@ const PostListView = () => {
   });
 
   const isAdmin = user?.roles?.includes('admin') || user?.role === 'admin';
+  const isWriter = user?.roles?.includes('writer');
+  const canManageAll = isAdmin || isWriter;
 
-  // Only admins see report counts
+  // Only managers see report counts
   const { data: reportCounts = {} } = useQuery<ReportCounts>({
     queryKey: ['cms-report-counts'],
     queryFn: fetchReportCounts,
-    enabled: isAdmin,
+    enabled: canManageAll,
     staleTime: 60_000,
     refetchInterval: 30_000,
   });
@@ -233,7 +237,7 @@ const PostListView = () => {
                   <th className="px-4 py-3 text-left">Title</th>
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-left">Category</th>
-                  {isAdmin && <th className="px-4 py-3 text-left">Author</th>}
+                  {canManageAll && <th className="px-4 py-3 text-left">Author</th>}
                   <th className="px-4 py-3 text-left">Last Updated</th>
                   <th className="px-4 py-3 text-center">
                     <span className="flex items-center justify-center gap-1">
@@ -245,7 +249,7 @@ const PostListView = () => {
                       <MessageCircle className="w-3.5 h-3.5" /> Comments
                     </span>
                   </th>
-                  {isAdmin && (
+                  {canManageAll && (
                     <th className="px-4 py-3 text-center">
                       <span className="flex items-center justify-center gap-1">
                         <Flag className="w-3.5 h-3.5" /> Reports
@@ -267,7 +271,7 @@ const PostListView = () => {
                         <StatusBadge status={blog.status} />
                       </td>
                       <td className="px-4 py-3 text-gray-300">{blog.category || '—'}</td>
-                      {isAdmin && (
+                      {canManageAll && (
                         <td className="px-4 py-3 text-gray-300">{getAuthorName(blog.authorId)}</td>
                       )}
                       <td className="px-4 py-3 text-gray-400">{formatDate(blog.updatedAt)}</td>
@@ -292,8 +296,8 @@ const PostListView = () => {
                         </div>
                       </td>
 
-                      {/* Reports (admin only) */}
-                      {isAdmin && (
+                      {/* Reports (admin/writer) */}
+                      {canManageAll && (
                         <td className="px-4 py-3 text-center">
                           {pendingReports > 0 ? (
                             <button
@@ -349,7 +353,7 @@ const PostListView = () => {
                   </div>
                   <div className="text-xs text-gray-400 space-y-1 mb-3">
                     {blog.category && <div>Category: {blog.category}</div>}
-                    {isAdmin && <div>Author: {getAuthorName(blog.authorId)}</div>}
+                    {canManageAll && <div>Author: {getAuthorName(blog.authorId)}</div>}
                     <div>Updated: {formatDate(blog.updatedAt)}</div>
                     <div className="flex items-center gap-3 pt-1">
                       <span className="flex items-center gap-1">
@@ -358,7 +362,7 @@ const PostListView = () => {
                       <span className="flex items-center gap-1">
                         <MessageCircle className="w-3 h-3" /> {blog.commentsCount ?? 0} comments
                       </span>
-                      {isAdmin && pendingReports > 0 && (
+                      {canManageAll && pendingReports > 0 && (
                         <span className="flex items-center gap-1 text-red-400">
                           <Flag className="w-3 h-3" /> {pendingReports} reports
                         </span>

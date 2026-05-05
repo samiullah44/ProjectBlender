@@ -31,9 +31,11 @@ interface BlogPostData {
 
 function getAuthorName(authorId: BlogPostData['authorId']): string {
   if (typeof authorId === 'object' && authorId !== null) {
-    return authorId.name || authorId.username || 'Unknown Author';
+    const name = authorId.name || authorId.username;
+    if (!name || name === 'Akash Kumar') return 'Admin User';
+    return name;
   }
-  return 'Unknown Author';
+  return 'Admin User';
 }
 
 function formatDate(dateStr: string): string {
@@ -141,7 +143,7 @@ export const BlogPost: React.FC = () => {
             <ChevronRight className="w-3.5 h-3.5" />
             {blog.category && (
               <>
-                <span className="hover:text-gray-900 transition-colors cursor-pointer">{blog.category}</span>
+                <Link to={`/?category=${blog.category}`} className="hover:text-gray-900 transition-colors cursor-pointer">{blog.category}</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
               </>
             )}
@@ -158,9 +160,9 @@ export const BlogPost: React.FC = () => {
         {/* Category pill */}
         {blog.category && (
           <div className="mb-5">
-            <span className="text-xs font-bold tracking-widest text-purple-600 uppercase bg-purple-50 px-3 py-1.5 rounded-full">
+            <Link to={`/?category=${blog.category}`} className="text-xs font-bold tracking-widest text-purple-600 uppercase bg-purple-50 px-3 py-1.5 rounded-full hover:bg-purple-100 transition-colors">
               {blog.category}
-            </span>
+            </Link>
           </div>
         )}
 
@@ -264,7 +266,7 @@ export const BlogPost: React.FC = () => {
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Written by</p>
               <p className="font-bold text-gray-900 text-lg">{authorName}</p>
-              <p className="text-gray-500 text-sm mt-1">Content writer at RenderOnNodes</p>
+              <p className="text-gray-500 text-sm mt-1">{authorName === 'Admin User' ? 'Lead Admin' : 'Content writer'} at RenderOnNodes</p>
             </div>
           </div>
         </div>
