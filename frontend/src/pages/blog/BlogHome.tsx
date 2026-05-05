@@ -6,7 +6,6 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/axios';
 import FavoriteButton from '../../components/blog/FavoriteButton';
-import Footer from '@/components/layout/Footer';
 import { useBlogRealtime } from '@/hooks/useBlogRealtime';
 import { CryptoWidget } from '@/components/blog/CryptoWidget';
 import NewsletterBox from '@/components/blog/NewsletterBox';
@@ -26,7 +25,7 @@ const ALL_CATEGORIES = [
 export const BlogHome = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get('category') || 'All';
-  
+
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -128,34 +127,10 @@ export const BlogHome = () => {
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-purple-200 selection:text-purple-900">
 
-      {/* Navbar - Ultra-slim and refined */}
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100/50">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 group shrink-0">
-            <img
-              src="/assets/images/logo_blog.png"
-              alt="RenderOnNodes"
-              className="h-10 w-auto object-contain"
-            />
-          </Link>
-
-          {/* Central space empty as requested */}
-          <div className="flex-1" />
-
-          <div className="hidden sm:flex items-center gap-4">
-            <a
-              href="https://www.renderonnodes.com"
-              className="bg-gray-900 text-white px-5 py-2 rounded-xl font-bold text-[12px] tracking-wide uppercase transition-all hover:bg-black hover:shadow-lg hover:shadow-gray-200 active:scale-95"
-            >
-              Main App
-            </a>
-          </div>
-        </div>
-      </nav>
 
       <main className="max-w-7xl mx-auto px-6 pt-10 pb-10">
 
-        <div className="grid lg:grid-cols-2 gap-0 lg:gap-12 items-center mt-[-50px] pt-0 pb-0 relative min-h-[400px]">
+        <div className="grid lg:grid-cols-2 gap-0 lg:gap-12 items-center mt-0 pt-0 pb-0 relative min-h-[400px]">
           <div className="relative z-[60] text-left py-0">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -229,7 +204,7 @@ export const BlogHome = () => {
                 {/* Main Featured Card */}
                 <div className="flex-1 min-w-0">
                   {featuredPosts[0] && (
-                    <Link to={`/${featuredPosts[0].slug}`} className="group block">
+                    <Link to={`/blog/${featuredPosts[0].slug}`} className="group block">
                       <motion.div
                         initial={{ opacity: 0, y: 30 }}
                         whileInView={{ opacity: 1, y: 0 }}
@@ -281,7 +256,7 @@ export const BlogHome = () => {
                 </div>
 
                 {/* Share Sidebar Integration */}
-                <ShareSidebar url={featuredPosts[0] ? `${window.location.origin}/${featuredPosts[0].slug}` : window.location.href} />
+                <ShareSidebar url={featuredPosts[0] ? `${window.location.origin}/blog/${featuredPosts[0].slug}` : window.location.href} />
               </div>
 
               {/* Right Column: Newsletter + Social */}
@@ -300,7 +275,7 @@ export const BlogHome = () => {
             <h3 className="text-[12px] font-black tracking-[0.3em] text-[#7C3AED] uppercase">Browse by Category</h3>
             <div className="flex items-center gap-6">
               {(activeTab !== 'All' || searchQuery) && (
-                <button 
+                <button
                   onClick={() => {
                     handleTabChange('All');
                     setSearchQuery('');
@@ -312,24 +287,24 @@ export const BlogHome = () => {
                 </button>
               )}
               <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-white w-56 focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-300 transition-all shadow-sm">
-              <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search articles..."
-                className="bg-transparent text-[13px] outline-none text-gray-700 placeholder-gray-400 w-full"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="text-gray-300 hover:text-gray-500 transition-colors shrink-0 text-xs font-bold"
-                >
-                  ✕
-                </button>
-              )}
+                <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search articles..."
+                  className="bg-transparent text-[13px] outline-none text-gray-700 placeholder-gray-400 w-full"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-gray-300 hover:text-gray-500 transition-colors shrink-0 text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
           <div className="flex flex-wrap gap-4">
             {ALL_CATEGORIES.map((cat, i) => (
               <button
@@ -436,7 +411,7 @@ export const BlogHome = () => {
                         transition={{ delay: i * 0.04, duration: 0.22, ease: 'easeOut' }}
                         className="relative group/card"
                       >
-                        <Link to={`/${post.slug}`}>
+                        <Link to={`/blog/${post.slug}`}>
                           <article className="group bg-white rounded-[28px] border border-gray-100 overflow-hidden flex flex-col h-full">
                             {/* Cover image */}
                             <div className="w-full h-[180px] overflow-hidden relative shrink-0">
@@ -468,11 +443,11 @@ export const BlogHome = () => {
                               <p className="text-gray-500 line-clamp-2 text-sm leading-relaxed font-medium flex-1">
                                 {post.seoMeta?.description || 'Explore the technical details and innovative approaches behind this update...'}
                               </p>
-                              
+
                               <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <div className="w-5 h-5 rounded-full bg-gray-100 overflow-hidden">
-                                     <img src={`https://ui-avatars.com/api/?name=Admin+User&background=random`} className="w-full h-full object-cover" />
+                                    <img src={`https://ui-avatars.com/api/?name=Admin+User&background=random`} className="w-full h-full object-cover" />
                                   </div>
                                   <span className="text-[10px] font-bold text-gray-800">Admin User</span>
                                 </div>
@@ -505,7 +480,7 @@ export const BlogHome = () => {
                         transition={{ delay: i * 0.04, duration: 0.22, ease: 'easeOut' }}
                         className="relative group/card bg-white rounded-[32px] border border-gray-50 hover:bg-gray-50/50 transition-all p-2 pr-6"
                       >
-                        <Link to={`/${post.slug}`}>
+                        <Link to={`/blog/${post.slug}`}>
                           <article className="group cursor-pointer grid grid-cols-1 sm:grid-cols-[280px_1fr] gap-8 items-center">
                             <div className="w-full sm:w-[280px] h-[200px] rounded-[32px] overflow-hidden relative shadow-sm group-hover:shadow-xl transition-all duration-700">
                               <img
@@ -529,8 +504,8 @@ export const BlogHome = () => {
 
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                   <div className="w-6 h-6 rounded-full bg-gray-100 overflow-hidden">
-                                     <img src={`https://ui-avatars.com/api/?name=Admin+User&background=random`} className="w-full h-full object-cover" />
+                                  <div className="w-6 h-6 rounded-full bg-gray-100 overflow-hidden">
+                                    <img src={`https://ui-avatars.com/api/?name=Admin+User&background=random`} className="w-full h-full object-cover" />
                                   </div>
                                   <span className="text-[11px] font-bold text-gray-800">Admin User</span>
                                 </div>
@@ -595,16 +570,16 @@ export const BlogHome = () => {
                 </div>
                 <div className="flex flex-col gap-6">
                   {(trendingPosts as any[]).map((post: any, i: number) => (
-                    <Link key={post._id} to={`/${post.slug}`} className="group">
+                    <Link key={post._id} to={`/blog/${post.slug}`} className="group">
                       <div className="flex gap-4 items-center">
                         <span className="text-[11px] font-black text-gray-400 leading-none shrink-0 w-4">
                           {String(i + 1).padStart(2, '0')}
                         </span>
                         <div className="w-20 h-14 rounded-xl overflow-hidden shrink-0 shadow-sm">
-                           <img 
-                             src={post.coverImage || post.seoMeta?.ogImage || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&q=80'} 
-                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                           />
+                          <img
+                            src={post.coverImage || post.seoMeta?.ogImage || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&q=80'}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                          />
                         </div>
                         <div className="flex flex-col gap-1">
                           <p className="text-[12px] font-bold text-gray-800 group-hover:text-purple-600 transition-colors leading-tight line-clamp-2">{post.title}</p>
@@ -623,7 +598,6 @@ export const BlogHome = () => {
       </main>
 
       {/* Put standard Footer from layout here */}
-      <Footer />
     </div>
   );
 };

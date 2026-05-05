@@ -141,11 +141,11 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
 // Main Layout component with Navbar, Footer, and Popup
 const MainLayout = ({ showTopBar, onOpenWaitlist }: { showTopBar: boolean, onOpenWaitlist: () => void }) => {
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col overflow-x-hidden animate-page-reveal">
+    <div className="min-h-screen bg-gray-950 flex flex-col animate-page-reveal">
       <ImpersonationBanner />
       <TopBar isVisible={showTopBar} onReopen={onOpenWaitlist} />
       <Navbar hideWaitlist={showTopBar} />
-      <main className="mx-auto flex-1 w-full overflow-x-hidden">
+      <main className="mx-auto flex-1 w-full">
         <React.Suspense fallback={<PageSkeleton />}>
           <Outlet />
         </React.Suspense>
@@ -174,8 +174,8 @@ const AnalyticsTracker = () => {
 }
 
 function App() {
-  const isBlogSubdomain = typeof window !== 'undefined' &&
-    /^((www)\.)?blog\.renderonnodes\.com$/.test(window.location.hostname) || window.location.search.includes('simulateBlogDomain=true');
+  // No longer using separate subdomain for blog
+  const isBlogSubdomain = false;
 
   // const [showSplash, setShowSplash] = useState(() => {
   //   // Show splash only once per session
@@ -268,37 +268,6 @@ function App() {
     setIsWaitlistOpen(false);
   };
 
-  if (isBlogSubdomain) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <AuthInitializer>
-          <Router>
-            <ScrollToTop />
-            <React.Suspense fallback={<PageSkeleton />}>
-              <BlogApp />
-            </React.Suspense>
-          </Router>
-        </AuthInitializer>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#111827',
-              color: '#f9fafb',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '12px',
-              fontSize: '14px',
-              fontWeight: 500,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-            },
-            success: { iconTheme: { primary: '#10b981', secondary: '#111827' } },
-            error: { iconTheme: { primary: '#ef4444', secondary: '#111827' } },
-          }}
-        />
-      </QueryClientProvider>
-    );
-  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -332,7 +301,7 @@ function App() {
               {/* About Pages */}
               <Route path="/about" element={<AboutUsPage />} />
               <Route path="/contact" element={<ContactPage />} />
-              <Route path="/blog" element={<BlogPage />} />
+              <Route path="/blog/*" element={<BlogApp />} />
 
               {/* Participant Pages */}
               <Route path="/participants/artists" element={<ArtistsPage />} />

@@ -17,6 +17,7 @@
 
     body {
         font-family: var(--font-sans);
+        overflow-x: clip; /* Prevent horizontal scroll without breaking position: sticky */
     }
 }
 

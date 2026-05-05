@@ -98,7 +98,8 @@ export const BlogPost: React.FC = () => {
     enabled: !!slug,
   });
 
-  const blocks = data?.blog?.contentBlocks ?? [];
+  const blogPreview = data?.blog;
+  const blocks = blogPreview?.contentBlocks ?? [];
   const headings = blocks
     .filter((b: any) => b.type === 'heading' && (b.attrs?.level === 2 || b.attrs?.level === 3))
     .map((b: any) => {
@@ -108,30 +109,33 @@ export const BlogPost: React.FC = () => {
     });
 
   useEffect(() => {
-    if (headings.length === 0) return;
+    if (!headings || headings.length === 0) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveHeading(entry.target.id);
+    const handleScroll = () => {
+      const scrollPosition = window.scrollY + 150;
+      let currentHeading = '';
+      for (let i = 0; i < headings.length; i++) {
+        const el = document.getElementById(headings[i].id);
+        if (el) {
+          const offsetTop = el.offsetTop;
+          if (scrollPosition >= offsetTop) {
+            currentHeading = headings[i].id;
+          } else {
+            break;
           }
-        });
-      },
-      { rootMargin: '-100px 0px -70% 0px' }
-    );
+        }
+      }
+      setActiveHeading(currentHeading);
+    };
 
-    headings.forEach((h) => {
-      const el = document.getElementById(h.id);
-      if (el) observer.observe(el);
-    });
-
-    return () => observer.disconnect();
-  }, [headings]);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [headings, blogPreview?.contentBlocks]);
 
   const handleShare = (platform: string) => {
     const url = window.location.href;
-    const title = data?.blog?.title || '';
+    const title = blogPreview?.title || '';
     
     if (platform === 'copy') {
       navigator.clipboard.writeText(url);
@@ -154,7 +158,7 @@ export const BlogPost: React.FC = () => {
 
   const is404 = (error as any)?.response?.status === 404 || (data && !data.success);
 
-  if (is404 || !data?.blog) {
+  if (is404 || !blogPreview) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 text-center">
         <h1 className="text-8xl font-black text-gray-100 mb-4">404</h1>
@@ -167,7 +171,7 @@ export const BlogPost: React.FC = () => {
     );
   }
 
-  const blog = data.blog;
+  const blog = blogPreview;
   const authorName = getAuthorName(blog.authorId);
 
   return (
@@ -179,23 +183,21 @@ export const BlogPost: React.FC = () => {
         ogType="article"
       />
 
-      {/* Top nav */}
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
-            <Link to="/" className="hover:text-gray-900 transition-colors">Blog</Link>
-            <ChevronRight className="w-3 h-3" />
-            <Link to={`/?category=${blog.category}`} className="hover:text-gray-900 transition-colors truncate max-w-[150px]">{blog.category}</Link>
-            <ChevronRight className="w-3 h-3" />
-            <span className="text-gray-900 truncate max-w-[200px]">{blog.title}</span>
-          </div>
-          <Link to="/" className="inline-flex items-center gap-1.5 text-xs font-black text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-widest">
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Link>
-        </div>
-      </nav>
 
       <div className="max-w-7xl mx-auto px-6 pt-12">
+        {/* Minimalist Breadcrumb - Integrated after removing extra navbar */}
+        <nav className="flex items-center gap-2 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-10 overflow-x-auto no-scrollbar whitespace-nowrap">
+          <Link to="/blog" className="hover:text-gray-900 transition-colors">Blog</Link>
+          <ChevronRight className="w-3 h-3 text-gray-300" />
+          {blog.category && (
+            <>
+              <Link to={`/blog?category=${blog.category}`} className="hover:text-gray-900 transition-colors">{blog.category}</Link>
+              <ChevronRight className="w-3 h-3 text-gray-300" />
+            </>
+          )}
+          <span className="text-gray-900 truncate max-w-[200px] sm:max-w-md">{blog.title}</span>
+        </nav>
+
         {/* Cover Image - Top curved */}
         {blog.coverImage && (
           <div className="w-full h-[300px] sm:h-[450px] lg:h-[550px] rounded-[32px] sm:rounded-[48px] overflow-hidden mb-12 shadow-2xl shadow-purple-500/10">
@@ -276,8 +278,8 @@ export const BlogPost: React.FC = () => {
           </article>
 
           {/* Sidebar */}
-          <aside className="hidden lg:block">
-            <div className="sticky top-24 space-y-10">
+          <aside className="hidden lg:block relative h-full">
+            <div className="sticky top-[120px] space-y-10">
               
               {/* Table of Contents */}
               {headings.length > 0 && (
@@ -341,7 +343,7 @@ export const BlogPost: React.FC = () => {
                   </div>
                   <div className="flex flex-col gap-6">
                     {morePosts.map(post => (
-                      <Link key={post._id} to={`/${post.slug}`} className="group flex gap-4">
+                      <Link key={post._id} to={`/blog/${post.slug}`} className="group flex gap-4">
                         <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-sm">
                           <img src={post.coverImage || post.seoMeta?.ogImage} alt={post.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                         </div>
@@ -354,7 +356,7 @@ export const BlogPost: React.FC = () => {
                       </Link>
                     ))}
                   </div>
-                  <Link to="/" className="inline-flex items-center gap-2 text-[10px] font-black text-purple-600 uppercase tracking-widest mt-8 hover:gap-3 transition-all duration-300">
+                  <Link to="/blog" className="inline-flex items-center gap-2 text-[10px] font-black text-purple-600 uppercase tracking-widest mt-8 hover:gap-3 transition-all duration-300">
                     View all articles <ChevronRight size={12} />
                   </Link>
                 </div>

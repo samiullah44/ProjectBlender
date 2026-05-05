@@ -130,8 +130,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
     toast.success('Logged out successfully')
   }
 
-  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  const blogHref = isLocal ? window.location.origin + '/?simulateBlogDomain=true' : 'https://blog.renderonnodes.com';
+  const blogHref = '/blog';
 
   const navItems: NavItem[] = [
     {
