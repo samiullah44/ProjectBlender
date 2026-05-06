@@ -15,10 +15,14 @@ import { Readable } from 'stream';
 export class S3Service {
   private s3Client: S3Client;
   private bucketName: string;
+  private blogBucketName: string;
+  private blogCloudFrontUrl: string;
   private region: string;
 
   constructor() {
     this.bucketName = env.aws.s3Bucket;
+    this.blogBucketName = env.aws.blogS3Bucket;
+    this.blogCloudFrontUrl = env.aws.blogCloudFrontUrl;
     this.region = env.aws.region;
 
     this.s3Client = new S3Client({
@@ -192,13 +196,13 @@ export class S3Service {
   }
 
   /**
-   * Upload a blog image to S3 under the blog-images/ prefix and return a pre-signed URL
+   * Upload a blog image to S3 under the render-blg-images/ prefix and return a pre-signed URL or CloudFront URL
    */
   async uploadBlogImage(file: Express.Multer.File): Promise<string> {
-    const fileKey = `blog-images/${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
+    const fileKey = `render-blg-images/${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
 
     const command = new PutObjectCommand({
-      Bucket: this.bucketName,
+      Bucket: this.blogBucketName,
       Key: fileKey,
       Body: file.buffer,
       ContentType: file.mimetype,
@@ -206,15 +210,14 @@ export class S3Service {
 
     await this.s3Client.send(command);
 
-    // Use CloudFront domain if configured, otherwise fall back to pre-signed URL
-    const cloudfrontDomain = process.env.CLOUDFRONT_DOMAIN;
-    if (cloudfrontDomain) {
-      return `${cloudfrontDomain.replace(/\/$/, '')}/${fileKey}`;
+    // Use CloudFront URL if configured
+    if (this.blogCloudFrontUrl) {
+      return `${this.blogCloudFrontUrl.replace(/\/$/, '')}/${fileKey}`;
     }
 
-    // Fallback: 7-day pre-signed URL
+    // Fallback: 7-day pre-signed URL using the blog bucket
     const getCommand = new GetObjectCommand({
-      Bucket: this.bucketName,
+      Bucket: this.blogBucketName,
       Key: fileKey,
     });
     return getSignedUrl(this.s3Client, getCommand, { expiresIn: 604800 });

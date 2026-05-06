@@ -38,6 +38,8 @@ export const env = {
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
     region: process.env.AWS_REGION || 'ap-south-1',
     s3Bucket: process.env.S3_BUCKET_NAME || 'blendfarm-renders',
+    blogS3Bucket: process.env.BLOG_S3_BUCKET_NAME || 'web-assets-s3-0326',
+    blogCloudFrontUrl: process.env.BLOG_CLOUDFRONT_URL || 'https://d5nejbnryt4r3.cloudfront.net/',
   },
 
   // Security
