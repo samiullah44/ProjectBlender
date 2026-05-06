@@ -1,43 +1,46 @@
 ---
 id: artist-quickstart
-title: Artist Quickstart Guide
+title: Client Quickstart Guide
 sidebar_label: Quickstart
 sidebar_position: 1
 ---
 
-# Artist Quickstart Guide
+# Client Quickstart Guide
 
-Welcome to the RenderOnNodes network. This guide provides a three-phase blueprint to transition from local production to distributed, high-velocity compute.
+Welcome to RenderOnNodes. As a **Compute Client (Artist)**, you can connect your wallet and immediately distribute your rendering tasks to a global fleet of GPUs without renting servers or signing contracts.
 
----
+Follow these 3 easy steps to start your first network render.
 
-## Phase 1: Authentication & Ledger Bonding
-To interact with the network, you must establish a secure session through the **Management Portal**.
+## Step 1: Connect Your Wallet
 
-1.  **Identity Verification:** Access the [RenderOnNodes Portal](https://app.renderonnodes.com) and authenticate using your preferred strategic wallet.
-2.  **Asset Collateral (Optional):** Ensure your settlement address holds sufficient **RON** (Compute Credits) and a marginal **SOL** reserve for ledger interaction fees.
-3.  **Active Session:** Once bonded, the portal will provide real-time telemetry regarding your current compute limits and account standing.
+The RenderOnNodes platform uses the Solana blockchain strictly for logging transactions and handling secure escrows. You do not need to understand crypto to use it.
 
----
+1. Navigate to the **Web Portal** (app.renderonnodes.com).
+2. Click **Connect Wallet** in the top right corner.
+3. Select your provider (e.g., Phantom) and approve the connection.
+4. Ensure your wallet has **RON** tokens to pay for compute, and a tiny fraction of **SOL** (e.g., $0.05) to pay for the system's ledger logging fees.
 
-## Phase 2: Strategic Asset Staging
-RenderOnNodes utilizes a **Stateless Staging Fabric** to handle large-scale project files without central bottlenecks.
+## Step 2: Prepare Your Scene
 
-1.  **Project Introspection:** Use the **One-Click Plugin** or the dedicated **Staging Engine** to scan your scene for external dependencies (textures, cache files, HDRIs).
-2.  **Autonomous Staging:** The system will automatically package these dependencies and initiate a 256-bit encrypted stream to the staging buffer.
-3.  **Validation:** Once the bitstream transfer is complete, the network controller verifies the integrity of the staged artifacts before enabling mission initiation.
+If your 3D scene references external images, caches, or HDRIs on your local hard drive, the remote network GPUs won't be able to find them. You must pack your scene before uploading.
 
----
+1. Open your project in Blender.
+2. Go to **File > External Data > Pack Resources**.
+3. Save your `.blend` file. 
 
-## Phase 3: Mission Initiation & Execution
-With your assets staged, you are ready to trigger a distributed compute mission.
+*For detailed instructions on optimizing your scene for speed, read the [Scene Preparation Guide](./scene-preparation).*
 
-1.  **Configuration:** Define your mission parameters (Parallelization factor, Output resolution, Priority tier).
-2.  **Escrow Authorization:** Sign the programmatic fund lock. This secures the compute resources required for your task.
-3.  **Distribution:** The **[Optimized Distribution Logic](../concepts/scheduler-and-queues)** immediately allocates your task fragments across the global agent pool.
-4.  **Finality Progress:** Monitor the real-time progress via the **Live Monitoring Dashboard**.
+## Step 3: Launch Your Render
+
+1. On the web portal, navigate to the **Client Dashboard**.
+2. Click the **New Render Job** button.
+3. Upload your packed `.blend` file.
+4. Define your desired resolution and sample count.
+5. Click **Submit**.
+
+The network will automatically lock your RON escrow and distribute your frames to the network. You can watch your frames complete in real-time under the **Active Jobs** tab!
 
 ---
 
 ## Next Steps
-For detailed instructions on optimizing your scene for the network's distribution engine, proceed to the **[Asset Management & Preparation](./scene-preparation)** guide.
+Want to learn exactly how to manage running jobs and download your final products? Read the **[Creating & Managing Jobs](./job-management)** guide.

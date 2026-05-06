@@ -1,48 +1,46 @@
 ---
 id: job-management
-title: Management Portal Guide
-sidebar_label: Portal Guide
+title: Creating & Managing Jobs
+sidebar_label: Job Management
 sidebar_position: 3
 ---
 
-# Management Portal Guide
+# Creating & Managing Jobs
 
-The **RenderOnNodes Management Portal** is your central cockpit for network orchestration. It provides real-time visibility into mission status, financial finality, and agent performance.
+The **Client Dashboard** is your primary interface for submitting renders to the global network. This guide walks you through the exact steps to create a new job and monitor your fleet of renders.
 
----
+### Step 1: Initiating a New Job
 
-## 1. Mission Configuration
-When initiating a new compute mission, the portal provides a high-fidelity configuration suite.
+Once your wallet is connected and funded:
+1. Navigate to the **Client Dashboard**.
+2. Click the bright blue **New Render Job** button located at the top right of the screen.
+3. The **Create New Render Job** modal will appear.
 
-- **Priority Allocation:** Select between *Standard* and *Priority Allocation tiers*. Priority tiers guarantee routing to the highest-trust agents with the lowest latency profiles.
-- **Dynamic Chunking:** Define the fragmentation factor for your animation. The **[Distribution Engine](../concepts/scheduler-and-queues)** will automatically split your sequence into these discrete missions.
-- **Resource Constraints:** Optionally restrict your mission to specific hardware tiers (e.g., "Minimum 24GB VRAM Agents").
+<div style={{textAlign: 'center', margin: '30px 0'}}>
+  <img src="/img/create-job-modal.png" alt="Create New Render Job Modal" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+</div>
 
----
+### Step 2: Uploading Your Scene
 
-## 2. Real-Time Telemetry
-Once a mission is ACTIVE, the portal displays a live stream of network telemetry.
+In the upload menu, you need to provide the network with your `.blend` file. As shown in the panel above:
+1. You can either **Drag & Drop** your `.blend` (or `.zip` project archive) file into the designated area, or click the **Explore File System** button to browse your computer.
+2. Max upload limit is **2GB** for a `.zip` and **500MB** for a standalone `.blend` file.
+3. Once selected, click the **Next: Settings** button at the bottom right. 
 
-- **Global Mesh View:** Visualize your compute task fragments being processed across the global network in real-time.
-- **Agent Vitals:** Monitor the thermal and load status of the specific agents assigned to your mission.
-- **Log Streaming:** Real-time access to the compute output stream (stdout), allowing you to identify any environment-level exceptions immediately.
+### Step 3: Monitoring Active Renders
 
----
+Once submitted, the system will instantly route your scene to available execution agents.
+* You can track the progress under the **Active Jobs** section of the dashboard.
+* Click on any specific job to see the live frame rendering progress and estimated time to completion.
+* The 4 primary metrics banners (Active Renders, Frames Today, Total Frames, Time Saved) will update in real-time as your job progresses.
 
-## 3. Financial Finality & History
-The portal provides a historical audit trail for every interaction with the **Strategic Ledger**.
+### Step 4: Retrieving Results
 
-- **Cumulative Consumption:** Monitor your RON balance and active resource locks in real-time.
-- **Transaction Proofs:** Every settlement has a corresponding cryptographic signature that links directly to a strategic explorer for public audit.
-- **Historical Analysis:** Review the cost-per-frame and time-to-finality for previous missions to better estimate future project budgets.
+When the job reaches 100% completion, it will move from the `Active Jobs` tab to the `All Jobs` ledger.
+1. Click on the completed job.
+2. Ensure the status reads **FINALIZED**.
+3. Click the **Download Final Render** button to save the completed frames or video file directly to your local machine.
 
----
-
-## 4. Collaborative Features (Enterprise)
-For studios and high-volume teams, the portal supports collaborative management.
-- **Resource Buckets:** Organization-level RON pools to manage compute across multi-artist teams.
-- **Telemetry Sharing:** Share real-time mission status links with stakeholders for review.
-
-:::info[Next Step]
-To understand how to interpret the performance markers and mission status signals, proceed to the **[Monitoring & Mission Finality](./monitoring)** guide.
+:::info
+Your job results are temporarily stored securely. Ensure you download your renders promptly, as the stateless staging layer deletes completed jobs after an expiration period.
 :::

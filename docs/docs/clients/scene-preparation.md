@@ -1,55 +1,51 @@
 ---
 id: scene-preparation
-title: Asset Management & Preparation
-sidebar_label: Asset Preparation
+title: Scene Preparation
+sidebar_label: Scene Preparation
 sidebar_position: 2
 ---
 
-# Asset Management & Preparation
+# Scene Preparation
 
-To leverage the power of a globally distributed network, your project assets must be structured for mobility. This guide outlines the professional standards required to ensure your mission executes without environment-level exceptions.
+Before uploading your `.blend` file to the network, you must ensure that all global execution agents can properly open and read your file. If you have missing textures or physics caches, the network will try to render your scene and it will fail or render incorrectly (e.g., bright pink missing textures).
 
----
+Follow this checklist for every file you upload to RenderOnNodes.
 
-## 1. The Mobility Requirement: Relative Paths
-Because your project will be executed across multiple independent agents, all internal file references must be relative to the primary project entry point (the `.blend` file).
+## 1. Pack All External Data
 
-- **Standard Execution:** `//textures/diffuse_01.jpg` (Success)
-- **Hard-Linked Execution:** `C:/Users/Artist/Desktop/Textures/diffuse_01.jpg` (Failure)
+If your `.blend` file relies on external models, HDRIs, or image textures stored on your local `C:/` drive, the cloud GPUs will not be able to find them.
 
-**Optimization:** Use the internal Blender utility *File > External Data > Make All Paths Relative* before initiating the staging process.
+**How to fix this in Blender:**
+1. Open your finished project.
+2. At the top left, click **File**.
+3. Hover over **External Data**.
+4. Click **Pack Resources**. 
 
----
+This will embed all images and HDRIs directly inside your `.blend` file. Your file size will increase, but it will guarantee the network can access everything.
 
-## 2. Dependency Consolidation
-The RenderOnNodes **Staging Engine** supports the automatic detection of external dependencies. However, for complex simulations or high-fidelity geometry, we recommend strategic consolidation.
+## 2. Bake Your Physics
 
-- **Simulation Caches:** Ensure all physics (Fluid, Smoke, Cloth) are baked using a **Single Mesh Cache (.bphys / .vdb)** located within the project sub-directory.
-- **External Geometry:** If using linked libraries, ensure they are packable or reside within the same directory tree as the master scene.
+If you are using fluid, smoke, cloth, or rigid body simulations, you **must** bake your cache to disk or directly into the file. Unbaked physics simulations execute differently on different hardware, which will lead to jittery animations.
 
----
+1. Select your simulation object.
+2. Go to the Physics Properties tab.
+3. Scroll down to Cache.
+4. Ensure the cache is fully baked and saved alongside your blend file (if uploading a ZIP) or packed.
 
-## 3. High-Performance Resource Tuning
-The cost and speed of your compute mission are directly tied to your scene’s resource footprint.
+## 3. Limit Your VRAM Usage
 
-### VRAM Optimization
-The **[Distribution Engine](../concepts/scheduler-and-queues)** matches your project to agents based on available hardware memory.
-- **Recommendation:** Aim for a peak VRAM usage of **8GB - 12GB**. This ensures your mission can be allocated to 95% of the active network pool, resulting in the fastest possible mission initiation.
-- **Tip:** Use 2K or 4K textures instead of 8K where possible to maximize parallelism.
+RenderOnNodes matches your job to agents with enough VRAM (Video RAM) to open your scene. 
 
-### Adaptive Sampling
-To maximize the efficiency of the **[Automated Quality Logic](../concepts/job-lifecycle)**, utilize adaptive sampling.
-- Set a reasonable noise threshold (e.g., 0.01) rather than a fixed high sample count. This allows the network to complete mission fragments faster without sacrificing perceptual quality.
+* **The Rule:** If your scene requires 20GB of VRAM to open, only top-tier hardware (like RTX 3090s/4090s) can render it. This means you will wait longer for a match, and you may pay more.
+* **How to Optimize:** Reduce texture sizes from 8K down to 4K or 2K. Reduce polygon counts on objects that are far away from the camera. If you can keep your scene under **12GB of VRAM**, your job will instantly match with 95% of the network.
 
----
+## 4. Adaptive Sampling
 
-## 4. Final Verification Checklist
-Before committing your project to the **Stateless Staging Fabric**, ensure the following:
-- [ ] No missing textures or environment maps.
-- [ ] All simulation caches are baked to disk.
-- [ ] Render engine is set to a supported architecture (e.g., Cycles).
-- [ ] Output range (Start/End Frame) is correctly defined.
+Instead of forcing the network to calculate 4096 samples per pixel (which is very expensive), utilize Blender's built-in **Noise Threshold**.
 
-:::info[Next Step]
-Once your assets are prepared, proceed to the **[Management Portal Guide](./job-management)** to learn how to monitor your mission in real-time.
-:::
+1. Go to your Render Properties tab.
+2. Under Sampling > Render, check the **Noise Threshold** box.
+3. Set the threshold to a reasonable number (e.g., `0.01` or `0.05`).
+4. Set the Max Samples high.
+
+This tells the network to stop rendering a pixel once it is "clean enough," saving you massive amounts of RON tokens across an entire animation sequence.

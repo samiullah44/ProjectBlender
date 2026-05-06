@@ -1,76 +1,46 @@
 ---
 id: node-lifecycle
-title: Node Lifecycle & Reputation
+title: Node Lifecycle & Trust
 sidebar_label: Node Lifecycle
 sidebar_position: 3
 ---
 
-# Node Lifecycle & Reputation
+# Node Lifecycle & Trust
 
-**Mental Model:** An Execution Agent is a high-availability network resource. Reliability is its primary value proposition. The platform treats every Agent as a dynamic entity that must consistently validate its compute capacity and network stability to maintain access to premium task tiers.
+As a Node Provider, your computer's job is to sit and wait for work. To do this effectively, the platform needs to know exactly what state your hardware is in at all times.
 
----
+## The 4 Node States
 
-## Agent Operational States
+When you look at your Provider Dashboard, you will see your Nodes moving between these four states automatically:
 
-An agent transitions through several strategic states to ensure network integrity and task finality.
+### 1. Online (Idle)
+You have opened the Node software on your desktop and clicked Connect. Your computer is telling the platform, "I am awake, my GPU is ready, give me a job." 
 
-```mermaid
-stateDiagram-v2
-    [*] --> REGISTERED: Authorization Secured
-    REGISTERED --> ONLINE: Session Established
-    ONLINE --> VALIDATING: Capacity Verification
-    VALIDATING --> ACTIVE: Performance Baseline Certified
-    ACTIVE --> BUSY: Resource Lock Acquired
-    BUSY --> ACTIVE: Compute Mission Success
-    ACTIVE --> OFFLINE: Session Termination
-    OFFLINE --> ONLINE: Session Resumption
-```
+### 2. Validating
+Before we give a brand new node a paying job, we test it. We send a tiny, fake render job to see if the hardware actually works as fast as it claims to. If the test passes, the node moves to Active.
 
-### 1. REGISTERED
-The initial entry point where a hardware profile is bonded to a secure settlement address. In this state, the agent is recognized by the network directory but has no compute privileges.
+### 3. Active & Busy
+Your computer has been matched with an Artist's job. Your local GPU usage will spike to 100%, your fans will spin up, and you are currently rendering frames. While you are Busy, the platform knows not to send you any other jobs. 
 
-### 2. ONLINE (Idle)
-The agent has established a persistent, high-frequency connection to the Orchestration Plane. It broadcasts its operational telemetry (resource load, thermal metadata) but is not yet qualified for production workloads.
-
-### 3. VALIDATING (Certification)
-Before promotion to the active resource pool, the agent must pass a **Performance Certification** task. This process verifies that the reported capacity matches actual throughput, preventing resource misrepresentation.
-
-### 4. ACTIVE
-The agent is certified and entered into the global matchmaking discovery pool. It is fully qualified to accept and execute production fragments.
-
-### 5. BUSY
-The agent has acquired a dedicated resource lock. During this phase, it is removed from the discovery pool to ensure 100% resource dedication to the current compute mission.
+### 4. Offline
+If your computer goes to sleep, or you close the Node software, or you lose Wi-Fi, the platform immediately marks you as offline. You will not receive any jobs or earn any money in this state.
 
 ---
 
-## The Network Trust Engine
+## The Trust Score Engine
 
-RenderOnNodes utilizes a multi-dimensional **Trust Score (0-100)** to grade agent quality and reliability.
+We don't let just anyone render files. To keep the network fast and reliable for Artists, every Node Provider has a hidden **Trust Score** between 0 and 100.
 
-### Performance Indicators
-- **Task Finality:** Consistent delivery of valid datasets within predicted time envelopes.
-- **Session Consistency:** Extended operational windows without unplanned disconnections.
-- **Throughput Stability:** Reliable hardware performance profiles without degradation markers.
+### How to get a High Trust Score (90-100)
+* Stay **Online** for long periods without disconnecting.
+* Render frames quickly without crashing.
+* Keep your GPU cool so it doesn't slow down (thermal throttle) in the middle of a render.
 
-### Risk Indicators
-- **Execution Failures:** Environment-level exceptions or process-level interruptions.
-- **Mission Abandonment:** Unexpected termination of the agent process while resource locks are active.
-- **Data Mismatches:** Returning results that fail the network's proprietary verification checks.
+If your Trust Score is high, **you get right of first refusal on the best-paying jobs**.
 
----
+### What lowers your Trust Score?
+* Crashing during an Active render.
+* Delivering corrupted images.
+* Going offline constantly.
 
-## Economic Impact of Reputation
-
-The **Job Scheduler** uses Trust Scores as a primary weighting factor:
-
-| Trust Score | Job Tier Eligibility | Priority |
-|---|---|---|
-| **90 - 100** | Premium (High RON/Frame) | Tier 1 (First access) |
-| **70 - 89** | Standard | Tier 2 |
-| **50 - 69** | Economy | Tier 3 |
-| **Below 50** | Benchmarking Only | Suspended from paid queue |
-
-:::tip[Optimization Tip]
-Providers are encouraged to maintain a stable environment with adequate cooling to prevent thermal throttling, which can inadvertently lower render performance and hurt your Trust Score.
-:::
+If a Node Provider's Trust Score drops below 50, the platform will ban their machine from receiving any high-priority or high-paying jobs until they prove their computer is stable again.

@@ -1,0 +1,136 @@
+﻿
+> docs@0.0.0 build
+> docusaurus build
+
+
+ ------------------------------------------------------------------------------                                                                                                         Update available 3.10.0 ΓåÆ 3.10.1                                                                                                                To upgrade Docusaurus packages with the latest version, run the                                       following command:                                            `npm i @docusaurus/core@latest @docusaurus/faster@latest                @docusaurus/preset-classic@latest @docusaurus/module-type-aliases@latest                 @docusaurus/tsconfig@latest @docusaurus/types@latest`                                                                                               ------------------------------------------------------------------------------ 
+
+[INFO] [en] Creating an optimized production build...
+
+node.exe : [ERROR] Error: Unable 
+to build website for locale en.
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~
+    + CategoryInfo          : Not 
+   Specified: ([ERROR] Error: ..  
+  . for locale en.:String) [],    
+ RemoteException
+    + FullyQualifiedErrorId : Nat 
+   iveCommandError
+ 
+    at tryToBuildLocale 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\core\lib\commands\
+build\build.js:76:15)
+    at async C:\Users\Jafar Hussai
+n\Desktop\newfolder\renderNodes\do
+cs\node_modules\@docusaurus\core\l
+ib\commands\build\build.js:34:9
+    ... 4 lines matching cause 
+stack trace ...
+    at async file:///C:/Users/Jafa
+r%20Hussain/Desktop/newfolder/rend
+erNodes/docs/node_modules/@docusau
+rus/core/bin/docusaurus.mjs:44:3 {
+  [cause]: Error: Docusaurus 
+found broken links!
+  
+  Please check the pages of your 
+site in the list below, and make 
+sure you don't reference any path 
+that does not exist.
+  Note: it's possible to ignore 
+broken links with the 
+'onBrokenLinks' Docusaurus 
+configuration, and let the build 
+pass.
+  
+  Exhaustive list of all broken 
+links found:
+  - Broken link on source page 
+path = /:
+     -> linking to /docs/intro
+  
+      at throwError 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\logger\lib\logger.
+js:80:11)
+      at reportBrokenLinks 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\core\lib\server\br
+okenLinks.js:250:47)
+      at handleBrokenLinks 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\core\lib\server\br
+okenLinks.js:282:5)
+      at executeBrokenLinksCheck 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\core\lib\commands\
+build\buildLocale.js:123:47)
+      at C:\Users\Jafar Hussain\De
+sktop\newfolder\renderNodes\docs\n
+ode_modules\@docusaurus\core\lib\c
+ommands\build\buildLocale.js:98:67
+      at Object.async 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\logger\lib\perfLog
+ger.js:42:47)
+      at buildLocale 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\core\lib\commands\
+build\buildLocale.js:98:31)
+      at async runBuildLocaleTask 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\core\lib\commands\
+build\build.js:91:5)
+      at async C:\Users\Jafar Huss
+ain\Desktop\newfolder\renderNodes\
+docs\node_modules\@docusaurus\core
+\lib\commands\build\build.js:72:13
+      at async tryToBuildLocale 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\core\lib\commands\
+build\build.js:68:9)
+      at async C:\Users\Jafar Huss
+ain\Desktop\newfolder\renderNodes\
+docs\node_modules\@docusaurus\core
+\lib\commands\build\build.js:34:9
+      at async mapAsyncSequential 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\utils\lib\jsUtils.
+js:21:24)
+      at async Command.build 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\core\lib\commands\
+build\build.js:33:5)
+      at async Promise.all (index 
+0)
+      at async runCLI 
+(C:\Users\Jafar Hussain\Desktop\ne
+wfolder\renderNodes\docs\node_modu
+les\@docusaurus\core\lib\commands\
+cli.js:56:5)
+      at async file:///C:/Users/Ja
+far%20Hussain/Desktop/newfolder/re
+nderNodes/docs/node_modules/@docus
+aurus/core/bin/docusaurus.mjs:44:3
+}
+[INFO] Docusaurus version: 3.10.0
+Node version: v24.13.0

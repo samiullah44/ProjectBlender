@@ -1,71 +1,34 @@
 ---
 id: scheduler-and-queues
-title: Scheduler & Queues
-sidebar_label: Scheduler & Queues
+title: How Jobs are Assigned
+sidebar_label: Job Assignments
 sidebar_position: 4
 ---
 
-# Scheduler & Queues
+# How Jobs are Assigned (The Matchmaker)
 
-**Mental Model:** The Distribution Engine is the platform's high-frequency "Task Clearing House." It functions as a strategic balancer, continually matching resource "Supply" (Agent availability) against compute "Demand" (Job requirements) based on liquidity, latency, and hardware constraints.
+When an Artist uploads a job, how does the platform decide which of the thousands of Node Providers around the world actually gets to render it?
 
----
+This is handled by our automated backend Matchmaker engine, which evaluates three main things in less than a second:
 
-## Optimized Distribution Logic
+## 1. Hardware Compatibility
+The engine first looks for nodes that can actually handle the job.
+* For example, if your Blender scene requires 12GB of VRAM to open, the Matchmaker instantly filters out all Node Providers running older 8GB graphics cards.
 
-The RenderOnNodes Distribution Engine is a specialized, low-latency system designed to maximize global throughput. When a mission is submitted, the engine evaluates four primary strategic variables to determine optimal agent allocation.
+## 2. The Trust Score (Reputation)
+As explained in the [Node Lifecycle](./node-lifecycle) guide, Node Providers earn a Trust Score between 0 and 100 based on their reliability.
 
-### 1. Hardware Determinants (Baseline Constraints)
-The engine first filters the global agent directory for resources that meet the mission's immutable operational requirements:
-- **Compute Architecture:** Verifying the agent's compatibility with the required execution engine.
-- **Resource Saturation:** Ensuring the mission's memory footprint fits within the agent's dedicated capacity.
-- **Instruction Compatibility:** Confirming the environment and binary versioning match the project specification.
+If there is a highly urgent job that pays well, the Matchmaker will **always** offer it to the Nodes with the highest Trust Scores first (e.g., 95+). If none of them are available, it offers the job to the next tier down.
 
-### 2. Reputation & Trust Grading (Dynamic Weighting)
-As detailed in the **[Node Lifecycle](./node-lifecycle)**, the Trust Score acts as a prioritization multiplier. Agents with a Tier-1 reputation are prioritized for high-value, time-sensitive mission fragments.
-
-### 3. Geographic Optimization (Latency Minimization)
-To minimize transit overhead, the engine prefers agents with the lowest latency profiles to the specific staging buffer where the project assets are located.
-
-### 4. Strategic Priority
-Clients can specify the desired urgency of their compute request:
-- **Priority Tier:** Optimized for speed; routed exclusively to the highest-performing, most reliable agents.
-- **Standard Tier:** Balanced for cost and efficiency; executed across the broader active agent pool.
+## 3. The Artist's Urgency
+When an Artist uploads a render, they can choose how fast they need it.
+* **Standard Priority:** The job goes into the normal queue and is distributed evenly across the network to provide the cheapest possible price.
+* **High Priority:** The job jumps to the front of the line and is brute-forced across the highest-tier nodes available, guaranteeing blazing fast speeds at a slightly higher cost.
 
 ---
 
-## Segmented Prioritization Strategy
+## What happens when a job gets stuck?
 
-RenderOnNodes utilizes a **Segmented Prioritization Queue (SPQ)** to manage thousands of concurrent compute fragments.
+If the Matchmaker gives a frame to a Node Provider, and that Node Provider's internet cuts out, the platform has an automated fail-safe.
 
-```mermaid
-graph LR
-    Sub[Intake Gate] --> Guard{Validator}
-    Guard --> High[Priority Buffer]
-    Guard --> Standard[Standard Buffer]
-    Guard --> Basic[Base Buffer]
-
-    High --> N1[Tier 1 Agents]
-    Standard --> N2[Tier 2 Agents]
-    Basic --> N3[Evaluating Agents]
-```
-
-### Fragment Parallelization
-For large-scale missions, the engine utilizes **Atomic Parallelization**:
-- Complex projects are automatically fragmented into discrete compute missions.
-- These fragments are dispatched to multiple agents simultaneously across the global network.
-- This results in a non-linear reduction in execution time, allowing multi-hour tasks to be completed in minutes.
-
----
-
-## Failover & Retries
-
-If a node accepts a job but fails to return a frame within the **Expected Time To Render (ETTR)**:
-1. The scheduler marks the node as `FAILED`.
-2. The node's Reputation Score is penalized.
-3. The specific frame is instantly put back into the high-priority "Retry Queue" and reassigned to a different, higher-trust node.
-4. The Artist is never charged for the failed attempt.
-
-:::info[Technical Note]
-The scheduler is built on a high-availability cluster using gRPC for near-zero latency communication with nodes, ensuring the "assignment-to-execution" time is measured in milliseconds.
-:::
+The platform knows exactly how long a frame *should* take to render. If the Node Provider exceeds that time limit by too much, or drops completely offline, the Matchmaker instantly claws the frame back and gives it to a different, highly-trusted Node so the Artist doesn't have to wait.

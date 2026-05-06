@@ -1,62 +1,43 @@
 ---
 id: settlement-system
-title: Settlement & Payout Engine
-sidebar_label: Settlement System
+title: Automated Payouts
+sidebar_label: Automated Payouts
 sidebar_position: 6
 ---
 
-# Settlement & Payout Engine
+# Automated Payouts
 
-**Mental Model:** The Settlement System is the network’s immutable "Clearing House." It ensures that compute value is exchanged only upon cryptographic verification of results. By automating the escrow-to-payout pipeline on-chain, RenderOnNodes removes counterparty risk and provides immediate liquidity to agents.
+One of the biggest problems with traditional freelance rendering is trust. Artists worry about paying for renders that look broken, and Node Providers worry about rendering thousands of frames and never getting paid.
 
----
+**RenderOnNodes solves this by completely automating the payment process.**
 
-## The Distributed Escrow Mechanism
+## The Escrow Guarantee
 
-RenderOnNodes utilizes a specialized **Strategic Ledger Layer** to orchestrate all network value transfers. This system functions as a neutral, decentralized escrow vault.
+When an Artist clicks "Submit," they do not hand their money to the Node Provider, nor do they hand it to our company. 
 
-### Phase 1: Capital Commitment
-When a Compute Client initiates a workload request, the platform calculates the **Projected Resource Load**.
-- The Client must cryptographically authorize a commitment of this value into the Escrow Vault.
-- **Verification:** The distribution engine will not allocate network resources to the task until the "Capital Lock" state is confirmed on the immutable ledger.
+Instead, the money (**RON** tokens) is locked in a neutral "Escrow" smart contract on the blockchain. The money is frozen there, meaning neither the Artist nor the Node Provider can touch it.
 
-### Phase 2: Compute Verification
-Once an Execution Agent submits a mission fragment, the orchestration plane executes **Automated Quality Logic (AQL)**:
-- **Integrity Validation:** Comparing output fingerprints against predicted baseline results.
-- **Specification Check:** Confirming the final artifact matches the project’s technical requirements.
+## Verification
 
-### Phase 3: Liquidation & Distribution
-Following successful verification, the network triggers an automated liquidation:
-- **Agent Remuneration (95%):** The primary portion of the locked value is transferred directly to the Agent’s settlement address.
-- **Network Ecosystem Fee (5%):** A minor portion is redirected to the protocol treasury to maintain orchestration infrastructure and long-term network sustainability.
+When the Node finishes rendering the frame, it uploads the image. Our platform analyzes the image automatically:
+* Is it completely black?
+* Is the file size totally wrong?
+* Is it corrupted?
 
----
+If the frame passes the quality check, the platform sends a cryptographic signal to the Escrow contract, telling it the job is complete.
 
-## Automated Remuneration Logic
+## Distribution
 
-To ensure maximum efficiency and network speed, agent rewards are managed via a **Settlement Threshold**.
+The exact moment the frame is verified, the Escrow contract automatically unlocks and splits the money:
 
-- Rewards are tracked in real-time as **Pending Credits** for every mission fragment successfully delivered.
-- Once the credit balance crosses the platform’s **Operational Threshold**, the system automatically triggers a ledger-level payout.
-- **Platform Managed Costs:** The network internally manages all interaction costs for these automated payouts. Agents receive 100% of their cross-threshold earnings without losing value to transaction fees.
+* **95% goes directly to the Node Provider's wallet.**
+* **5% goes to the RenderOnNodes platform** to pay for server costs, storage, and matcher engine maintenance.
 
----
+If the frame was bad, or the Node crashed, **100% of the money goes safely back to the Artist**. 
 
-## Strategic Transparency
+### Do I have to pay transaction fees?
 
-Because the network logic is anchored to a strategic ledger, every payout is verifiable and auditable. 
-Agents and Clients can view their **Reference Signatures** within the management portal to confirm the status and proof of payment on the public ledger.
+Normally, every time a smart contract moves money, there is a tiny network fee (called "Gas"). 
+Because we want RenderOnNodes to be incredibly simple to use, **the platform pays all of these automated payout fees for you.**
 
----
-
-## Handling Exceptions
-
-In the rare event of a fragmented delivery or execution anomaly:
-1. The orchestration plane flags the specific mission segment for review.
-2. The committed funds remain in the escrow vault temporarily.
-3. If a failure is verified (agent interruption or data corruption), the locked value is **returned to the Client**.
-4. The Agent receives no reward and incurs a reputation penalty within the network performance registry.
-
-:::info[Security Note]
-The Backend's authority to release funds is restricted by a multi-signature wallet logic, ensuring that any single server compromise cannot drain the network's global escrow funds.
-:::
+Node Providers receive all 95% of their earnings automatically dropped into their Phantom wallets without having to click any buttons or pay any hidden withdrawal fees.

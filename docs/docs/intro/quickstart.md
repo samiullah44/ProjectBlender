@@ -8,78 +8,44 @@ sidebar_position: 2
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# Quickstart: From 0 to Render
+# Platform Quickstart
 
-**Mental Model:** RenderOnNodes is a **two-sided marketplace**. You are either *buying* compute power (Client) or *selling* compute power (Provider). The network connects you cryptographically.
+To get started on RenderOnNodes, you need to decide if you are uploading files to be rendered, or if you are providing hardware to earn money.
 
-This guide is the fastest way to get your machine connected, regardless of which side of the marketplace you are joining.
-
----
-
-## Choose Your Path
-
-> **Decision Point:** Are you a 3D Artist who needs scenes rendered instantly, or are you a Hardware Owner with a high-end GPU looking to earn passive income?
-
-Select your path below to see your specific quickstart guide:
+**Choose your path below to see exact setup instructions:**
 
 <Tabs groupId="user-role">
-  <TabItem value="client" label="I want to Render Scenes (Client)" default>
+  <TabItem value="client" label="I am an Artist (Rendering)" default>
 
-### The Compute Client Journey
+### How to Start Rendering
 
-If you have a `.blend` file and want to use the network's decentralized GPUs to render it at blistering speeds:
+If you have a `.blend` file and want to render it using the network:
 
-1. **Connect your Wallet:** 
-   Click the **"Client"** button on the top right of the navigation bar, and connect your Solana Phantom or Solflare wallet.
-   *(Don't have a wallet? Read the [Wallet Setup Guide](./wallet-setup)).*
-
-2. **Fund your Account:** 
-   Ensure your account holds a sufficient balance of **RON** (Compute Credits). These credits are the economic fuel of every compute mission on the network.
-
-3. **Submit your Mission:** 
-   Navigate to the **Management Portal** and create a new compute mission. The platform will stage your scene assets to the secure **Staging Fabric** and initialize the job allocation pipeline. *(Read the [Asset Preparation](../clients/scene-preparation) guide to ensure your project is correctly packaged).*
-
-4. **Retrieve Results:** 
-   Once the network verifies your job has reached **FINALIZED** status, the completed frames become available for retrieval directly from your portal dashboard.
+1. **Get a Wallet:** Install the **Phantom** browser extension. [(See Wallet Setup)](./wallet-setup).
+2. **Login:** Go to the [RenderOnNodes Portal](https://app.renderonnodes.com) and click **Connect Wallet**.
+3. **Submit a Render:** On the Client Dashboard, click the bright blue **New Render Job** button in the top right.
+4. **Track Progress:** Watch the real-time telemetry like **Frames Today** and monitor your **Active Jobs** ledger directly from the dashboard.
 
 <div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/artist-dashboard.png" alt="RenderOnNodes Client Dashboard" style={{borderRadius: '8px', border: '1px solid #10B981', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
-  <p style={{fontSize: '0.8rem', color: '#888'}}>*The RenderOnNodes Client Management Portal.*</p>
+  <img src="/img/client-dashboard-new.png" alt="RenderOnNodes Client Dashboard" style={{borderRadius: '8px', border: '1px solid #10B981', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
 </div>
 
   </TabItem>
-  <TabItem value="provider" label="I want to Earn RON (Provider)">
+  <TabItem value="provider" label="I am a Node Provider (Earning)">
 
-### The Node Provider Journey
+### How to Start Earning Provider
 
-If you have a Windows PC with an NVIDIA RTX or AMD Radeon GPU and want to earn tokens for processing other people's compute missions:
+If you have a Windows PC with a powerful GPU and want to earn money:
 
-1. **Download the Execution Agent:** 
-   Toggle the top navigation to **"Provider"** and download the **RenderOnNodes Execution Agent** — a lightweight desktop application.
-
-2. **Link your Settlement Address:** 
-   When you first open the application, you will be prompted to connect your Solana wallet. This is the address where your earned **RON** will be automatically delivered.
-
-3. **Activate the Agent:** 
-   Click **"Start Agent"**. As long as the Execution Agent is running and your system passes performance validation, the network's **[Distribution Engine](../concepts/scheduler-and-queues)** will autonomously assign compute missions to your hardware.
-
-4. **Earn Tokens Automatically:** 
-   Once your agent completes verified missions and crosses the **[Settlement Threshold](../concepts/settlement-system)**, RON tokens are automatically credited to your wallet — platform-managed, gas free.
+1. **Get a Wallet:** Install the **Phantom** browser extension. This is where your earnings will be automatically sent. [(See Wallet Setup)](./wallet-setup).
+2. **Login:** Go to the [RenderOnNodes Portal](https://app.renderonnodes.com) and toggle to the **Provider** view at the top.
+3. **Set Payout Wallet:** In the large **Payout Wallet** section, paste your Solana address and click **Save**. (You cannot receive jobs without doing this).
+4. **Download Software:** Click the **Node Software** button to download the execution agent.
+5. **Add Node:** Click the purple **+ Add Node** button to register your machine and start earning.
 
 <div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/node-dashboard.png" alt="RenderOnNodes Provider Dashboard" style={{borderRadius: '8px', border: '1px solid #8B5CF6', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
-  <p style={{fontSize: '0.8rem', color: '#888'}}>*The RenderOnNodes Node Provider Dashboard.*</p>
+  <img src="/img/provider-dashboard-new.png" alt="RenderOnNodes Provider Dashboard" style={{borderRadius: '8px', border: '1px solid #8B5CF6', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
 </div>
 
   </TabItem>
 </Tabs>
-
----
-
-## Next Steps
-
-Now that you understand the basic sequence, you need to set up the cryptography that powers your account. Proceed to the next section to configure your Solana Wallet.
-
-:::info[Deep Dive]
-If you are heavily technical and want to know *exactly* what happens between step 3 and step 4, read the [Job Lifecycle (End-to-End)](../concepts/job-lifecycle) architectural document.
-:::

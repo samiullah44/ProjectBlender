@@ -1,86 +1,43 @@
 ---
 id: job-lifecycle
-title: Job Lifecycle (End-to-End)
+title: Job Lifecycle
 sidebar_label: Job Lifecycle
 sidebar_position: 2
 ---
 
-# The Job Lifecycle: End-to-End
+# The Job Lifecycle
 
-**Mental Model:** Think of a job on RenderOnNodes not just as a file transfer, but as a **distributed, cryptographic transaction** orchestrated by the Backend and settled by a Solana Smart Contract. No party needs to trust the other; the system enforces the rules of engagement automatically.
+When an Artist clicks "Submit Render", a lot of automated software instantly springs into action to deliver the final product as fast as possible.
 
----
+Here is a step-by-step breakdown of how a render actually gets processed.
 
-## Strategic Lifecycle Overview
+## 1. Upload & Split
+When you upload your packed `.blend` file on the Client Dashboard, it goes directly to our secure storage servers. The platform instantly analyzes the file and splits it up. For example, if you upload a 100-frame animation, the platform creates 100 separate "mini-jobs", ready to be distributed.
 
-The following sequence illustrates the orchestration of a compute mission across the network’s logic planes.
+## 2. The Payment Lock (Escrow)
+Before handing the job out, the platform estimates the total cost. It takes the required **RON** from your connected wallet and locks it securely in an **Escrow Account**. 
+* This proves to the network that you have the money to pay.
+* It guarantees the Node Providers that they won't get scammed.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Client as Compute Client
-    participant Plane1 as Asset Staging Plane
-    participant Plane2 as Network Orchestration
-    participant Plane3 as Distributed Execution
-    participant Plane4 as Strategic Ledger
-    
-    Note over Client, Plane1: 1. Strategic Staging
-    Client->>Plane2: Request Workload Authorization
-    Plane2-->>Client: Dispatch Secure Access Credentials
-    Client->>Plane1: Stream Asset Bitstream
-    
-    Note over Plane2, Plane4: 2. Financial Finality
-    Plane2->>Plane4: Instantiate Security Escrow
-    Client->>Plane4: Authorize Resource Lock
-    
-    Note over Plane2, Plane3: 3. Autonomous Execution
-    Plane2->>Plane3: Dispatch Task Allocation
-    Plane3->>Plane1: Retrieve Fragment Data
-    Plane3->>Plane3: Perform Compute Mission
-    Plane3->>Plane1: Commit Final Artifact
-    
-    Note over Plane2, Plane4: 4. Liquidation & Delivery
-    Plane2->>Plane4: Trigger Programmatic Payout
-    Plane4-->>Plane3: Settle Reward
-    Plane2-->>Client: Final Artifact Availability
-```
+## 3. Finding the Hardware
+Our Matchmaker engine scans the globe for available GPUs that meet the requirements of your scene. 
+* A 100-frame animation might be sent to 100 different computers simultaneously.
+* The Node software on those computers downloads the `.blend` file, opens Blender in the background, and starts rendering the specific frame it was assigned.
+
+## 4. Verification & Delivery
+As soon as a Node finishes rendering a frame, it uploads the final PNG or EXR image.
+* Our system analyzes the image. If the image is corrupted (e.g., all black, missing data), the system rejects it. 
+* If the image is perfect, the system makes it available on your Dashboard for download.
+
+## 5. Getting Paid
+Once the perfect image is verified, the Escrow Account automatically releases a portion of your locked RON and sends it directly to the Node Provider who rendered it.
 
 ---
 
-## Phase 1: Symmetric Asset Staging
-Large-scale compute mandates a high-velocity data strategy. RenderOnNodes utilizes a **Stateless Staging Plane** where project assets are streamed directly from the client to a globally distributed buffer.
-1. **Introspection:** The management portal identifies the necessary resource fragments.
-2. **Access Credentials:** The controller issues secure, time-limited cryptographic keys for asset transmission.
-3. **Optimized Streaming:** Data is transferred in parallel fragments to a secure staging environment, bypassing central platform bottlenecks to ensure maximum throughput.
+### What happens if a Node crashes in the middle?
 
-## Phase 2: Programmatic Escrow
-To maintain network integrity, every compute mission is backed by a secure financial lock.
-- The platform calculates the projected resource requirements.
-- The Client authorizes a **Capital Lock** within the strategic Ledger.
-- Only once the network confirms resource availability and financial lock finality does the mission enter the prioritized distribution queue.
-
-## Phase 3: Autonomous Mission Dispatch
-As governed by the **[Distribution Engine](./scheduler-and-queues)**, the network selects an optimal execution agent.
-- The selected agent receives secure, encrypted access to the staging buffer.
-- Compute is performed in a protected sandbox, ensuring host stability and mission privacy.
-- Upon completion, the agent commits the final artifact fingerprint to the network registry.
-
-## Phase 4: Automated Verification & Delivery
-Once the orchestration plane validates the compute integrity:
-- **Settlement:** The strategic ledger executes the programmed reward distribution.
-- **Liquidation:** The system handles all network-level interaction costs, as detailed in the **[Settlement System](./settlement-system)**.
-- **Artifact Access:** The Client is notified of mission finality, and the resulting artifacts are immediately available for retrieval via the Management Portal.
-
-For details on how payouts are batched, see the **[Settlement System](./settlement-system)** guide.
-
----
-
-## Automatic Failover (The Retry Policy)
-Nodes are independently operated hardware and can occasionally go offline due to power loss or thermal instability.
-1. **Heartbeat Timeout:** If a Node stops communicating for more than 5 minutes, the system assumes failure.
-2. **Infinite Retry:** The backend marks the Node as `OFFLINE` (penalizing its Reputation) and instantly requeues the job for the next available, high-trust Node.
-3. **No Duplicate Charges:** The Artist is never charged for a failed node attempt. One price guarantees one successful render.
-
-:::info[Deep Dive]
-Curious how the hardware is managed? Read the **[Node Lifecycle & Reputation](./node-lifecycle)** doc to learn how trust scores prevent bad actors from entering the network.
-:::
+Sometimes, a Node Provider's computer might lose power or crash due to overheating. 
+1. If the platform doesn't hear back from a node within a few minutes, it marks the node as **OFFLINE**.
+2. The platform instantly takes that broken frame and assigns it to a new, healthy computer.
+3. The original offline node gets paid **nothing**, and its reputation score drops.
+4. The Artist gets a seamless experience and only pays for the final, successful image.

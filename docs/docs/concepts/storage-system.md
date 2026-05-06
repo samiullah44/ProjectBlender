@@ -1,77 +1,35 @@
 ---
 id: storage-system
-title: Asset Management & Security
-sidebar_label: Asset Management
+title: Storage & File Privacy
+sidebar_label: File Privacy
 sidebar_position: 5
 ---
 
-# Asset Management & Security
+# Storage & File Privacy
 
-**Mental Model:** The Asset Plane is a stateless, ephemeral "Exchange Buffer." It is designed for high-velocity bitstream staging, ensuring that proprietary source data is only accessible during the active compute window and is purged immediately following mission finality.
+**Mental Model:** RenderOnNodes is a compute service, not a Dropbox alternative. We do not store your files permanently.
 
----
+When you upload your 3D scenes to the network, we treat your intellectual property with maximum security.
 
-## Infrastructure Flow
+## How Your Files Are Handled
 
-RenderOnNodes utilizes a globally distributed, high-performance **Staging Fabric** as the central buffer for mission data. This ensures that massive file assets are transferred with maximum available bandwidth, bypassing central platform bottlenecks.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant A as Client Experience
-    participant S3 as Staging Fabric
-    participant B as Orchestration Plane
-    participant N as Execution Agent
-
-    A->>B: Init Workload Request
-    B->>A: Dispatch Secure Access Credentials
-    A->>S3: Stream Asset Bitstream
-    B->>N: Assign Task Fragment
-    N->>S3: Retrieve Assets (Encrypted Read)
-    N->>N: Parallel GPU Compute
-    N->>S3: Commit Final Artifact
-    B->>A: Broadcast Finality Notification
-    A->>S3: Retrieve Render Artifact
-```
+1. **Upload:** You upload your packed `.blend` file through the Dashboard. The file goes into our Secure Temporary Storage.
+2. **Download by Node:** The specific Node Provider assigned to your job is given a temporary, one-time link. The node software on their computer automatically downloads your file in the background so it can open it in Blender.
+3. **Execution:** The Node renders the single frame it was assigned.
+4. **Upload by Node:** The Node uploads the final rendered image (PNG or EXR) back to our Secure Temporary Storage.
 
 ---
 
-## Secure Asset Isolation
+## The strict "Secure Deletion" Policy
 
-Data security is a primary concern when distributing proprietary mission files across a distributed network.
+To make sure your private 3D models and textures are safe, we strictly enforce automatic deletions across the entire network:
 
-### 1. Cryptographic Access Credentials
-At no point do Clients or Agents have permanent access keys to the network’s staging infrastructure. 
-- The Orchestration Plane generates **Temporary Access Tokens** with strict expiration windows.
-- These credentials allow the client’s browser or the agent’s compute core to stream data directly, ensuring maximum efficiency without exposing persistent permissions.
+### For Node Providers:
+The instant the Node finishes rendering your frame and uploads the final image, the Node software **automatically deletes all traces of your original `.blend` file** from their hard drive. 
 
-### 2. Isolated Execution Environment
-When an execution agent retrieves a mission fragment, it is processed within a temporary, high-security sandbox.
-- The agent’s local file system is isolated from the mission data.
-- Upon mission finality and artifact verification, the compute core performs a **Secure Wipe** of all local temporary data to prevent project persistence.
+### For the Platform:
+The final rendered images (the ones you download from the dashboard) are kept securely on our servers for **7 Days** so you have plenty of time to download them.
 
----
-
-## Strategic Retention Policy
-
-RenderOnNodes is a high-throughput compute engine, not a permanent data repository. To maintain operational leaness and ensure privacy, the network enforces an **Immutable Lifecycle Purge**:
-
-| Artifact Class | Retention Period | Action |
-|---|---|---|
-| **Mission Source Data** | 24 Hours | Automated Secure Wipe after fragment finality |
-| **Output Artifacts** | 7 Days | Purged from Staging (Must be retrieved by Client) |
-| **Mission Metadata** | Permanent | Maintained for audit and ledger transparency |
-
-:::warning[Important]
-Clients must retrieve their completed artifacts within 7 days. After this window, the staging fabric is permanently purged to ensure that no proprietary data remains on platform infrastructure.
-:::
-
----
-
-## Resilience Optimization: Parallel Staging
-
-For large-scale mission assets, the system supports **Parallel Streaming**. Instead of relying on a single, fragile data pipe, assets are streamed in discrete fragments. This ensures high reliability and fast resumption even in the event of local network fluctuations.
-
-:::info[Next Step]
-To understand how these missions are matched to financial finality, proceed to the **[Settlement System](./settlement-system)**.
+:::warning[Download your files!]
+**After 7 Days, all of your rendered images and files are permanently deleted from our servers.** Please ensure you download your finished frames from the Dashboard to your local computer before they expire.
 :::

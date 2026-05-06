@@ -32,7 +32,6 @@ const sidebars: SidebarsConfig = {
         'clients/scene-preparation',
         'clients/job-management',
         'clients/monitoring',
-        'clients/advanced-rendering',
       ],
     },
     {
@@ -48,41 +47,10 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Developer API & SDK',
-      items: [
-        'api/automation-guides',
-        'api/reference',
-        'api/authentication',
-        'api/webhooks',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Operations & Observability',
-      items: [
-        'ops/client-logs',
-        'ops/node-metrics',
-        'ops/debugging-jobs',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Security & System Guarantees',
-      items: [
-        'security/security-model',
-        'security/file-isolation',
-        'security/guarantees',
-        'security/system-constraints',
-        'security/scaling-behavior',
-      ],
-    },
-    {
-      type: 'category',
       label: 'Troubleshooting',
       items: [
-        'troubleshooting/error-index',
-        'troubleshooting/debugging-flows',
-        'troubleshooting/role-based-issues',
+        'troubleshooting/artist-issues',
+        'troubleshooting/provider-issues',
       ],
     },
   ],

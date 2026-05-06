@@ -1,59 +1,49 @@
 ---
 id: monitoring
-title: Mission Monitoring & Finality
+title: Mission Monitoring
 sidebar_label: Monitoring
 sidebar_position: 4
 ---
 
-# Mission Monitoring & Finality
+# Mission Monitoring
 
-Managing a distributed compute mission requires an understanding of the automated signals used by the **Orchestration Plane**. This guide defines the operational statuses and the lifecycle of mission finality.
+When you submit a job via the **Client Dashboard**, you can monitor exactly where your project is in the execution pipeline. Understanding these states helps you track your render's progress from upload to final delivery.
 
----
+## Dashboard Statistics
 
-## 1. Mission Status Signals
+At the top of your **Client Dashboard**, you'll see four critical metric cards:
 
-The Management Portal displays real-time status markers for every task fragment in your project.
+<div style={{textAlign: 'center', margin: '30px 0'}}>
+  <img src="/img/client-dashboard-new.png" alt="RenderOnNodes Client Dashboard" style={{borderRadius: '8px', border: '1px solid #10B981', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+</div>
 
-| Status | Strategic Meaning |
-|---|---|
-| **STAGING** | Project bitstream is being transferred to the **[Staging Fabric](../concepts/storage-system)**. |
-| **QUEUED** | Asset validation is complete; mission is awaiting distribution engine allocation. |
-| **MATCHED** | An optimal execution agent has been identified and resource locks are active. |
-| **PROCESSING** | The compute core is actively executing the mission fragment. |
-| **VERIFYING** | The orchestration plane is performing **[Automated Quality Logic](../concepts/job-lifecycle)**. |
-| **FINALIZED** | Mission success; artifact is ready for retrieval and settlement is complete. |
-| **DISPUTED** | Compute integrity check failed; mission is undergoing re-evaluation. |
+* **Active Renders:** The number of jobs currently processing on the network.
+* **Frames Today:** The total number of individual frames completed and verified in the last 24 hours.
+* **Total Frames:** Your lifetime render history on RenderOnNodes.
+* **Time Saved:** An estimation of the physical time you have saved by utilizing massive parallel distribution instead of rendering locally.
 
----
+## Job Status Indicators
 
-## 2. Interpreting Performance Markers
+Under the **Active Jobs** section, or by clicking into a specific job from the **All Jobs** ledger, you will see a status badge. Jobs transition automatically through these states:
 
-During execution, the portal provides high-definition telemetry for the assigned agents.
+### 1. 🟡 Staging / Uploading
+You have submitted the job, and the file is currently being transferred from your browser to the platform's secure asset storage layer. 
 
-- **Compute Velocity:** The real-time frames-per-minute (FPM) or samples-per-second throughput.
-- **Resource Saturation:** Monitoring the agent's hardware load. A stable saturation level indicates a healthy execution environment.
-- **Progress Delta:** The predicted vs. actual time-to-finality for the current mission.
+### 2. 🔵 Queued / Matched
+The network has received the file and is currently analyzing your task to break it up into frames. The distribution engine is actively matching execution agents with the hardware required to handle your scene.
 
----
+### 3. 🟢 Processing (Active)
+Your job has been partitioned and sent to global agents. You will see a progress bar indicating how many frames are complete versus how many total frames exist in your job. This is when the network is actively crunching your numbers.
 
-## 3. The Verification Process (Finality)
+### 4. 🟣 Verifying
+The execution agents have finished rendering, but the platform is mathematically verifying the results to ensure no artifacts, tampering, or errors occurred during processing.
 
-RenderOnNodes ensures the integrity of your results before the **Strategic Ledger** initiates any reward distribution.
+### 5. ✅ Finalized
+The render is complete, verified, and settled. You may now click into the job details and securely download the final files.
 
-1.  **Deterministic Integrity Check:** The network evaluates the artifact fingerprint to ensure it matches the predicted mission outcome.
-2.  **Resolution Reconciliation:** Verification that the final dimensions and bit-depth match your mission specification.
-3.  **Automated Acceptance:** Once verified, the **[Settlement System](../concepts/settlement-system)** automatically releases the capital lock and notifies the portal of mission success.
+## Troubleshooting Failures
 
----
-
-## 4. Troubleshooting Mission Disruption
-
-If a mission enters a **FAILED** or **DISPUTED** state:
-- **Auto-Failover:** The distribution engine will automatically attempt to re-route the mission fragment to a different agent.
-- **Zero Loss Policy:** You are only billed for missions that reach a **FINALIZED** state. If an agent fails, your locked capital is preserved.
-- **Log Inspection:** Access the mission logs via the portal to identify if the failure was due to an internal scene error (e.g., missing dependency) or an agent network interruption.
-
-:::info[Next Step]
-For advanced integration and pipeline automation, proceed to the **[Enterprise Pipeline Integration](./advanced-rendering)** guide.
-:::
+If a job returns a **FAILED** state:
+- This generally means the `.blend` file was corrupted, missing external textures, or crashed the rendering engine on multiple distributed agents.
+- **Action:** Check your local file. Ensure you used the *Pack All Into .blend* feature in Blender. Then, submit a new job.
+- Rest assured, you are **not charged RON** for jobs that fail on the network side. Your compute credits are only deducted upon verified completion.

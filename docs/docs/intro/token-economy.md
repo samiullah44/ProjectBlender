@@ -1,92 +1,63 @@
 ---
 id: token-economy
-title: The Token Economy (RON & SOL)
-sidebar_label: Token Economy
+title: How Pricing Works (RON & SOL)
+sidebar_label: Pricing & Tokens
 sidebar_position: 4
 ---
 
-# The Token Economy: RON & SOL
+# How Pricing Works: RON & SOL
 
-**Mental Model:** On RenderOnNodes, computation is purchased and sold using two distinct tokens. **RON** is the platform's native compute credit — the economic unit of rendering work. **SOL** is Solana's native token, used exclusively to pay the blockchain's transaction fees. You must hold both to interact with the platform.
+To use RenderOnNodes, you need to understand two different tokens: **RON** and **SOL**.
 
----
+* **RON:** This is the token used to pay for the actual rendering process.
+* **SOL:** This is the token used to pay tiny transaction fees to the Solana network every time money moves.
 
-## RON — The Compute Credit
+## RON (Compute Credits)
 
-**RON** (the RenderOnNodes platform token) is the unit of value used to price, purchase, and award computational work on the network.
+RON is the official currency of the RenderOnNodes platform.
+* If you are an **Artist**, you must buy and deposit RON into your account to pay for your renders.
+* If you are a **Node Provider**, you are paid exclusively in RON for the renders your hardware completes.
 
-- **Compute Clients** spend RON to submit rendering jobs.
-- **Node Providers** earn RON for every successfully completed and validated render.
+## SOL (Transaction Fees)
 
-RON is not a speculative asset on external markets — it is a utility token with a single purpose: programming GPU compute time on the RenderOnNodes network.
+Because RenderOnNodes is built on the Solana blockchain, every time you make a transaction (like depositing RON into the platform, or withdrawing it back to your wallet), the network charges a tiny fee (usually a fraction of a penny).
 
-### SOL — The Infrastructure Fuel
-Every interaction with the strategic ledger — locking resources in escrow, triggering a settlement delivery, or verifying compute finality — requires a marginal infrastructure fee paid in SOL.
+This fee must be paid in **SOL**.
 
-**Platform-Managed Fees:** To provide a seamless experience, RenderOnNodes manages the friction of these network fees for all core compute operations. Submissions, automated matching, and settlement deliveries are fully managed by the platform.
+## Funding Your Platform Balance (Depositing)
 
-**User-Initiated Transitions:** Clients and Agents are only responsible for transaction fees when manually moving funds into or out of the network’s strategic vault (Deposits and Withdrawals). We recommend maintaining a marginal SOL reserve (e.g., 0.05 SOL) to ensure these manual transactions are always prioritized by the ledger.
+Once your wallet is installed, you need to deposit RON into your platform account to pay for renders.
 
-### How the Escrow Contract Protects Both Parties
+1. Locate the **Balance Indicator** (e.g., `0.00 RNDR`) at the very top right of the navigation bar.
+2. Click the balance to open the dropdown menu.
+3. Click **Deposit**. 
 
-When a Client submits a job, the estimated cost in RON is immediately locked in the **RenderOnNodes Escrow Smart Contract** on Solana. This lock is enforced at the protocol level. Neither the Client nor the platform can access those funds while the job is active. The contract releases payment to the Provider only upon confirmed delivery of the rendered frames.
+<div style={{textAlign: 'center', margin: '30px 0'}}>
+  <img src="/img/top-nav-balance.png" alt="Top Navigation Balance Dropdown" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+</div>
 
-This mechanism eliminates a core failure mode of traditional render farms: Artists being charged for jobs that fail, or Providers completing work they are never compensated for.
+4. A popup window will appear asking you to **Connect Your Wallet**. 
+5. Click **Select Wallet** and choose your installed wallet (e.g., Phantom).
 
----
+<div style={{display: 'flex', gap: '20px', justifyContent: 'center', margin: '30px 0'}}>
+  <img src="/img/deposit-modal.png" alt="Deposit Modal" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '45%'}} />
+  <img src="/img/wallet-connect.png" alt="Wallet Connect List" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '45%'}} />
+</div>
 
-## SOL — The Network Gas
+6. Approve the connection popup in your Phantom extension to finalize the deposit process.
 
-RenderOnNodes operates entirely on the **Solana Blockchain**.
-Solana requires a transaction fee (gas) to write any state changes to the ledger. However, to ensure a seamless experience for both Artists and Providers, **RenderOnNodes pays the majority of these fees.**
+*(The exact same process applies when you wish to **Withdraw** your earnings back to your self-hosted wallet).*
 
-### Who Pays for Gas?
+**Good News:** The platform pays for almost all of this! We pay the fee when you submit jobs and when we automatically pay out Node Providers.
 
-- **The Platform Pays For:** 
-  - **Job Creation:** Opening the smart contract account when a new project is submitted.
-  - **Batch Releases:** Aggregating and processing the complex logic that releases payouts to Providers.
-- **The Users (Artist/Provider) Pay For:**
-  - **Depositing Funds:** Moving RON from your wallet into the platform's escrow balance.
-  - **Withdrawing Funds:** Moving your earnings or remaining balance back to your private wallet.
+**However:** You still need to keep a tiny amount of SOL (like $0.50 worth) in your Phantom wallet just to cover the cost of clicking the "Deposit" or "Withdraw" buttons. If you have 0 SOL, your wallet won't let you click the button.
 
-> **Decision Point:** Because the platform subsidizes the most frequent background transactions, you only need a very small amount of SOL. We recommend keeping roughly `0.02 SOL` in your wallet to cover manual deposit and withdrawal signatures. Without at least some SOL, the blockchain will reject these manual interactions.
+## How the Money Moves Safely
 
----
+You never have to worry about getting scammed on RenderOnNodes. 
 
-## The Flow of Funds
+When an Artist clicks "Submit Render", the system calculates the estimated cost and takes that amount of RON from the Artist, holding it safely in an automated Escrow pool.
+* Once the Node Provider finishes rendering the frame, the system automatically releases the money from the Escrow directly to the Provider.
+* If the Provider's machine crashes, they do not get paid, and the money safely returns to the Artist to hire a new node.
 
-The following table illustrates the allocation of token flows for a standard `10 RON` rendering job:
-
-| Party | Action | Amount |
-|---|---|---|
-| **Client** | Locks in escrow on job submission | `10 RON` |
-| **Provider** | Receives upon successful delivery | `9.5 RON` |
-| **Network** | Retained for infrastructure & token mechanics | `0.5 RON` |
-
-```mermaid
-pie title Token Allocation — 10 RON Render Job
-    "Provider Earning (95%)" : 9.5
-    "Network Fee (5%)" : 0.5
-```
-
-The network fee is not consumed arbitrarily. It funds the operational infrastructure of the matching engine, scheduler, and storage layer, and feeds the platform's long-term token equilibrium mechanism.
-
----
-
-## Funding Your Wallet
-
-Since RON is the RenderOnNodes platform's own token, it is not available on external exchanges. To fund your account:
-
-1. **Acquire SOL** from any major exchange (Coinbase, Binance, Kraken, or Bybit) using a bank transfer or card.
-2. **Withdraw SOL** to your Phantom or Solflare wallet address. When selecting the network on the exchange, always choose **Solana** — never Ethereum or BSC.
-3. **Convert or deposit RON** through the platform's internal onboarding flow once your SOL arrives.
-
-:::caution[Network Selection]
-When withdrawing from any exchange to your Solana wallet, confirm the withdrawal network is set to **Solana (SOL)**. Sending assets over the wrong network results in permanent, unrecoverable loss of funds. This error cannot be reversed by RenderOnNodes or the exchange.
-:::
-
----
-
-:::info[Next Step]
-Your wallet is funded and your account is ready. Proceed to **[Core Concepts](../concepts/architecture-overview)** to understand how the system orchestrates jobs from submission to settlement, or go directly to the **[Client Quickstart](../clients/artist-quickstart)** to submit your first render.
-:::
+Neither the Artist nor the Provider has to trust each other — the system enforces payment automatically based on the final images.
