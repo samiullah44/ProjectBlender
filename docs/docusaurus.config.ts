@@ -7,7 +7,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'RenderOnNodes Documentation',
   tagline: 'Learn how to render with RenderOnNodes',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/logo_new.png',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -66,6 +66,7 @@ const config: Config = {
         alt: 'RenderOnNodes Logo',
         src: 'img/logo_black.png',
         srcDark: 'img/logo_white.png',
+        href: 'https://www.renderonnodes.com',
       },
       items: [
         {

@@ -6,10 +6,9 @@ const Footer: React.FC = () => {
   return (
     <footer className="bg-[#0B0F19] border-t border-white/5 pt-16 pb-8 min-h-[350px]">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-
+        <div className="flex flex-row flex-wrap lg:flex-nowrap justify-between gap-8 mb-12 items-start">
           {/* Brand & Description */}
-          <div className="col-span-1 md:col-span-2">
+          <div className="w-full lg:w-2/5 mb-8 lg:mb-0">
             <Link to="/" className="flex items-center gap-3 mb-4 group">
               <img
                 src="/assets/images/logo.png"
@@ -36,58 +35,88 @@ const Footer: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Links */}
-          <div className="col-span-1">
-            <h4 className="text-white font-semibold mb-4">Platform</h4>
-            <ul className="space-y-3">
-              <li>
-                <Link to="/features" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
-                  Features
-                </Link>
-              </li>
-              <li>
-                <Link to="/how-it-works" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
-                  How It Works
-                </Link>
-              </li>
-              <li>
-                <Link to="/faq" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
-                  FAQ
-                </Link>
-              </li>
-            </ul>
-          </div>
+          {/* Quick Links Group */}
+          <div className="flex flex-row flex-1 justify-between gap-8 min-w-[300px]">
+            {/* Quick Links */}
+            <div>
+              <h4 className="text-white font-semibold mb-4 whitespace-nowrap">Platform</h4>
+              <ul className="space-y-3">
+                <li>
+                  <Link to="/features" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
+                    Features
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/how-it-works" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
+                    How It Works
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/faq" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
+                    FAQ
+                  </Link>
+                </li>
+              </ul>
+            </div>
 
-          {/* Legal */}
-          <div className="col-span-1">
-            <h4 className="text-white font-semibold mb-4">Legal</h4>
-            <ul className="space-y-3">
-              <li>
-                <Link to="/privacy" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  Privacy Policy
-                </Link>
-              </li>
-              <li>
-                <Link to="/terms" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  Terms of Service
-                </Link>
-              </li>
-              <li>
-                <Link to="/risk" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  Risk Disclosure
-                </Link>
-              </li>
-              <li>
-                <Link to="/refund" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  Refund Policy
-                </Link>
-              </li>
-              <li>
-                <Link to="/aup" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  Acceptable Use
-                </Link>
-              </li>
-            </ul>
+            {/* About Links */}
+            <div>
+              <h4 className="text-white font-semibold mb-4 whitespace-nowrap">About</h4>
+              <ul className="space-y-3">
+                <li>
+                  <Link to="/about" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
+                    About Us
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/contact" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
+                    Contact
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/blog" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
+                    Blog
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/docs/" className="text-sm text-gray-400 hover:text-indigo-400 transition-colors">
+                    Docs
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Legal */}
+            <div>
+              <h4 className="text-white font-semibold mb-4 whitespace-nowrap">Legal</h4>
+              <ul className="space-y-3">
+                <li>
+                  <Link to="/privacy" className="text-sm text-gray-400 hover:text-white transition-colors">
+                    Privacy Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/terms" className="text-sm text-gray-400 hover:text-white transition-colors">
+                    Terms of Service
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/risk" className="text-sm text-gray-400 hover:text-white transition-colors">
+                    Risk Disclosure
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/refund" className="text-sm text-gray-400 hover:text-white transition-colors">
+                    Refund Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/aup" className="text-sm text-gray-400 hover:text-white transition-colors">
+                    Acceptable Use
+                  </Link>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
 

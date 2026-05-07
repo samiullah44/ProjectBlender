@@ -192,6 +192,12 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
           description: 'Latest updates & guides',
           icon: <FileText className="w-4 h-4" />
         },
+        {
+          label: 'Docs',
+          href: '/docs/',
+          description: 'Help & documentation',
+          icon: <BookOpen className="w-4 h-4" />
+        },
       ]
     },
     {
