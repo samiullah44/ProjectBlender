@@ -26,8 +26,11 @@ npm run build >> "$LOG_DIR/deploy-docs.log" 2>&1
 if [ $? -eq 0 ]; then
     echo "✅ Docs Build Successful!" | tee -a "$LOG_DIR/deploy-docs.log"
     
-    # Reload Nginx to ensure everything is fresh (though not strictly necessary for static files)
-    # sudo systemctl reload nginx
+    # Fix permissions to ensure Nginx can read the files
+    chmod -R 755 $DOCS_DIR/build
+    
+    # Optional: Create a symlink in frontend/dist for better Nginx compatibility
+    ln -sfn $DOCS_DIR/build $FRONTEND_DIR/dist/docs
     
     echo "✨ Deployment Complete! Live at https://www.renderonnodes.com/docs" | tee -a "$LOG_DIR/deploy-docs.log"
 else
