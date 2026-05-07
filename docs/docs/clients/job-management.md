@@ -17,7 +17,7 @@ Once your wallet is connected and funded:
 3. The **Create New Render Job** modal will appear.
 
 <div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/create-job-modal.png" alt="Create New Render Job Modal" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+  <img src={require('@site/static/img/create-job-modal.png').default} alt="Create New Render Job Modal" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
 </div>
 
 ### Step 2: Uploading Your Scene

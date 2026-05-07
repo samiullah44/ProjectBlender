@@ -14,7 +14,7 @@ Once your Execution Agent is running, it operates completely autonomously. Howev
 The Provider Dashboard gives you a real-time overview of your fleet. Pay attention to the four primary metrics at the top of your screen:
 
 <div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/provider-dashboard-new.png" alt="RenderOnNodes Provider Dashboard Metrics" style={{borderRadius: '8px', border: '1px solid #8B5CF6', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+  <img src={require('@site/static/img/provider-dashboard-new.png').default} alt="RenderOnNodes Provider Dashboard Metrics" style={{borderRadius: '8px', border: '1px solid #8B5CF6', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
 </div>
 
 * **Released Credits:** The total amount of RON that has been successfully transferred to your Solana wallet on-chain.

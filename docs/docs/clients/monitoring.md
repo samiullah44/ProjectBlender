@@ -14,7 +14,7 @@ When you submit a job via the **Client Dashboard**, you can monitor exactly wher
 At the top of your **Client Dashboard**, you'll see four critical metric cards:
 
 <div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/client-dashboard-new.png" alt="RenderOnNodes Client Dashboard" style={{borderRadius: '8px', border: '1px solid #10B981', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+  <img src={require('@site/static/img/client-dashboard-new.png').default} alt="RenderOnNodes Client Dashboard" style={{borderRadius: '8px', border: '1px solid #10B981', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
 </div>
 
 * **Active Renders:** The number of jobs currently processing on the network.

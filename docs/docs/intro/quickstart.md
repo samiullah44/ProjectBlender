@@ -27,7 +27,7 @@ If you have a `.blend` file and want to render it using the network:
 4. **Track Progress:** Watch the real-time telemetry like **Frames Today** and monitor your **Active Jobs** ledger directly from the dashboard.
 
 <div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/client-dashboard-new.png" alt="RenderOnNodes Client Dashboard" style={{borderRadius: '8px', border: '1px solid #10B981', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+  <img src={require('@site/static/img/client-dashboard-new.png').default} alt="RenderOnNodes Client Dashboard" style={{borderRadius: '8px', border: '1px solid #10B981', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
 </div>
 
   </TabItem>
@@ -44,7 +44,7 @@ If you have a Windows PC with a powerful GPU and want to earn money:
 5. **Add Node:** Click the purple **+ Add Node** button to register your machine and start earning.
 
 <div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/provider-dashboard-new.png" alt="RenderOnNodes Provider Dashboard" style={{borderRadius: '8px', border: '1px solid #8B5CF6', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+  <img src={require('@site/static/img/provider-dashboard-new.png').default} alt="RenderOnNodes Provider Dashboard" style={{borderRadius: '8px', border: '1px solid #8B5CF6', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
 </div>
 
   </TabItem>

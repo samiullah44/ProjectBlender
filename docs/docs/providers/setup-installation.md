@@ -16,7 +16,7 @@ Before your hardware can accept rendering jobs, you must tell the network where 
 1. Navigate to the **Provider Dashboard** on the RenderOnNodes web portal.
 
 <div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/provider-dashboard-new.png" alt="RenderOnNodes Provider Dashboard" style={{borderRadius: '8px', border: '1px solid #8B5CF6', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+  <img src={require('@site/static/img/provider-dashboard-new.png').default} alt="RenderOnNodes Provider Dashboard" style={{borderRadius: '8px', border: '1px solid #8B5CF6', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
 </div>
 2. Under the **Payout Wallet** section, locate the input field marked "Enter your Solana wallet address".
 3. Paste your public Solana wallet address (e.g., from Phantom or Solflare).

@@ -22,7 +22,7 @@ We connect **Artists** who need rendering done with **Providers** who have idle 
 4. **Deliver & Pay:** Once a frame is finished and verified, it is automatically sent back to the Artist. The platform automatically deducts the cost from the Artist and pays the Node Provider.
 
 <div style={{textAlign: 'center', margin: '40px 0'}}>
-  <img src="/img/global-gpu-network-premium.png" alt="The RenderOnNodes distributed GPU node network" style={{borderRadius: '12px', boxShadow: '0 10px 30px rgba(16, 185, 129, 0.4)', maxWidth: '100%'}} />
+  <img src={require('@site/static/img/global-gpu-network-premium.png').default} alt="The RenderOnNodes distributed GPU node network" style={{borderRadius: '12px', boxShadow: '0 10px 30px rgba(16, 185, 129, 0.4)', maxWidth: '100%'}} />
   <p style={{fontSize: '0.85rem', color: '#888', marginTop: '10px'}}>A premium, global mesh of independently operated GPU nodes rendering frames simultaneously.</p>
 </div>
 

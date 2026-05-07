@@ -12,7 +12,7 @@ sidebar_position: 1
 Here is exactly how these pieces communicate with each other in plain English:
 
 <div style={{textAlign: 'center', margin: '40px 0'}}>
-  <img src="/img/architecture-flow-premium.png" alt="RenderOnNodes Architecture Flow Infographic" style={{borderRadius: '12px', boxShadow: '0 10px 30px rgba(16, 185, 129, 0.4)', maxWidth: '100%'}} />
+  <img src={require('@site/static/img/architecture-flow-premium.png').default} alt="RenderOnNodes Architecture Flow Infographic" style={{borderRadius: '12px', boxShadow: '0 10px 30px rgba(16, 185, 129, 0.4)', maxWidth: '100%'}} />
 </div>
 
 ## The Four Main Parts

@@ -33,15 +33,15 @@ Once your wallet is installed, you need to deposit RON into your platform accoun
 3. Click **Deposit**. 
 
 <div style={{textAlign: 'center', margin: '30px 0'}}>
-  <img src="/img/top-nav-balance.png" alt="Top Navigation Balance Dropdown" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
+  <img src={require('@site/static/img/top-nav-balance.png').default} alt="Top Navigation Balance Dropdown" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '100%'}} />
 </div>
 
 4. A popup window will appear asking you to **Connect Your Wallet**. 
 5. Click **Select Wallet** and choose your installed wallet (e.g., Phantom).
 
 <div style={{display: 'flex', gap: '20px', justifyContent: 'center', margin: '30px 0'}}>
-  <img src="/img/deposit-modal.png" alt="Deposit Modal" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '45%'}} />
-  <img src="/img/wallet-connect.png" alt="Wallet Connect List" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '45%'}} />
+  <img src={require('@site/static/img/deposit-modal.png').default} alt="Deposit Modal" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '45%'}} />
+  <img src={require('@site/static/img/wallet-connect.png').default} alt="Wallet Connect List" style={{borderRadius: '8px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0, 0.5)', maxWidth: '45%'}} />
 </div>
 
 6. Approve the connection popup in your Phantom extension to finalize the deposit process.
