@@ -1,4 +1,5 @@
 import React from 'react'
+import SEO from '@/components/SEO'
 import { motion } from 'framer-motion'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -26,6 +27,11 @@ const integrations = [
 const ComputeClientsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#050505] text-white">
+      <SEO 
+        title="Compute Clients"
+        description="Scale your rendering pipeline with industrial-grade GPU power on demand. Built for studios and enterprises requiring elastic infrastructure."
+        canonical="/participants/compute-clients"
+      />
       {/* Hero */}
       <section className="relative py-32 overflow-hidden">
         <div className="absolute inset-0">

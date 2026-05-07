@@ -1,4 +1,5 @@
 import React from 'react';
+import SEO from '@/components/SEO';
 import { motion } from 'framer-motion';
 import { BarChart3, Clock, LayoutGrid, Bell, Settings2, ShieldCheck } from 'lucide-react';
 
@@ -10,6 +11,11 @@ const FeaturesAnalytics = () => {
 
   return (
     <div className="bg-[#050505] min-h-screen text-white pt-24">
+      <SEO 
+        title="Real-time Analytics"
+        description="Monitor your render jobs and earnings with detailed real-time telemetry and observability dashboards."
+        canonical="/features/analytics"
+      />
       {/* Hero */}
       <section className="relative py-24 lg:py-32 overflow-hidden border-b border-white/5">
         <div className="absolute inset-0 bg-cyan-500/5 blur-[100px] pointer-events-none" />

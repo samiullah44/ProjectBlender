@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest --run",
     "test:watch": "vitest",
+    "postbuild": "node scripts/prerender.js",
     "check-bundle": "npm run build && node -e \"const fs=require('fs');const files=fs.readdirSync('dist/assets/js');const sizes=files.map(f=>({name:f,kb:Math.round(fs.statSync('dist/assets/js/'+f).size/1024)})).sort((a,b)=>b.kb-a.kb);console.log('Bundle sizes:');sizes.forEach(f=>console.log(f.kb+'KB\\t'+f.name));const initial=sizes.filter(f=>f.name.startsWith('index-')||f.name.startsWith('react-vendor-')).reduce((s,f)=>s+f.kb,0);console.log('\\nInitial load: '+initial+'KB (target: <500KB)');if(initial>500)process.exit(1);\""
   },
   "dependencies": {
@@ -78,8 +79,12 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "fast-check": "^4.7.0",
+    "fs-extra": "^11.3.5",
     "globals": "^16.5.0",
     "jsdom": "^29.1.0",
+    "puppeteer": "^24.43.0",
+    "serve-handler": "^6.1.7",
+    "sirv-cli": "^3.0.1",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",

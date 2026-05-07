@@ -1,4 +1,5 @@
 import React from 'react';
+import SEO from '@/components/SEO';
 import { motion } from 'framer-motion';
 import { Cpu, Zap, Layers, Activity, Server, Box, MonitorPlay } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +12,11 @@ const FeaturesGPU = () => {
 
   return (
     <div className="bg-[#050505] min-h-screen text-white pt-24">
+      <SEO 
+        title="GPU Architecture"
+        description="Optimized GPU orchestration for Cycles and Eevee rendering. Unleash unmatched hardware acceleration without limits."
+        canonical="/features/gpu"
+      />
       {/* Hero */}
       <section className="relative py-24 lg:py-32 overflow-hidden border-b border-white/5">
         <div className="absolute inset-0 bg-indigo-500/5 blur-[100px] pointer-events-none" />

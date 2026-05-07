@@ -1,4 +1,5 @@
 import React from 'react'
+import SEO from '@/components/SEO'
 import { motion } from 'framer-motion'
 import { Cpu, Globe, Shield, Zap, Users, Rocket, Heart, Target } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -24,6 +25,11 @@ const values = [
 const AboutUsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#050505] text-white">
+      <SEO 
+        title="About Us"
+        description="Learn about RenderOnNodes: the decentralized GPU rendering network for Blender. Connecting artists with high-performance GPU power."
+        canonical="/about"
+      />
       {/* Hero */}
       <section className="relative py-32 overflow-hidden">
         <div className="absolute inset-0">

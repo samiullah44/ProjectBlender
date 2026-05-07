@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SEO from '@/components/SEO';
 import { motion } from 'framer-motion';
 import {
   Server, Shield, Zap, CircleDollarSign,
@@ -39,6 +40,11 @@ const Features = () => {
 
   return (
     <div className="bg-[#050505] min-h-screen text-white pt-24 pb-20">
+      <SEO 
+        title="Platform Features"
+        description="Explore the advanced features of RenderOnNodes: distributed rendering engine, global node marketplace, and smart optimization layer."
+        canonical="/features"
+      />
 
       {/* Hero Section */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 text-center mb-32">

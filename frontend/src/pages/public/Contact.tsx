@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import SEO from '@/components/SEO'
 import { motion } from 'framer-motion'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -51,6 +52,11 @@ const ContactPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
+      <SEO 
+        title="Contact Us"
+        description="Get in touch with the RenderOnNodes team for support, business inquiries, or technical assistance."
+        canonical="/contact"
+      />
       {/* Hero */}
       <section className="py-28 relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-2xl h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />

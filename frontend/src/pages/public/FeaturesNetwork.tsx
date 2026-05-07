@@ -1,4 +1,5 @@
 import React from 'react';
+import SEO from '@/components/SEO';
 import { motion } from 'framer-motion';
 import { Globe, Shield, Wifi, Server, Play, HeartHandshake, Earth } from 'lucide-react';
 
@@ -10,6 +11,11 @@ const FeaturesNetwork = () => {
 
   return (
     <div className="bg-[#050505] min-h-screen text-white pt-24">
+      <SEO 
+        title="Decentralized Network"
+        description="High-performance P2P network for secure and distributed rendering. Explore our global node topology and enterprise-level security."
+        canonical="/features/network"
+      />
       {/* Hero */}
       <section className="relative py-24 lg:py-32 overflow-hidden border-b border-white/5">
         <div className="absolute inset-0 bg-emerald-500/5 blur-[100px] pointer-events-none" />

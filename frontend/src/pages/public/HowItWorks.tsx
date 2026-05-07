@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SEO from '@/components/SEO';
 import { motion } from 'framer-motion';
 import {
   UploadCloud, Scissors, Network, Play, Download, ArrowRight
@@ -63,6 +64,11 @@ const HowItWorks = () => {
 
   return (
     <div className="bg-[#0B0F19] min-h-screen text-white pt-24 pb-20 overflow-hidden">
+      <SEO 
+        title="How It Works"
+        description="Learn how RenderOnNodes transforms Blender rendering: a seamless pipeline from project upload to final frame delivery across a global P2P network."
+        canonical="/how-it-works"
+      />
 
       {/* Hero Section */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 text-center mb-24 relative">

@@ -1,4 +1,5 @@
 import React from 'react'
+import SEO from '@/components/SEO'
 import { motion } from 'framer-motion'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -24,6 +25,11 @@ const useCases = [
 const ArtistsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#050505] text-white">
+      <SEO 
+        title="For Artists"
+        description="Stop waiting on local GPU renders. Fast, scalable, and affordable GPU rendering for Blender artists and studios."
+        canonical="/participants/artists"
+      />
       {/* Hero */}
       <section className="relative py-32 overflow-hidden">
         <div className="absolute inset-0">

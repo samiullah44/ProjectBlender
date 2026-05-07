@@ -1,4 +1,5 @@
 import React from 'react'
+import SEO from '@/components/SEO'
 import { motion } from 'framer-motion'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -24,6 +25,11 @@ const steps = [
 const NodeProvidersPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#050505] text-white">
+      <SEO 
+        title="Node Providers"
+        description="Join the RenderOnNodes network as a node provider and earn mRNDR credits from your idle GPUs. High-performance P2P rendering settled on Solana."
+        canonical="/participants/node-providers"
+      />
       {/* Hero */}
       <section className="relative py-32 overflow-hidden">
         <div className="absolute inset-0">
