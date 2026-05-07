@@ -66,7 +66,14 @@ jobs:
             pm2 delete render-client > /dev/null 2>&1 || true
             pm2 save
 
-            echo "Reloading Nginx to clear stale handles and apply new config..."
+            # -------------------------
+            # Documentation (Docusaurus)
+            # -------------------------
+            echo "Building documentation..."
+            chmod +x scripts/deploy-docs.sh
+            ./scripts/deploy-docs.sh
+
+            echo "Reloading Nginx to apply all configurations..."
             sudo systemctl reload nginx
 
-            echo "✅ Deployment of Frontend & Backend complete (Zero Downtime)"
+            echo "✅ Deployment of Frontend, Backend & Docs complete (Zero Downtime)"
