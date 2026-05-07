@@ -365,7 +365,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                       >
                         <div className="py-2">
                           {item.submenu.map((subItem) => {
-                            const isExternal = subItem.href.startsWith('http');
+                            const isExternal = subItem.href.startsWith('http') || subItem.href.startsWith('/docs') || subItem.href.startsWith('/blog');
                             const linkClass = "flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors group";
                             const content = (
                               <>
@@ -825,7 +825,7 @@ const Navbar: React.FC<NavbarProps> = ({ hideWaitlist = false }) => {
                                 className="overflow-hidden ml-4 pl-4 border-l border-white/5 space-y-1"
                               >
                                 {item.submenu.map((subItem) => {
-                                  const isExternal = subItem.href.startsWith('http');
+                                  const isExternal = subItem.href.startsWith('http') || subItem.href.startsWith('/docs') || subItem.href.startsWith('/blog');
                                   const linkClass = "flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors";
 
                                   return isExternal ? (
