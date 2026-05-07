@@ -70,6 +70,7 @@ jobs:
             # Documentation (Docusaurus)
             # -------------------------
             echo "Building documentation..."
+            cd ~/render
             chmod +x scripts/deploy-docs.sh
             ./scripts/deploy-docs.sh
 
