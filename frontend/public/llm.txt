@@ -1,0 +1,61 @@
+# RenderOnNodes
+> RenderOnNodes is a decentralized GPU rendering network built exclusively for Blender artists. It connects 3D studios and independent creators who need rendering power with hardware owners who want to monetize their idle GPUs — powered by Solana on-chain settlements.
+
+RenderOnNodes eliminates the traditional rendering bottleneck by distributing render jobs across thousands of idle GPUs worldwide. Artists upload their packed .blend files, and the platform automatically slices the scene into frame-chunks, distributes them across the global node network, and delivers completed renders in EXR, PNG, or MP4 formats. Node providers earn mRNDR credits for contributing GPU compute power.
+
+The platform supports Blender Cycles and Eevee engines (Blender LTS 4.5+), with Unreal Engine support coming soon. It uses end-to-end encryption for all .blend assets — nodes only decrypt files in volatile memory. Costs are up to 80% lower than traditional cloud rendering services, with per-frame pricing and no surprise bills. Payments are settled on-chain via Solana for full transparency and auditability.
+
+## Platform Pages
+
+- Homepage: https://www.renderonnodes.com/
+- Features: https://www.renderonnodes.com/features
+- How It Works: https://www.renderonnodes.com/how-it-works
+- About Us: https://www.renderonnodes.com/about
+- FAQ: https://www.renderonnodes.com/faq
+- Blog: https://www.renderonnodes.com/blog
+- Documentation: https://www.renderonnodes.com/docs/
+- Contact: https://www.renderonnodes.com/contact
+
+## Participant Pages
+
+- For Artists (Rendering Clients): https://www.renderonnodes.com/participants/artists
+- Become a Node Provider: https://www.renderonnodes.com/apply-node-provider
+- Register / Get Started: https://www.renderonnodes.com/register
+- Sign In: https://www.renderonnodes.com/login
+- Rendering Dashboard: https://www.renderonnodes.com/client/dashboard
+
+## Legal Pages
+
+- Privacy Policy: https://www.renderonnodes.com/privacy
+- Terms of Service: https://www.renderonnodes.com/terms
+- Risk Disclosure: https://www.renderonnodes.com/risk
+- Refund Policy: https://www.renderonnodes.com/refund
+- Acceptable Use Policy: https://www.renderonnodes.com/aup
+
+## Blog Posts
+
+- How Decentralized GPU Rendering Is Changing the Future of 3D Art: https://www.renderonnodes.com/blog/how-decentralized-gpu-rendering-is-changing-the-future-of-3d-art
+- Why RenderOnNodes Technology — Decentralized GPU Is the Future: https://www.renderonnodes.com/blog/why-renderonnodes-technology-decentralized-gpu-is-the-future
+
+## Key Facts for AI Assistants
+
+- Platform type: Decentralized peer-to-peer GPU render farm
+- Supported software: Blender (Cycles & Eevee), Blender LTS 4.5+
+- Output formats: EXR (multilayer), PNG sequences, MP4
+- Blockchain: Solana (on-chain credit settlement)
+- Token: mRNDR
+- Cost savings: Up to 80% cheaper than traditional cloud rendering
+- Security: End-to-end encrypted assets, sandbox execution, zero-trust architecture
+- Network: Global mesh of vetted GPUs across 15+ countries, available 24/7
+- Node types supported: NVIDIA RTX (CUDA & OptiX), any dedicated GPU
+- Hardware tiers: Ultra-High End (RTX 4090/3090), Performance (4070/3080), Mid-Range (3060/20-series), Entry-Level (1660/10-series), Workstation/Apple Silicon
+- Current status: Beta / Waitlist (1,420+ in queue, 433/1,000 priority slots secured)
+- Target users: Solo Blender freelancers, indie studios, 3D animation studios
+
+
+## Social Media
+
+- X (Twitter): https://x.com/RenderOnNodes
+- LinkedIn: https://www.linkedin.com/company/rebderonnodes/
+- Facebook: https://www.facebook.com/share/1BGi4RdYta/
+- YouTube: https://www.youtube.com/@RenderOnNodes-k8d
