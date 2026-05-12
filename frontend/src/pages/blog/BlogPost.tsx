@@ -200,11 +200,11 @@ export const BlogPost: React.FC = () => {
 
         {/* Cover Image - Top curved */}
         {blog.coverImage && (
-          <div className="w-full h-[300px] sm:h-[450px] lg:h-[550px] rounded-[32px] sm:rounded-[48px] overflow-hidden mb-12 shadow-2xl shadow-purple-500/10">
+          <div className="w-full h-[300px] sm:h-[450px] lg:h-[550px] rounded-[32px] sm:rounded-[48px] overflow-hidden mb-12 shadow-2xl shadow-purple-500/10 bg-gray-50 flex items-center justify-center">
             <img 
               src={blog.coverImage} 
               alt={blog.title} 
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
             />
           </div>
         )}

@@ -119,29 +119,20 @@ export function FloatingToolbar({ editor }: FloatingToolbarProps) {
             <>
               <div className="mx-0.5 h-4 w-px bg-white/10" />
               
-              <ToolbarButton
-                onClick={() => editor.chain().focus().updateAttributes('image', { width: '25%' }).run()}
-                isActive={editor.getAttributes('image').width === '25%'}
-                title="Small (25%)"
-              >
-                <span className="text-[10px] font-bold">25%</span>
-              </ToolbarButton>
-
-              <ToolbarButton
-                onClick={() => editor.chain().focus().updateAttributes('image', { width: '50%' }).run()}
-                isActive={editor.getAttributes('image').width === '50%'}
-                title="Medium (50%)"
-              >
-                <span className="text-[10px] font-bold">50%</span>
-              </ToolbarButton>
-
-              <ToolbarButton
-                onClick={() => editor.chain().focus().updateAttributes('image', { width: '100%' }).run()}
-                isActive={editor.getAttributes('image').width === '100%' || !editor.getAttributes('image').width}
-                title="Full Width (100%)"
-              >
-                <span className="text-[10px] font-bold">100%</span>
-              </ToolbarButton>
+              <div className="flex items-center gap-2 px-2">
+                <input
+                  type="range"
+                  min="10"
+                  max="100"
+                  value={parseInt(editor.getAttributes('image').width || '100')}
+                  onChange={(e) => editor.chain().focus().updateAttributes('image', { width: `${e.target.value}%` }).run()}
+                  className="w-24 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  title="Image size"
+                />
+                <span className="text-[10px] font-bold text-gray-300 min-w-[30px] text-right">
+                  {parseInt(editor.getAttributes('image').width || '100')}%
+                </span>
+              </div>
 
               <div className="mx-0.5 h-4 w-px bg-white/10" />
 
