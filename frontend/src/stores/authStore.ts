@@ -469,6 +469,16 @@ export const useAuthStore = create<AuthStore>()(
         }),
         {
             name: 'auth-storage',
+            version: 2, // Bumped to 2 to force-wipe stale auth state on all clients.
+                        // Any stored data from version <2 is automatically cleared by Zustand.
+                        // DO NOT revert this number — only ever increment it in future if needed.
+            migrate: () => ({
+                // Return clean initial state for all users migrating from old versions
+                token: null,
+                user: null,
+                isAuthenticated: false,
+                impersonatingUser: null
+            }),
             partialize: (state) => ({
                 token: state.token,
                 user: state.user,
