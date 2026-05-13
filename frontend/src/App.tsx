@@ -1,6 +1,6 @@
 // App.tsx
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'react-hot-toast'
@@ -107,6 +107,9 @@ const queryClient = new QueryClient({
   },
 })
 
+// AuthInitializer must live OUTSIDE <Router> for token bootstrap,
+// but we need a separate inner component inside <Router> to handle
+// the auth:unauthorized event with React Router navigation.
 const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { getProfile, user } = useAuthStore()
 
@@ -123,7 +126,7 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
       }
       getProfile().catch(() => {
         // Fully reset auth state so stale isAuthenticated doesn't cause redirect loops
-        useAuthStore.getState().logout()
+        useAuthStore.getState().logout(true)
       })
     }
   }, [getProfile])
@@ -137,6 +140,22 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
   }, [user])
 
   return <>{children}</>
+}
+
+// Handles auth:unauthorized events dispatched by the axios interceptor.
+// Must live inside <Router> so it can use useNavigate.
+const UnauthorizedHandler: React.FC = () => {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      navigate('/login', { replace: true })
+    }
+    window.addEventListener('auth:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized)
+  }, [navigate])
+
+  return null
 }
 
 // Main Layout component with Navbar, Footer, and Popup
@@ -277,6 +296,7 @@ function App() {
         <Router>
           <ScrollToTop />
           <AnalyticsTracker />
+          <UnauthorizedHandler />
           <Routes>
             {/* Hidden Admin Login — not linked anywhere publicly */}
             <Route element={<AuthLayout />}>

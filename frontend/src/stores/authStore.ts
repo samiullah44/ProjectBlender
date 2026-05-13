@@ -73,7 +73,7 @@ interface AuthStore {
     resendOTP: (email: string) => Promise<{ success: boolean; error?: string }>
     forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>
     resetPassword: (token: string, newPassword: string) => Promise<{ success: boolean; error?: string }>
-    logout: () => void
+    logout: (silent?: boolean) => void
     updateProfile: (updates: Partial<Omit<User, 'id' | 'email' | 'role'>>) => Promise<{ success: boolean; error?: string }>
     getProfile: () => Promise<{ success: boolean; error?: string }>
     setToken: (token: string) => void
@@ -299,7 +299,7 @@ export const useAuthStore = create<AuthStore>()(
                 }
             },
 
-            logout: () => {
+            logout: (silent = false) => {
                 localStorage.removeItem('token')
                 removeSharedToken()
                 localStorage.removeItem('impersonatingUserId')
@@ -309,7 +309,9 @@ export const useAuthStore = create<AuthStore>()(
                     isAuthenticated: false,
                     impersonatingUser: null
                 })
-                toast.success('Logged out successfully')
+                if (!silent) {
+                    toast.success('Logged out successfully')
+                }
             },
 
             impersonate: (user) => {

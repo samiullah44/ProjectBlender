@@ -75,6 +75,7 @@ const RegisterPage: React.FC = () => {
     register: registerUser,
     isAuthenticated,
     isLoading,
+    user,
     error,
     clearError,
     getOAuthUrls,
@@ -98,17 +99,20 @@ const RegisterPage: React.FC = () => {
   });
 
   useEffect(() => {
-    if (isAuthenticated) {
+    // Same guard as Login: only redirect when auth is fully confirmed
+    if (isAuthenticated && user && !isLoading) {
       navigate("/", { replace: true });
       return;
     }
-    // Load remembered email
-    const rememberedEmail = localStorage.getItem("rememberedEmail");
-    if (rememberedEmail) {
-      setValue("email", rememberedEmail);
-      setValue("rememberMe", true);
+    // Load remembered email only when definitely not authenticated
+    if (!isAuthenticated && !isLoading) {
+      const rememberedEmail = localStorage.getItem("rememberedEmail");
+      if (rememberedEmail) {
+        setValue("email", rememberedEmail);
+        setValue("rememberMe", true);
+      }
     }
-  }, [isAuthenticated, navigate, setValue]);
+  }, [isAuthenticated, user, isLoading, navigate, setValue]);
 
   const onSubmit = async (data: RegisterFormData) => {
     clearError();

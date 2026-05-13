@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/authStore'
 
 const AdminLogin: React.FC = () => {
   const navigate = useNavigate()
-  const { login, logout, user, isLoading, error, clearError } = useAuthStore()
+  const { login, logout, user, isLoading, isAuthenticated, error, clearError } = useAuthStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -14,16 +14,19 @@ const AdminLogin: React.FC = () => {
 
   // If already logged in as admin, go straight to admin dashboard
   useEffect(() => {
+    // Wait until auth is fully resolved — don't act on stale persisted state
+    if (isLoading) return
+    if (!isAuthenticated) return
     if (user) {
-      if (user.role === 'admin') {
+      if (user.role === 'admin' || user.roles?.includes('admin')) {
         navigate('/admin/dashboard', { replace: true })
       } else {
-        // Logged in but not admin — kick them out
+        // Logged in but not admin — kick them out silently
         setAccessDenied(true)
-        logout()
+        logout(true)
       }
     }
-  }, [user, navigate, logout])
+  }, [user, isLoading, isAuthenticated, navigate, logout])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -1,5 +1,5 @@
 // components/layout/ProtectedLayout.tsx
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -14,9 +14,26 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { isAuthenticated, user, isLoading } = useAuthStore()
   const location = useLocation()
+  const [timedOut, setTimedOut] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Show loading state if we are currently fetching or if we have a token but no profile yet
-  if (isLoading || (isAuthenticated && !user)) {
+  // Safety valve: if we've been in the loading/waiting state for more than 5 seconds,
+  // treat it as unauthenticated to avoid an infinite spinner.
+  useEffect(() => {
+    const isWaiting = isLoading || (isAuthenticated && !user)
+    if (isWaiting) {
+      timerRef.current = setTimeout(() => setTimedOut(true), 5000)
+    } else {
+      setTimedOut(false)
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [isLoading, isAuthenticated, user])
+
+  // Show loading state while fetching profile or waiting for user object
+  if (!timedOut && (isLoading || (isAuthenticated && !user))) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950">
         <div className="text-center">
@@ -27,8 +44,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     )
   }
 
-  // Redirect to login ONLY if we are definitely not authenticated
-  if (!isAuthenticated) {
+  // Redirect to login if definitely not authenticated (or timed out waiting)
+  if (!isAuthenticated || !user || timedOut) {
+    // Clean up any stale state before redirecting
+    if (timedOut) {
+      useAuthStore.getState().logout(true)
+    }
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
