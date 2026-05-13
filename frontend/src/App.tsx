@@ -158,6 +158,22 @@ const UnauthorizedHandler: React.FC = () => {
   return null
 }
 
+// Closes the waitlist popup whenever the user is on a blog/auth page.
+// Must live inside <Router> to use useLocation.
+const WaitlistGuard: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const location = useLocation()
+
+  useEffect(() => {
+    const noWaitlistPaths = ['/blog', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/auth', '/admin']
+    const isSuppressed = noWaitlistPaths.some(p => location.pathname.startsWith(p))
+    if (isSuppressed) {
+      onClose()
+    }
+  }, [location.pathname, onClose])
+
+  return null
+}
+
 // Main Layout component with Navbar, Footer, and Popup
 const MainLayout = ({ showTopBar, onOpenWaitlist }: { showTopBar: boolean, onOpenWaitlist: () => void }) => {
   const location = useLocation()
@@ -308,6 +324,7 @@ function App() {
           <ScrollToTop />
           <AnalyticsTracker />
           <UnauthorizedHandler />
+          <WaitlistGuard onClose={() => setIsWaitlistOpen(false)} />
           <Routes>
             {/* Hidden Admin Login — not linked anywhere publicly */}
             <Route element={<AuthLayout />}>
