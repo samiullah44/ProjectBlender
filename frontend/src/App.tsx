@@ -122,7 +122,8 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
         localStorage.setItem('token', token)
       }
       getProfile().catch(() => {
-        localStorage.removeItem('token')
+        // Fully reset auth state so stale isAuthenticated doesn't cause redirect loops
+        useAuthStore.getState().logout()
       })
     }
   }, [getProfile])

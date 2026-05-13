@@ -40,10 +40,15 @@ axiosInstance.interceptors.response.use(
 
     // Handle 401 Unauthorized
     if (response?.status === 401) {
-      // Clear auth state
-      localStorage.removeItem('token')
-      // Don't redirect if we're already on login page
-      if (!window.location.pathname.includes('/login')) {
+      // Fully reset auth state via Zustand store (not just localStorage)
+      // Import lazily to avoid circular dependency
+      import('@/stores/authStore').then(({ useAuthStore }) => {
+        useAuthStore.getState().logout()
+      })
+      // Don't redirect if we're already on an auth page
+      const authPaths = ['/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/auth/callback']
+      const isAuthPage = authPaths.some(p => window.location.pathname.startsWith(p))
+      if (!isAuthPage) {
         window.location.href = '/login'
       }
     }

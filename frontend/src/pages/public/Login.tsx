@@ -24,7 +24,7 @@ type LoginFormData = z.infer<typeof loginSchema>
 const LoginPage: React.FC = () => {
     const navigate = useNavigate()
     const location = useLocation()
-    const { login, isAuthenticated, isLoading, error, clearError, getOAuthUrls } = useAuthStore()
+    const { login, isAuthenticated, isLoading, error, clearError, getOAuthUrls, user } = useAuthStore()
     const [showPassword, setShowPassword] = useState(false)
     const [isOAuthLoading, setIsOAuthLoading] = useState(false)
 
@@ -45,7 +45,10 @@ const LoginPage: React.FC = () => {
     const returnTo = searchParams.get('returnTo') || (location.state as any)?.from?.pathname || '/'
 
     useEffect(() => {
-        if (isAuthenticated) {
+        // Only redirect if auth is fully confirmed — not just from stale persisted state.
+        // Require user object to be present and loading to be complete to avoid
+        // bouncing back during the getProfile() validation window.
+        if (isAuthenticated && user && !isLoading) {
             if (returnTo.startsWith('http')) {
                 window.location.href = returnTo
             } else {
@@ -53,15 +56,17 @@ const LoginPage: React.FC = () => {
             }
             return
         }
-        clearError()
 
-        // Load remembered email
-        const rememberedEmail = localStorage.getItem('rememberedEmail')
-        if (rememberedEmail) {
-            setValue('email', rememberedEmail)
-            setValue('rememberMe', true)
+        // Only clear error and load remembered email when we know we're not authenticated
+        if (!isAuthenticated && !isLoading) {
+            clearError()
+            const rememberedEmail = localStorage.getItem('rememberedEmail')
+            if (rememberedEmail) {
+                setValue('email', rememberedEmail)
+                setValue('rememberMe', true)
+            }
         }
-    }, [isAuthenticated, navigate, setValue, clearError])
+    }, [isAuthenticated, user, isLoading, navigate, setValue, clearError])
 
     const onSubmit = async (data: LoginFormData) => {
         // Handle Remember Me
