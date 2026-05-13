@@ -1,5 +1,5 @@
 // App.tsx
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
@@ -158,20 +158,76 @@ const UnauthorizedHandler: React.FC = () => {
   return null
 }
 
-// Closes the waitlist popup whenever the user is on a blog/auth page.
-// Must live inside <Router> to use useLocation.
-// Uses a silent close (no localStorage side effects) since the user
-// didn't explicitly dismiss it — they just navigated to a suppressed page.
-const WaitlistGuard: React.FC<{ onSilentClose: () => void }> = ({ onSilentClose }) => {
-  const location = useLocation()
+// All waitlist trigger logic lives INSIDE <Router> so useLocation() is always
+// accurate — eliminating any race between window.location and React Router state.
+const SUPPRESSED_PATHS = ['/blog', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/auth', '/admin']
+const DISMISS_COOLDOWN_DAYS = 30
 
+const WaitlistController: React.FC<{
+  setIsWaitlistOpen: React.Dispatch<React.SetStateAction<boolean>>
+}> = ({ setIsWaitlistOpen }) => {
+  const location = useLocation()
+  const isSuppressed = SUPPRESSED_PATHS.some(p => location.pathname.startsWith(p))
+
+  // Immediately close the popup whenever the user lands on a suppressed path
   useEffect(() => {
-    const noWaitlistPaths = ['/blog', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/auth', '/admin']
-    const isSuppressed = noWaitlistPaths.some(p => location.pathname.startsWith(p))
-    if (isSuppressed) {
-      onSilentClose()
+    if (isSuppressed) setIsWaitlistOpen(false)
+  }, [isSuppressed, setIsWaitlistOpen])
+
+  // Set up popup triggers ONLY when on a non-suppressed path
+  useEffect(() => {
+    if (isSuppressed) return
+
+    const status = localStorage.getItem('waitlist_status')
+    const dismissedAt = localStorage.getItem('waitlist_dismissed_at')
+
+    // Don't show if subscribed, or if dismissed within 30 days
+    if (
+      status === 'subscribed' ||
+      (status === 'dismissed' && dismissedAt &&
+        (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24) < DISMISS_COOLDOWN_DAYS)
+    ) {
+      return
     }
-  }, [location.pathname, onSilentClose])
+
+    let isTriggered = false
+
+    const tryOpen = () => {
+      // Re-check path at trigger time to guard against fast navigation
+      if (!isTriggered && !SUPPRESSED_PATHS.some(p => window.location.pathname.startsWith(p))) {
+        setIsWaitlistOpen(true)
+        isTriggered = true
+      }
+    }
+
+    // 8-second delay so page content always finishes rendering first
+    const timer = setTimeout(tryOpen, 8000)
+
+    const handleScroll = () => {
+      if (document.documentElement.scrollTop > document.documentElement.scrollHeight * 0.3) {
+        tryOpen()
+        window.removeEventListener('scroll', handleScroll)
+      }
+    }
+
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (e.clientY <= 0) {
+        tryOpen()
+        document.removeEventListener('mouseleave', handleMouseLeave)
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    window.addEventListener('open-waitlist', tryOpen)
+    document.addEventListener('mouseleave', handleMouseLeave)
+
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('open-waitlist', tryOpen)
+      document.removeEventListener('mouseleave', handleMouseLeave)
+    }
+  }, [isSuppressed]) // Re-evaluate whenever suppression changes
 
   return null
 }
@@ -184,7 +240,7 @@ const MainLayout = ({ showTopBar, onOpenWaitlist }: { showTopBar: boolean, onOpe
   return (
     <div className={`min-h-screen flex flex-col animate-page-reveal ${isBlogRoute ? 'bg-white' : 'bg-gray-950'}`}>
       <ImpersonationBanner />
-      <TopBar isVisible={showTopBar} onReopen={onOpenWaitlist} />
+      <TopBar isVisible={showTopBar && !isBlogRoute} onReopen={onOpenWaitlist} />
       <Navbar hideWaitlist={showTopBar} />
       <main className="mx-auto flex-1 w-full">
         <React.Suspense fallback={<PageSkeleton />}>
@@ -238,69 +294,14 @@ function App() {
       if (status === 'dismissed') {
         if (!dismissedAt) return true;
         const daysPassed = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
-        return daysPassed < 2;
+        return daysPassed < DISMISS_COOLDOWN_DAYS;
       }
     }
     return false;
   })
 
-  useEffect(() => {
-    const status = localStorage.getItem('waitlist_status')
-    const dismissedAt = localStorage.getItem('waitlist_dismissed_at')
-
-    if (status === 'subscribed' || (status === 'dismissed' && (!dismissedAt || (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24) < 2))) {
-      return;
-    }
-
-    // Pages where the waitlist should never appear
-    const noWaitlistPaths = ['/blog', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/auth', '/admin']
-    const isWaitlistSuppressed = () => noWaitlistPaths.some(p => window.location.pathname.startsWith(p))
-
-    // Don't even set up listeners if we're already on a suppressed page
-    if (isWaitlistSuppressed()) return
-
-    let isTriggered = false;
-
-    const timer = setTimeout(() => {
-      if (!isTriggered && !isWaitlistSuppressed()) {
-        setIsWaitlistOpen(true);
-        isTriggered = true;
-      }
-    }, 3000);
-
-    const handleScroll = () => {
-      if (!isTriggered && !isWaitlistSuppressed() && document.documentElement.scrollTop > document.documentElement.scrollHeight * 0.3) {
-        setIsWaitlistOpen(true);
-        isTriggered = true;
-        window.removeEventListener('scroll', handleScroll);
-      }
-    };
-
-    const handleMouseLeave = (e: MouseEvent) => {
-      if (!isTriggered && !isWaitlistSuppressed() && e.clientY <= 0) {
-        setIsWaitlistOpen(true);
-        isTriggered = true;
-        document.removeEventListener('mouseleave', handleMouseLeave);
-      }
-    };
-
-    const handleOpenWaitlist = () => {
-      if (!isWaitlistSuppressed()) {
-        setIsWaitlistOpen(true);
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    window.addEventListener('open-waitlist', handleOpenWaitlist);
-    document.addEventListener('mouseleave', handleMouseLeave);
-
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('open-waitlist', handleOpenWaitlist);
-      document.removeEventListener('mouseleave', handleMouseLeave);
-    };
-  }, []);
+  // Waitlist trigger logic has been moved into WaitlistController (inside Router)
+  // so useLocation() provides accurate, race-free path detection.
 
   const handleCloseWaitlist = () => {
     setIsWaitlistOpen(false);
@@ -312,9 +313,7 @@ function App() {
     setShowTopBar(true);
   };
 
-  const handleSilentCloseWaitlist = useCallback(() => {
-    setIsWaitlistOpen(false)
-  }, [])
+
 
   const handleSubscribe = () => {
     localStorage.setItem('waitlist_status', 'subscribed');
@@ -331,7 +330,7 @@ function App() {
           <ScrollToTop />
           <AnalyticsTracker />
           <UnauthorizedHandler />
-          <WaitlistGuard onSilentClose={handleSilentCloseWaitlist} />
+          <WaitlistController setIsWaitlistOpen={setIsWaitlistOpen} />
           <Routes>
             {/* Hidden Admin Login — not linked anywhere publicly */}
             <Route element={<AuthLayout />}>
