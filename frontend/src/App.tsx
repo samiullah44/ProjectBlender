@@ -1,5 +1,5 @@
 // App.tsx
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
@@ -160,16 +160,18 @@ const UnauthorizedHandler: React.FC = () => {
 
 // Closes the waitlist popup whenever the user is on a blog/auth page.
 // Must live inside <Router> to use useLocation.
-const WaitlistGuard: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+// Uses a silent close (no localStorage side effects) since the user
+// didn't explicitly dismiss it — they just navigated to a suppressed page.
+const WaitlistGuard: React.FC<{ onSilentClose: () => void }> = ({ onSilentClose }) => {
   const location = useLocation()
 
   useEffect(() => {
     const noWaitlistPaths = ['/blog', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/auth', '/admin']
     const isSuppressed = noWaitlistPaths.some(p => location.pathname.startsWith(p))
     if (isSuppressed) {
-      onClose()
+      onSilentClose()
     }
-  }, [location.pathname, onClose])
+  }, [location.pathname, onSilentClose])
 
   return null
 }
@@ -250,25 +252,24 @@ function App() {
       return;
     }
 
-    // Don't trigger waitlist on blog pages, legal pages, or auth pages —
-    // only on marketing/landing pages where it makes sense
-    const currentPath = window.location.pathname
+    // Pages where the waitlist should never appear
     const noWaitlistPaths = ['/blog', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/auth', '/admin']
-    if (noWaitlistPaths.some(p => currentPath.startsWith(p))) {
-      return;
-    }
+    const isWaitlistSuppressed = () => noWaitlistPaths.some(p => window.location.pathname.startsWith(p))
+
+    // Don't even set up listeners if we're already on a suppressed page
+    if (isWaitlistSuppressed()) return
 
     let isTriggered = false;
 
     const timer = setTimeout(() => {
-      if (!isTriggered) {
+      if (!isTriggered && !isWaitlistSuppressed()) {
         setIsWaitlistOpen(true);
         isTriggered = true;
       }
     }, 3000);
 
     const handleScroll = () => {
-      if (!isTriggered && document.documentElement.scrollTop > document.documentElement.scrollHeight * 0.3) {
+      if (!isTriggered && !isWaitlistSuppressed() && document.documentElement.scrollTop > document.documentElement.scrollHeight * 0.3) {
         setIsWaitlistOpen(true);
         isTriggered = true;
         window.removeEventListener('scroll', handleScroll);
@@ -276,7 +277,7 @@ function App() {
     };
 
     const handleMouseLeave = (e: MouseEvent) => {
-      if (!isTriggered && e.clientY <= 0) {
+      if (!isTriggered && !isWaitlistSuppressed() && e.clientY <= 0) {
         setIsWaitlistOpen(true);
         isTriggered = true;
         document.removeEventListener('mouseleave', handleMouseLeave);
@@ -284,7 +285,9 @@ function App() {
     };
 
     const handleOpenWaitlist = () => {
-      setIsWaitlistOpen(true);
+      if (!isWaitlistSuppressed()) {
+        setIsWaitlistOpen(true);
+      }
     };
 
     window.addEventListener('scroll', handleScroll);
@@ -309,6 +312,10 @@ function App() {
     setShowTopBar(true);
   };
 
+  const handleSilentCloseWaitlist = useCallback(() => {
+    setIsWaitlistOpen(false)
+  }, [])
+
   const handleSubscribe = () => {
     localStorage.setItem('waitlist_status', 'subscribed');
     setShowTopBar(true);
@@ -324,7 +331,7 @@ function App() {
           <ScrollToTop />
           <AnalyticsTracker />
           <UnauthorizedHandler />
-          <WaitlistGuard onClose={() => setIsWaitlistOpen(false)} />
+          <WaitlistGuard onSilentClose={handleSilentCloseWaitlist} />
           <Routes>
             {/* Hidden Admin Login — not linked anywhere publicly */}
             <Route element={<AuthLayout />}>
