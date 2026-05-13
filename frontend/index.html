@@ -1,7 +1,16 @@
 <!doctype html>
-<html lang="en" style="background-color: #030712;">
+<html lang="en" id="html-root">
 
 <head>
+  <!-- Set background color before React mounts to prevent flash.
+       Blog pages are white, all other pages are dark. -->
+  <script>
+    (function() {
+      var path = window.location.pathname;
+      var isBlog = path.startsWith('/blog');
+      document.getElementById('html-root').style.backgroundColor = isBlog ? '#ffffff' : '#030712';
+    })();
+  </script>
   <meta charset="UTF-8" />
 
   <!-- Icons -->

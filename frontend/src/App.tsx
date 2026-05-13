@@ -1,6 +1,6 @@
 // App.tsx
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'react-hot-toast'
@@ -160,8 +160,11 @@ const UnauthorizedHandler: React.FC = () => {
 
 // Main Layout component with Navbar, Footer, and Popup
 const MainLayout = ({ showTopBar, onOpenWaitlist }: { showTopBar: boolean, onOpenWaitlist: () => void }) => {
+  const location = useLocation()
+  const isBlogRoute = location.pathname.startsWith('/blog')
+
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col animate-page-reveal">
+    <div className={`min-h-screen flex flex-col animate-page-reveal ${isBlogRoute ? 'bg-white' : 'bg-gray-950'}`}>
       <ImpersonationBanner />
       <TopBar isVisible={showTopBar} onReopen={onOpenWaitlist} />
       <Navbar hideWaitlist={showTopBar} />
@@ -228,6 +231,14 @@ function App() {
     const dismissedAt = localStorage.getItem('waitlist_dismissed_at')
 
     if (status === 'subscribed' || (status === 'dismissed' && (!dismissedAt || (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24) < 2))) {
+      return;
+    }
+
+    // Don't trigger waitlist on blog pages, legal pages, or auth pages —
+    // only on marketing/landing pages where it makes sense
+    const currentPath = window.location.pathname
+    const noWaitlistPaths = ['/blog', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/auth', '/admin']
+    if (noWaitlistPaths.some(p => currentPath.startsWith(p))) {
       return;
     }
 
